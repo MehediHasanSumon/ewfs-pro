@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Sale Invoice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            position: relative;
+        }
+        .header .logo {
+            width: 120px;
+            flex-shrink: 0;
+        }
+        .header .logo img {
+            height: 80px;
+            width: auto;
+            display: block;
+        }
+        .header .company-info {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-60%);
+            text-align: center;
+            width: auto;
+            margin-top: -80px;
+        }
+        .header .company-info h2 {
+            margin: 0 0 8px 0;
+            font-size: 20px;
+            font-weight: bold;
+            color: #000;
+        }
+        .header .company-info p {
+            margin: 4px 0;
+            font-size: 12px;
+            color: #333;
+            line-height: 1.4;
+        }
+        .title-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .title-box {
+            border: 1px solid #000;
+            display: inline-block;
+            padding: 8px 20px;
+            background-color: #f5f5f5;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .invoice-info {
+            margin-bottom: 20px;
+        }
+        .invoice-info table {
+            width: 100%;
+            border: none;
+        }
+        .invoice-info td {
+            border: none;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        .invoice-info .left {
+            width: 50%;
+            vertical-align: top;
+        }
+        .invoice-info .right {
+            width: 50%;
+            vertical-align: top;
+            text-align: right;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px 6px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            font-size: 11px;
+            color: #000;
+        }
+        td {
+            font-size: 10px;
+            color: #333;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .total-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        .total-section p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        .total-section .amount {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .total-section .words {
+            font-style: italic;
+            font-size: 12px;
+        }
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+        .signature-section {
+            margin-top: 40px;
+            padding: 20px 0;
+        }
+        .signature-section table {
+            border: none;
+            margin: 0;
+        }
+        .signature-section tr {
+            background: none !important;
+        }
+        .signature-section td {
+            border: none !important;
+            text-align: center;
+            padding: 20px 10px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            @if($companySetting && $companySetting->company_logo)
+            <img src="{{ public_path('storage/' . $companySetting->company_logo) }}" alt="Company Logo">
+            @endif
+        </div>
+        <div class="company-info">
+            @if($companySetting)
+            <h2>{{ $companySetting->company_name ?? 'East West Filling Station' }}</h2>
+            @if($companySetting->company_address)
+            <p>{{ $companySetting->company_address }}</p>
+            @endif
+            @if($companySetting->company_mobile || $companySetting->company_email)
+            <p>
+                @if($companySetting->company_email)
+                {{ $companySetting->company_email }}
+                @endif
+                @if($companySetting->company_mobile && $companySetting->company_email) | @endif
+                @if($companySetting->company_mobile)
+                {{ $companySetting->company_mobile }}
+                @endif
+            </p>
+            @endif
+            @else
+            <h2>East West Filling Station</h2>
+            <p>Dhaka, Bangladesh</p>
+            <p>mehedihassan2992001@gmail.com | 01750542923</p>
+            @endif
+        </div>
+    </div>
+
+    <div class="title-section">
+        <div class="title-box">Sale Invoice</div>
+    </div>
+
+    <div class="invoice-info">
+        <table>
+            <tr>
+                <td class="left">
+                    <strong>Customer:</strong> {{ $sale->customer }}<br>
+                    <strong>Vehicle No:</strong> {{ $sale->vehicle_no }}<br>
+                    @if($sale->memo_no)
+                    <strong>Memo No:</strong> {{ $sale->memo_no }}<br>
+                    @endif
+                </td>
+                <td class="right">
+                    <strong>Invoice No:</strong> {{ $sale->invoice_no }}<br>
+                    <strong>Date:</strong> {{ \Carbon\Carbon::parse($sale->sale_date)->format('d/m/Y') }}<br>
+                    <strong>Shift:</strong> {{ $sale->shift->name ?? 'N/A' }}<br>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>SL</th>
+                <th>Product Name</th>
+                <th>Unit</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="text-center">1</td>
+                <td>{{ $sale->product->product_name ?? 'N/A' }}</td>
+                <td>{{ $sale->product->unit->name ?? 'N/A' }}</td>
+                <td class="text-right">{{ number_format($sale->quantity, 2) }}</td>
+                <td class="text-right">{{ number_format($sale->amount / $sale->quantity, 2) }}</td>
+                <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
+            </tr>
+            <tr style="font-weight: bold; background-color: #e0e0e0;">
+                <td colspan="5" class="text-right">Grand Total:</td>
+                <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        <p class="amount">Total Amount: {{ number_format($sale->total_amount, 2) }}</p>
+        <p class="amount">Paid Amount: {{ number_format($sale->paid_amount, 2) }}</p>
+        @if($sale->due_amount > 0)
+        <p class="amount" style="color: red;">Due Amount: {{ number_format($sale->due_amount, 2) }}</p>
+        @endif
+        <p class="words">In words: {{ numberToWords(floor($sale->total_amount)) }}</p>
+        @if($sale->remarks)
+        <p><strong>Remarks:</strong> {{ $sale->remarks }}</p>
+        @endif
+    </div>
+
+    @php
+        function numberToWords($num) {
+            $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+            $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+            $teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+            
+            if ($num == 0) return 'Zero';
+            
+            function convertLessThanThousand($n, $ones, $tens, $teens) {
+                if ($n == 0) return '';
+                if ($n < 10) return $ones[$n];
+                if ($n < 20) return $teens[$n - 10];
+                if ($n < 100) return $tens[floor($n / 10)] . ($n % 10 != 0 ? ' ' . $ones[$n % 10] : '');
+                return $ones[floor($n / 100)] . ' Hundred' . ($n % 100 != 0 ? ' ' . convertLessThanThousand($n % 100, $ones, $tens, $teens) : '');
+            }
+            
+            $billion = floor($num / 1000000000);
+            $million = floor(($num % 1000000000) / 1000000);
+            $thousand = floor(($num % 1000000) / 1000);
+            $remainder = floor($num % 1000);
+            
+            $result = '';
+            if ($billion > 0) $result .= convertLessThanThousand($billion, $ones, $tens, $teens) . ' Billion ';
+            if ($million > 0) $result .= convertLessThanThousand($million, $ones, $tens, $teens) . ' Million ';
+            if ($thousand > 0) $result .= convertLessThanThousand($thousand, $ones, $tens, $teens) . ' Thousand ';
+            if ($remainder > 0) $result .= convertLessThanThousand($remainder, $ones, $tens, $teens);
+            
+            return trim($result);
+        }
+    @endphp
+
+    <div class="signature-section">
+        <table>
+            <tr>
+                <td>Customer Signature</td>
+                <td>Prepared By</td>
+                <td>Authorized By</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Generated on {{ now()->format('d/m/Y H:i:s') }} | Invoice: {{ $sale->invoice_no }}</p>
+    </div>
+</body>
+</html>
