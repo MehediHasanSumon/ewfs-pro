@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -558,12 +559,19 @@ export default function Products({ products, categories, units, filters }: Produ
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <Label htmlFor="category_id" className="dark:text-gray-200">Category *</Label>
-                            <Select value={data.category_id} onValueChange={(value) => setData('category_id', value)}>
-                                <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <Select value={data.category_id} onValueChange={(value) => setData('category_id', value)} required>
+                                <SelectTrigger
+                                    id="category_id"
+                                    name="category_id"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    aria-invalid={Boolean(errors.category_id)}
+                                    aria-describedby={errors.category_id ? 'category-id-error' : undefined}
+                                >
                                     <SelectValue placeholder="Select category" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -574,12 +582,18 @@ export default function Products({ products, categories, units, filters }: Produ
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {errors.category_id && <span className="text-red-500 text-sm">{errors.category_id}</span>}
+                            <InputError id="category-id-error" message={errors.category_id} />
                         </div>
                         <div>
                             <Label htmlFor="unit_id" className="dark:text-gray-200">Unit *</Label>
-                            <Select value={data.unit_id} onValueChange={(value) => setData('unit_id', value)}>
-                                <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <Select value={data.unit_id} onValueChange={(value) => setData('unit_id', value)} required>
+                                <SelectTrigger
+                                    id="unit_id"
+                                    name="unit_id"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    aria-invalid={Boolean(errors.unit_id)}
+                                    aria-describedby={errors.unit_id ? 'unit-id-error' : undefined}
+                                >
                                     <SelectValue placeholder="Select unit" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -590,41 +604,54 @@ export default function Products({ products, categories, units, filters }: Produ
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {errors.unit_id && <span className="text-red-500 text-sm">{errors.unit_id}</span>}
+                            <InputError id="unit-id-error" message={errors.unit_id} />
                         </div>
                         <div>
                             <Label htmlFor="product_code" className="dark:text-gray-200">Product Code</Label>
                             <Input
                                 id="product_code"
+                                name="product_code"
                                 value={data.product_code}
                                 onChange={(e) => setData('product_code', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 placeholder="e.g., PRD001"
+                                maxLength={64}
+                                aria-invalid={Boolean(errors.product_code)}
+                                aria-describedby={errors.product_code ? 'product-code-error' : undefined}
                             />
-                            {errors.product_code && <span className="text-red-500 text-sm">{errors.product_code}</span>}
+                            <InputError id="product-code-error" message={errors.product_code} />
                         </div>
                         <div>
                             <Label htmlFor="product_name" className="dark:text-gray-200">Product Name *</Label>
                             <Input
                                 id="product_name"
+                                name="product_name"
                                 value={data.product_name}
                                 onChange={(e) => setData('product_name', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 placeholder="e.g., Laptop"
+                                required
+                                maxLength={150}
+                                aria-invalid={Boolean(errors.product_name)}
+                                aria-describedby={errors.product_name ? 'product-name-error' : undefined}
                             />
-                            {errors.product_name && <span className="text-red-500 text-sm">{errors.product_name}</span>}
+                            <InputError id="product-name-error" message={errors.product_name} />
                         </div>
 
                         <div>
                             <Label htmlFor="country_Of_origin" className="dark:text-gray-200">Country of Origin</Label>
                             <Input
                                 id="country_Of_origin"
+                                name="country_Of_origin"
                                 value={data.country_Of_origin}
                                 onChange={(e) => setData('country_Of_origin', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 placeholder="e.g., Bangladesh"
+                                maxLength={100}
+                                aria-invalid={Boolean(errors.country_Of_origin)}
+                                aria-describedby={errors.country_Of_origin ? 'country-origin-error' : undefined}
                             />
-                            {errors.country_Of_origin && <span className="text-red-500 text-sm">{errors.country_Of_origin}</span>}
+                            <InputError id="country-origin-error" message={errors.country_Of_origin} />
                         </div>
                         <div>
                             <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
@@ -643,13 +670,16 @@ export default function Products({ products, categories, units, filters }: Produ
                         <Label htmlFor="remarks" className="dark:text-gray-200">Remarks</Label>
                         <Textarea
                             id="remarks"
+                            name="remarks"
                             value={data.remarks}
                             onChange={(e) => setData('remarks', e.target.value)}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             placeholder="Additional notes..."
                             rows={3}
+                            aria-invalid={Boolean(errors.remarks)}
+                            aria-describedby={errors.remarks ? 'remarks-error' : undefined}
                         />
-                        {errors.remarks && <span className="text-red-500 text-sm">{errors.remarks}</span>}
+                        <InputError id="remarks-error" message={errors.remarks} />
                     </div>
                 </FormModal>
 
@@ -660,12 +690,19 @@ export default function Products({ products, categories, units, filters }: Produ
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <Label htmlFor="edit-category_id" className="dark:text-gray-200">Category *</Label>
-                            <Select value={data.category_id} onValueChange={(value) => setData('category_id', value)}>
-                                <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <Select value={data.category_id} onValueChange={(value) => setData('category_id', value)} required>
+                                <SelectTrigger
+                                    id="edit-category_id"
+                                    name="category_id"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    aria-invalid={Boolean(errors.category_id)}
+                                    aria-describedby={errors.category_id ? 'edit-category-id-error' : undefined}
+                                >
                                     <SelectValue placeholder="Select category" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -676,12 +713,18 @@ export default function Products({ products, categories, units, filters }: Produ
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {errors.category_id && <span className="text-red-500 text-sm">{errors.category_id}</span>}
+                            <InputError id="edit-category-id-error" message={errors.category_id} />
                         </div>
                         <div>
                             <Label htmlFor="edit-unit_id" className="dark:text-gray-200">Unit *</Label>
-                            <Select value={data.unit_id} onValueChange={(value) => setData('unit_id', value)}>
-                                <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <Select value={data.unit_id} onValueChange={(value) => setData('unit_id', value)} required>
+                                <SelectTrigger
+                                    id="edit-unit_id"
+                                    name="unit_id"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    aria-invalid={Boolean(errors.unit_id)}
+                                    aria-describedby={errors.unit_id ? 'edit-unit-id-error' : undefined}
+                                >
                                     <SelectValue placeholder="Select unit" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -692,38 +735,51 @@ export default function Products({ products, categories, units, filters }: Produ
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {errors.unit_id && <span className="text-red-500 text-sm">{errors.unit_id}</span>}
+                            <InputError id="edit-unit-id-error" message={errors.unit_id} />
                         </div>
                         <div>
                             <Label htmlFor="edit-product_code" className="dark:text-gray-200">Product Code</Label>
                             <Input
                                 id="edit-product_code"
+                                name="product_code"
                                 value={data.product_code}
                                 onChange={(e) => setData('product_code', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                maxLength={64}
+                                aria-invalid={Boolean(errors.product_code)}
+                                aria-describedby={errors.product_code ? 'edit-product-code-error' : undefined}
                             />
-                            {errors.product_code && <span className="text-red-500 text-sm">{errors.product_code}</span>}
+                            <InputError id="edit-product-code-error" message={errors.product_code} />
                         </div>
                         <div>
                             <Label htmlFor="edit-product_name" className="dark:text-gray-200">Product Name *</Label>
                             <Input
                                 id="edit-product_name"
+                                name="product_name"
                                 value={data.product_name}
                                 onChange={(e) => setData('product_name', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                required
+                                maxLength={150}
+                                aria-invalid={Boolean(errors.product_name)}
+                                aria-describedby={errors.product_name ? 'edit-product-name-error' : undefined}
                             />
-                            {errors.product_name && <span className="text-red-500 text-sm">{errors.product_name}</span>}
+                            <InputError id="edit-product-name-error" message={errors.product_name} />
                         </div>
 
                         <div>
                             <Label htmlFor="edit-country_Of_origin" className="dark:text-gray-200">Country of Origin</Label>
                             <Input
                                 id="edit-country_Of_origin"
+                                name="country_Of_origin"
                                 value={data.country_Of_origin}
                                 onChange={(e) => setData('country_Of_origin', e.target.value)}
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                maxLength={100}
+                                aria-invalid={Boolean(errors.country_Of_origin)}
+                                aria-describedby={errors.country_Of_origin ? 'edit-country-origin-error' : undefined}
                             />
-                            {errors.country_Of_origin && <span className="text-red-500 text-sm">{errors.country_Of_origin}</span>}
+                            <InputError id="edit-country-origin-error" message={errors.country_Of_origin} />
                         </div>
                         <div>
                             <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>
@@ -742,12 +798,15 @@ export default function Products({ products, categories, units, filters }: Produ
                         <Label htmlFor="edit-remarks" className="dark:text-gray-200">Remarks</Label>
                         <Textarea
                             id="edit-remarks"
+                            name="remarks"
                             value={data.remarks}
                             onChange={(e) => setData('remarks', e.target.value)}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             rows={3}
+                            aria-invalid={Boolean(errors.remarks)}
+                            aria-describedby={errors.remarks ? 'edit-remarks-error' : undefined}
                         />
-                        {errors.remarks && <span className="text-red-500 text-sm">{errors.remarks}</span>}
+                        <InputError id="edit-remarks-error" message={errors.remarks} />
                     </div>
                 </FormModal>
 

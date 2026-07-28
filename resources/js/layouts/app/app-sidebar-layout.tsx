@@ -2,7 +2,6 @@ import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
-import { FlashToast } from '@/components/flash-toast';
 import { type BreadcrumbItem } from '@/types';
 import { type PropsWithChildren } from 'react';
 
@@ -22,7 +21,6 @@ export function AppSidebarLayout({
                 <div className="pt-16">
                     {children}
                 </div>
-            <FlashToast />
             </AppContent>
         </AppShell>
     );

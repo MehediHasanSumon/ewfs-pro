@@ -1,7 +1,8 @@
-import { AppSidebarLayout } from './app/app-sidebar-layout';
-import { AppHeaderLayout } from './app/app-header-layout';
+import { GlobalFeedback } from '@/components/global-feedback';
 import { type BreadcrumbItem } from '@/types';
 import { type ReactNode } from 'react';
+import { AppSidebarLayout } from './app/app-sidebar-layout';
+import { AppHeaderLayout } from './app/app-header-layout';
 
 interface AppLayoutProps {
     children: ReactNode;
@@ -17,8 +18,9 @@ export default function AppLayout({
     const Layout = variant === 'sidebar' ? AppSidebarLayout : AppHeaderLayout;
     
     return (
-        <Layout breadcrumbs={breadcrumbs}>
-            {children}
-        </Layout>
+        <>
+            <Layout breadcrumbs={breadcrumbs}>{children}</Layout>
+            <GlobalFeedback />
+        </>
     );
 }

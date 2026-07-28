@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -437,17 +438,23 @@ export default function EmpDesignations({ designations, filters }: EmpDesignatio
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="name" className="dark:text-gray-200">Designation Name</Label>
                         <Input
                             id="name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., Software Engineer"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
@@ -470,16 +477,22 @@ export default function EmpDesignations({ designations, filters }: EmpDesignatio
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-name" className="dark:text-gray-200">Designation Name</Label>
                         <Input
                             id="edit-name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'edit-name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="edit-name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>

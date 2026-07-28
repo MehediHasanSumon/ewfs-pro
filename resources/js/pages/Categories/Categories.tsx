@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -441,28 +442,39 @@ export default function Categories({ categories, filters }: CategoriesProps) {
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="name" className="dark:text-gray-200">Category Name</Label>
                         <Input
                             id="name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., Oil, Lubricant"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="code" className="dark:text-gray-200">Category Code</Label>
                         <Input
                             id="code"
+                            name="code"
                             value={data.code}
                             onChange={(e) => setData('code', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., OIL001"
+                            required
+                            maxLength={32}
+                            aria-invalid={Boolean(errors.code)}
+                            aria-describedby={errors.code ? 'code-error' : undefined}
                         />
-                        {errors.code && <span className="text-red-500 text-sm">{errors.code}</span>}
+                        <InputError id="code-error" message={errors.code} />
                     </div>
                     <div>
                         <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
@@ -485,27 +497,38 @@ export default function Categories({ categories, filters }: CategoriesProps) {
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-name" className="dark:text-gray-200">Category Name</Label>
                         <Input
                             id="edit-name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'edit-name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="edit-name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="edit-code" className="dark:text-gray-200">Category Code</Label>
                         <Input
                             id="edit-code"
+                            name="code"
                             value={data.code}
                             onChange={(e) => setData('code', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             disabled
+                            required
+                            maxLength={32}
+                            aria-invalid={Boolean(errors.code)}
+                            aria-describedby={errors.code ? 'edit-code-error' : undefined}
                         />
-                        {errors.code && <span className="text-red-500 text-sm">{errors.code}</span>}
+                        <InputError id="edit-code-error" message={errors.code} />
                     </div>
                     <div>
                         <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>

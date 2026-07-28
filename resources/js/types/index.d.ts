@@ -7,6 +7,19 @@ export interface Auth {
     roles?: string[];
 }
 
+export interface FlashMessages {
+    success?: string | null;
+    error?: string | null;
+    warning?: string | null;
+    info?: string | null;
+}
+
+export interface Company {
+    name?: string | null;
+    logo?: string | null;
+    is_registration: boolean;
+}
+
 export interface BreadcrumbItem {
     title: string;
     href: string;
@@ -29,6 +42,8 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     sidebarOpen: boolean;
+    flash: FlashMessages;
+    company: Company;
     [key: string]: unknown;
 }
 

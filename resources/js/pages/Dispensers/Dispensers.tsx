@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
 import { FormModal } from '@/components/ui/form-modal';
@@ -478,22 +479,34 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="dispenser_name" className="dark:text-gray-200">Dispenser Name</Label>
                         <Input
                             id="dispenser_name"
+                            name="dispenser_name"
                             value={data.dispenser_name}
                             onChange={(e) => setData('dispenser_name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., Dispenser 1"
+                            required
+                            maxLength={150}
+                            aria-invalid={Boolean(errors.dispenser_name)}
+                            aria-describedby={errors.dispenser_name ? 'dispenser-name-error' : undefined}
                         />
-                        {errors.dispenser_name && <span className="text-red-500 text-sm">{errors.dispenser_name}</span>}
+                        <InputError id="dispenser-name-error" message={errors.dispenser_name} />
                     </div>
                     <div>
                         <Label htmlFor="product_id" className="dark:text-gray-200">Product</Label>
-                        <Select value={data.product_id} onValueChange={(value) => setData('product_id', value)}>
-                            <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <Select value={data.product_id} onValueChange={(value) => setData('product_id', value)} required>
+                            <SelectTrigger
+                                id="product_id"
+                                name="product_id"
+                                className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                aria-invalid={Boolean(errors.product_id)}
+                                aria-describedby={errors.product_id ? 'product-id-error' : undefined}
+                            >
                                 <SelectValue placeholder="Select product" />
                             </SelectTrigger>
                             <SelectContent>
@@ -504,20 +517,25 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.product_id && <span className="text-red-500 text-sm">{errors.product_id}</span>}
+                        <InputError id="product-id-error" message={errors.product_id} />
                     </div>
                     <div>
                         <Label htmlFor="opening_reading" className="dark:text-gray-200">Opening Reading</Label>
                         <Input
                             id="opening_reading"
+                            name="opening_reading"
                             type="number"
                             step="0.01"
                             value={data.opening_reading}
                             onChange={(e) => setData('opening_reading', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="0.00"
+                            min="0"
+                            inputMode="decimal"
+                            aria-invalid={Boolean(errors.opening_reading)}
+                            aria-describedby={errors.opening_reading ? 'opening-reading-error' : undefined}
                         />
-                        {errors.opening_reading && <span className="text-red-500 text-sm">{errors.opening_reading}</span>}
+                        <InputError id="opening-reading-error" message={errors.opening_reading} />
                     </div>
                     <div>
                         <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
@@ -540,21 +558,33 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-dispenser_name" className="dark:text-gray-200">Dispenser Name</Label>
                         <Input
                             id="edit-dispenser_name"
+                            name="dispenser_name"
                             value={data.dispenser_name}
                             onChange={(e) => setData('dispenser_name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                            maxLength={150}
+                            aria-invalid={Boolean(errors.dispenser_name)}
+                            aria-describedby={errors.dispenser_name ? 'edit-dispenser-name-error' : undefined}
                         />
-                        {errors.dispenser_name && <span className="text-red-500 text-sm">{errors.dispenser_name}</span>}
+                        <InputError id="edit-dispenser-name-error" message={errors.dispenser_name} />
                     </div>
                     <div>
                         <Label htmlFor="edit-product_id" className="dark:text-gray-200">Product</Label>
-                        <Select value={data.product_id} onValueChange={(value) => setData('product_id', value)}>
-                            <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <Select value={data.product_id} onValueChange={(value) => setData('product_id', value)} required>
+                            <SelectTrigger
+                                id="edit-product_id"
+                                name="product_id"
+                                className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                aria-invalid={Boolean(errors.product_id)}
+                                aria-describedby={errors.product_id ? 'edit-product-id-error' : undefined}
+                            >
                                 <SelectValue placeholder="Select product" />
                             </SelectTrigger>
                             <SelectContent>
@@ -565,20 +595,25 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.product_id && <span className="text-red-500 text-sm">{errors.product_id}</span>}
+                        <InputError id="edit-product-id-error" message={errors.product_id} />
                     </div>
                     <div>
                         <Label htmlFor="edit-opening_reading" className="dark:text-gray-200">Opening Reading</Label>
                         <Input
                             id="edit-opening_reading"
+                            name="opening_reading"
                             type="number"
                             step="0.01"
                             value={data.opening_reading}
                             onChange={(e) => setData('opening_reading', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="0.00"
+                            min="0"
+                            inputMode="decimal"
+                            aria-invalid={Boolean(errors.opening_reading)}
+                            aria-describedby={errors.opening_reading ? 'edit-opening-reading-error' : undefined}
                         />
-                        {errors.opening_reading && <span className="text-red-500 text-sm">{errors.opening_reading}</span>}
+                        <InputError id="edit-opening-reading-error" message={errors.opening_reading} />
                     </div>
                     <div>
                         <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>

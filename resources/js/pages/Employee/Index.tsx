@@ -48,6 +48,9 @@ interface Employee {
         id: number;
         name: string;
     };
+    account?: {
+        ac_number?: string | null;
+    } | null;
     status: boolean;
     created_at: string;
 }

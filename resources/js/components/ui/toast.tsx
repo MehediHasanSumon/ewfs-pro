@@ -1,54 +1,91 @@
-import { CheckCircle, XCircle, AlertTriangle, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import {
+    AlertTriangle,
+    CheckCircle,
+    CircleAlert,
+    Info,
+    X,
+} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 interface ToastProps {
-    type: 'success' | 'error' | 'warning';
+    type: ToastType;
     message: string;
     isVisible: boolean;
     onClose: () => void;
     duration?: number;
 }
 
-export function Toast({ type, message, isVisible, onClose, duration = 5000 }: ToastProps) {
+export function Toast({
+    type,
+    message,
+    isVisible,
+    onClose,
+    duration = 5000,
+}: ToastProps) {
     useEffect(() => {
-        if (isVisible && duration > 0) {
-            const timer = setTimeout(onClose, duration);
-            return () => clearTimeout(timer);
+        if (!isVisible || duration <= 0) {
+            return;
         }
-    }, [isVisible, duration, onClose]);
 
-    if (!isVisible) return null;
+        const timer = window.setTimeout(onClose, duration);
+        return () => window.clearTimeout(timer);
+    }, [duration, isVisible, onClose]);
+
+    if (!isVisible) {
+        return null;
+    }
 
     const icons = {
         success: CheckCircle,
-        error: XCircle,
+        error: CircleAlert,
         warning: AlertTriangle,
+        info: Info,
     };
 
     const styles = {
-        success: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-200',
-        error: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900 dark:border-red-700 dark:text-red-200',
-        warning: 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:border-yellow-700 dark:text-yellow-200',
+        success:
+            'border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200',
+        error:
+            'border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200',
+        warning:
+            'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200',
+        info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200',
     };
 
     const iconStyles = {
         success: 'text-green-500 dark:text-green-400',
         error: 'text-red-500 dark:text-red-400',
-        warning: 'text-yellow-500 dark:text-yellow-400',
+        warning: 'text-amber-500 dark:text-amber-400',
+        info: 'text-sky-500 dark:text-sky-400',
     };
 
     const Icon = icons[type];
+    const isUrgent = type === 'error' || type === 'warning';
 
     return (
-        <div className="fixed bottom-4 right-4 z-[150] animate-in slide-in-from-bottom-2">
-            <div className={`flex items-center gap-3 p-4 border rounded-lg shadow-lg min-w-[300px] ${styles[type]}`}>
-                <Icon className={`h-5 w-5 flex-shrink-0 ${iconStyles[type]}`} />
-                <p className="text-sm font-medium flex-1">{message}</p>
+        <div className="fixed right-4 bottom-4 left-4 z-[150] animate-in slide-in-from-bottom-2 sm:left-auto sm:w-full sm:max-w-md">
+            <div
+                className={`flex items-start gap-3 rounded-lg border p-4 shadow-lg ${styles[type]}`}
+                role={isUrgent ? 'alert' : 'status'}
+                aria-live={isUrgent ? 'assertive' : 'polite'}
+                aria-atomic="true"
+            >
+                <Icon
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${iconStyles[type]}`}
+                    aria-hidden="true"
+                />
+                <p className="min-w-0 flex-1 text-sm font-medium break-words">
+                    {message}
+                </p>
                 <button
+                    type="button"
                     onClick={onClose}
-                    className="flex-shrink-0 p-1 hover:bg-black/10 rounded transition-colors"
+                    className="shrink-0 rounded p-1 transition-colors hover:bg-black/10 focus-visible:ring-2 focus-visible:ring-current focus-visible:outline-none"
+                    aria-label="Dismiss notification"
                 >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                 </button>
             </div>
         </div>
@@ -57,7 +94,7 @@ export function Toast({ type, message, isVisible, onClose, duration = 5000 }: To
 
 export function useToast() {
     const [toast, setToast] = useState<{
-        type: 'success' | 'error' | 'warning';
+        type: ToastType;
         message: string;
         isVisible: boolean;
     }>({
@@ -66,13 +103,13 @@ export function useToast() {
         isVisible: false,
     });
 
-    const showToast = (type: 'success' | 'error' | 'warning', message: string) => {
+    const showToast = useCallback((type: ToastType, message: string) => {
         setToast({ type, message, isVisible: true });
-    };
+    }, []);
 
-    const hideToast = () => {
-        setToast(prev => ({ ...prev, isVisible: false }));
-    };
+    const hideToast = useCallback(() => {
+        setToast((previous) => ({ ...previous, isVisible: false }));
+    }, []);
 
     return {
         toast,
@@ -81,5 +118,6 @@ export function useToast() {
         success: (message: string) => showToast('success', message),
         error: (message: string) => showToast('error', message),
         warning: (message: string) => showToast('warning', message),
+        info: (message: string) => showToast('info', message),
     };
 }

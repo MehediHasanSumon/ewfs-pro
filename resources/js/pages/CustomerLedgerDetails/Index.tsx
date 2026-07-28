@@ -23,6 +23,8 @@ interface Transaction {
 
 interface Ledger {
     customer_name: string;
+    customer_mobile?: string;
+    customer_address?: string;
     ac_number: string;
     transactions: Transaction[];
     total_debit: number;

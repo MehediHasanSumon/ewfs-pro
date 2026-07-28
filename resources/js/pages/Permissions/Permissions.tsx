@@ -48,6 +48,8 @@ interface PermissionsProps {
     filters: {
         search?: string;
         module?: string;
+        start_date?: string;
+        end_date?: string;
         sort_by?: string;
         sort_order?: string;
         per_page?: number;

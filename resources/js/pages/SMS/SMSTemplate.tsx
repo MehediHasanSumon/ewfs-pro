@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
 import { FormModal } from '@/components/ui/form-modal';
@@ -525,6 +526,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="title" className="dark:text-gray-200">
@@ -532,15 +534,16 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         </Label>
                         <Input
                             id="title"
+                            name="title"
                             value={data.title}
                             onChange={(e) => setData('title', e.target.value)}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            required
+                            maxLength={150}
+                            aria-invalid={Boolean(errors.title)}
+                            aria-describedby={errors.title ? 'title-error' : undefined}
                         />
-                        {errors.title && (
-                            <span className="text-sm text-red-500">
-                                {errors.title}
-                            </span>
-                        )}
+                        <InputError id="title-error" message={errors.title} />
                     </div>
                     <div>
                         <Label htmlFor="type" className="dark:text-gray-200">
@@ -549,8 +552,15 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         <Select
                             value={data.type}
                             onValueChange={(value) => setData('type', value)}
+                            required
                         >
-                            <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <SelectTrigger
+                                id="type"
+                                name="type"
+                                className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                aria-invalid={Boolean(errors.type)}
+                                aria-describedby={errors.type ? 'type-error' : undefined}
+                            >
                                 <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -561,11 +571,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                                 <SelectItem value="alert">Alert</SelectItem>
                             </SelectContent>
                         </Select>
-                        {errors.type && (
-                            <span className="text-sm text-red-500">
-                                {errors.type}
-                            </span>
-                        )}
+                        <InputError id="type-error" message={errors.type} />
                     </div>
                     <div>
                         <Label htmlFor="message" className="dark:text-gray-200">
@@ -573,11 +579,15 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         </Label>
                         <Textarea
                             id="message"
+                            name="message"
                             value={data.message}
                             onChange={(e) => setData('message', e.target.value)}
                             rows={4}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             placeholder="Enter your SMS message here..."
+                            required
+                            aria-invalid={Boolean(errors.message)}
+                            aria-describedby={errors.message ? 'message-error' : undefined}
                         />
                         <div className="mt-2">
                             <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -610,11 +620,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                                 ))}
                             </div>
                         </div>
-                        {errors.message && (
-                            <span className="text-sm text-red-500">
-                                {errors.message}
-                            </span>
-                        )}
+                        <InputError id="message-error" message={errors.message} />
                     </div>
                     <div>
                         <Label className="dark:text-gray-200">
@@ -642,6 +648,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-title" className="dark:text-gray-200">
@@ -649,15 +656,16 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         </Label>
                         <Input
                             id="edit-title"
+                            name="title"
                             value={data.title}
                             onChange={(e) => setData('title', e.target.value)}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            required
+                            maxLength={150}
+                            aria-invalid={Boolean(errors.title)}
+                            aria-describedby={errors.title ? 'edit-title-error' : undefined}
                         />
-                        {errors.title && (
-                            <span className="text-sm text-red-500">
-                                {errors.title}
-                            </span>
-                        )}
+                        <InputError id="edit-title-error" message={errors.title} />
                     </div>
                     <div>
                         <Label htmlFor="edit-type" className="dark:text-gray-200">
@@ -666,8 +674,15 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         <Select
                             value={data.type}
                             onValueChange={(value) => setData('type', value)}
+                            required
                         >
-                            <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <SelectTrigger
+                                id="edit-type"
+                                name="type"
+                                className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                aria-invalid={Boolean(errors.type)}
+                                aria-describedby={errors.type ? 'edit-type-error' : undefined}
+                            >
                                 <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -678,11 +693,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                                 <SelectItem value="alert">Alert</SelectItem>
                             </SelectContent>
                         </Select>
-                        {errors.type && (
-                            <span className="text-sm text-red-500">
-                                {errors.type}
-                            </span>
-                        )}
+                        <InputError id="edit-type-error" message={errors.type} />
                     </div>
                     <div>
                         <Label htmlFor="edit-message" className="dark:text-gray-200">
@@ -690,11 +701,15 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                         </Label>
                         <Textarea
                             id="edit-message"
+                            name="message"
                             value={data.message}
                             onChange={(e) => setData('message', e.target.value)}
                             rows={4}
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             placeholder="Enter your SMS message here..."
+                            required
+                            aria-invalid={Boolean(errors.message)}
+                            aria-describedby={errors.message ? 'edit-message-error' : undefined}
                         />
                         <div className="mt-2">
                             <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -727,11 +742,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                                 ))}
                             </div>
                         </div>
-                        {errors.message && (
-                            <span className="text-sm text-red-500">
-                                {errors.message}
-                            </span>
-                        )}
+                        <InputError id="edit-message-error" message={errors.message} />
                     </div>
                     <div>
                         <Label className="dark:text-gray-200">

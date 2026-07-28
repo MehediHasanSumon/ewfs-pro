@@ -1,5 +1,14 @@
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+type PageItem = number | 'ellipsis';
 
 interface PaginationProps {
     currentPage: number;
@@ -20,20 +29,57 @@ export function Pagination({
     total,
     perPage,
     onPageChange,
-    onPerPageChange
+    onPerPageChange,
 }: PaginationProps) {
-    if (lastPage <= 1) return null;
+    if (lastPage <= 1) {
+        return null;
+    }
+
+    const visiblePages = Array.from(
+        new Set(
+            [1, currentPage - 1, currentPage, currentPage + 1, lastPage].filter(
+                (page) => page >= 1 && page <= lastPage,
+            ),
+        ),
+    ).sort((a, b) => a - b);
+    const pageItems: PageItem[] = [];
+
+    visiblePages.forEach((page, index) => {
+        const previousPage = visiblePages[index - 1];
+
+        if (previousPage !== undefined && page - previousPage > 1) {
+            pageItems.push('ellipsis');
+        }
+
+        pageItems.push(page);
+    });
 
     return (
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-4">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
+        <nav
+            className="mt-4 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700"
+            aria-label="Table pagination"
+        >
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-start sm:gap-4">
+                <div
+                    className="text-sm text-gray-700 dark:text-gray-300"
+                    aria-live="polite"
+                >
                     Showing {from} to {to} of {total} results
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Per page:</span>
-                    <Select value={perPage.toString()} onValueChange={(value) => onPerPageChange(Number(value))}>
-                        <SelectTrigger className="w-20 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Per page:
+                    </span>
+                    <Select
+                        value={perPage.toString()}
+                        onValueChange={(value) =>
+                            onPerPageChange(Number(value))
+                        }
+                    >
+                        <SelectTrigger
+                            className="w-20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            aria-label="Rows per page"
+                        >
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -45,45 +91,66 @@ export function Pagination({
                     </Select>
                 </div>
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
                 <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onPageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
+                    disabled={currentPage <= 1}
+                    aria-label="Go to previous page"
                 >
-                    Previous
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden md:inline">Previous</span>
                 </Button>
-                {Array.from({ length: lastPage }, (_, i) => i + 1)
-                    .filter(page => 
-                        page === 1 || 
-                        page === lastPage || 
-                        Math.abs(page - currentPage) <= 2
-                    )
-                    .map((page, index, array) => (
-                        <div key={page} className="flex items-center">
-                            {index > 0 && array[index - 1] !== page - 1 && (
-                                <span className="px-2 text-gray-500">...</span>
-                            )}
-                            <Button
-                                variant={page === currentPage ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => onPageChange(page)}
+
+                <span className="text-sm text-gray-700 sm:hidden dark:text-gray-300">
+                    Page {currentPage} of {lastPage}
+                </span>
+
+                <div className="hidden items-center gap-2 sm:flex">
+                    {pageItems.map((item, index) =>
+                        item === 'ellipsis' ? (
+                            <span
+                                key={`ellipsis-${index}`}
+                                className="px-1 text-gray-500"
+                                aria-hidden="true"
                             >
-                                {page}
+                                ...
+                            </span>
+                        ) : (
+                            <Button
+                                key={item}
+                                variant={
+                                    item === currentPage
+                                        ? 'default'
+                                        : 'outline'
+                                }
+                                size="sm"
+                                className="min-w-8"
+                                onClick={() => onPageChange(item)}
+                                aria-label={`Go to page ${item}`}
+                                aria-current={
+                                    item === currentPage ? 'page' : undefined
+                                }
+                            >
+                                {item}
                             </Button>
-                        </div>
-                    ))
-                }
+                        ),
+                    )}
+                </div>
+
                 <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onPageChange(currentPage + 1)}
-                    disabled={currentPage === lastPage}
+                    disabled={currentPage >= lastPage}
+                    aria-label="Go to next page"
                 >
-                    Next
+                    <span className="hidden md:inline">Next</span>
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                 </Button>
             </div>
-        </div>
+        </nav>
     );
 }

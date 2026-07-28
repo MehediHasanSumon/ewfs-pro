@@ -1,48 +1,111 @@
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { AlertTriangle, LoaderCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface DeleteModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     title: string;
     message: string;
     processing?: boolean;
 }
 
-export function DeleteModal({ 
-    isOpen, 
-    onClose, 
-    onConfirm, 
-    title, 
-    message, 
-    processing = false 
+export function DeleteModal({
+    isOpen,
+    onClose,
+    onConfirm,
+    title,
+    message,
+    processing = false,
 }: DeleteModalProps) {
+    const [confirming, setConfirming] = useState(false);
+    const isBusy = processing || confirming;
+
+    useEffect(() => {
+        if (!isOpen) {
+            setConfirming(false);
+        }
+    }, [isOpen]);
+
+    const handleOpenChange = (open: boolean) => {
+        if (!open && !isBusy) {
+            onClose();
+        }
+    };
+
+    const handleConfirm = () => {
+        if (isBusy) {
+            return;
+        }
+
+        setConfirming(true);
+        const result = onConfirm();
+
+        if (result instanceof Promise) {
+            void result.finally(() => setConfirming(false));
+            return;
+        }
+
+        window.setTimeout(() => setConfirming(false), 1000);
+    };
+
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="dark:bg-gray-800">
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+            <DialogContent
+                className="dark:bg-gray-800"
+                onEscapeKeyDown={(event) => {
+                    if (isBusy) {
+                        event.preventDefault();
+                    }
+                }}
+                onPointerDownOutside={(event) => {
+                    if (isBusy) {
+                        event.preventDefault();
+                    }
+                }}
+                aria-busy={isBusy}
+            >
                 <DialogHeader>
-                    <DialogTitle className="dark:text-white flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                    <DialogTitle className="flex items-center gap-2 dark:text-white">
+                        <AlertTriangle
+                            className="h-5 w-5 text-red-500"
+                            aria-hidden="true"
+                        />
                         {title}
                     </DialogTitle>
+                    <DialogDescription>{message}</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                    <p className="text-gray-600 dark:text-gray-300">{message}</p>
-                    <div className="flex gap-2 justify-end">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button 
-                            type="button" 
-                            variant="destructive" 
-                            onClick={onConfirm}
-                            disabled={processing}
-                        >
-                            {processing ? 'Deleting...' : 'Delete'}
-                        </Button>
-                    </div>
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onClose}
+                        disabled={isBusy}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleConfirm}
+                        disabled={isBusy}
+                    >
+                        {isBusy && (
+                            <LoaderCircle
+                                className="h-4 w-4 animate-spin"
+                                aria-hidden="true"
+                            />
+                        )}
+                        {isBusy ? 'Deleting...' : 'Delete'}
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>

@@ -476,10 +476,10 @@ export default function Suppliers({ suppliers, groups = [], lastSupplierGroup, f
                                                     {supplier.total_payment?.toLocaleString() || '0'}
                                                 </td>
                                                 <td className="p-4 text-[13px] text-right font-semibold">
-                                                    <span className={supplier.total_due > 0 ? 'text-red-600 dark:text-red-400' : supplier.total_due < 0 ? 'text-green-600 dark:text-green-400' : 'dark:text-white'}>
+                                                    <span className={(supplier.total_due ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : (supplier.total_due ?? 0) < 0 ? 'text-green-600 dark:text-green-400' : 'dark:text-white'}>
                                                         {Math.abs(supplier.total_due || 0).toLocaleString()}
-                                                        {supplier.total_due > 0 && ' (Due)'}
-                                                        {supplier.total_due < 0 && ' (Adv)'}
+                                                        {(supplier.total_due ?? 0) > 0 && ' (Due)'}
+                                                        {(supplier.total_due ?? 0) < 0 && ' (Adv)'}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">

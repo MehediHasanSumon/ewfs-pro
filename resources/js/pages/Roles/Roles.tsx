@@ -23,6 +23,11 @@ interface Role {
     created_at: string;
 }
 
+interface Permission {
+    id: number;
+    name: string;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',

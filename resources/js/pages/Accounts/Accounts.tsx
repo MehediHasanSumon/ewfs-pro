@@ -59,6 +59,7 @@ interface AccountsProps {
     filters: {
         search?: string;
         group?: string;
+        status?: string;
         sort_by?: string;
         sort_order?: string;
         per_page?: number;

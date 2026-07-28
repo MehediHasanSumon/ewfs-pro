@@ -1,22 +1,32 @@
 import { Toast, useToast } from '@/components/ui/toast';
+import { type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
 export function FlashToast() {
-    const { flash } = usePage().props as { flash: { success?: string; error?: string; warning?: string } };
-    const { toast, success, error, warning, hideToast } = useToast();
+    const { flash } = usePage<SharedData>().props;
+    const { toast, showToast, hideToast } = useToast();
 
     useEffect(() => {
-        if (flash.success) {
-            success(flash.success);
-        }
         if (flash.error) {
-            error(flash.error);
+            showToast('error', flash.error);
+            return;
         }
+
         if (flash.warning) {
-            warning(flash.warning);
+            showToast('warning', flash.warning);
+            return;
         }
-    }, [flash]);
+
+        if (flash.success) {
+            showToast('success', flash.success);
+            return;
+        }
+
+        if (flash.info) {
+            showToast('info', flash.info);
+        }
+    }, [flash.error, flash.info, flash.success, flash.warning, showToast]);
 
     return (
         <Toast

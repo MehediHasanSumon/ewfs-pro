@@ -189,7 +189,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                     {data.purchase_data.map((item, index) => (
                                         <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                             <td className="p-2 text-[13px] dark:text-white">{item.product_name}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{parseFloat(item.avg_price).toFixed(2)}</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(item.avg_price).toFixed(2)}</td>
                                             <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_quantity.toLocaleString()}</td>
                                             <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString()}</td>
                                         </tr>
@@ -197,7 +197,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                     <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
                                         <td className="p-2 text-[13px] dark:text-white">Total</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.purchase_data.reduce((sum, item) => sum + parseFloat(item.total_quantity), 0).toLocaleString()}</td>
+                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.purchase_data.reduce((sum, item) => sum + Number(item.total_quantity), 0).toLocaleString()}</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">{data.totals.total_purchases.toLocaleString()}</td>
                                     </tr>
                                 </tbody>
@@ -227,9 +227,9 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                 </thead>
                                 <tbody>
                                     {[...data.sales_data, ...data.credit_sales_data].map((item, index) => {
-                                        const purchasePrice = parseFloat(item.purchase_price);
-                                        const salePrice = parseFloat(item.sale_price);
-                                        const totalProfit = (salePrice - purchasePrice) * parseFloat(item.total_quantity);
+                                        const purchasePrice = Number(item.purchase_price);
+                                        const salePrice = Number(item.sale_price);
+                                        const totalProfit = (salePrice - purchasePrice) * Number(item.total_quantity);
                                         return (
                                             <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                 <td className="p-2 text-[13px] dark:text-white">{item.product_name}</td>
@@ -247,12 +247,12 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                         <td className="p-2 text-right text-[13px] dark:text-white">-</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">-</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => sum + parseFloat(item.total_quantity), 0).toLocaleString()}</td>
+                                        <td className="p-2 text-right text-[13px] dark:text-white">{[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => sum + Number(item.total_quantity), 0).toLocaleString()}</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">{data.totals.total_sales.toLocaleString()}</td>
                                         <td className="p-2 text-right text-[13px] dark:text-white">{[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => {
-                                            const purchasePrice = parseFloat(item.purchase_price);
-                                            const salePrice = parseFloat(item.sale_price);
-                                            return sum + ((salePrice - purchasePrice) * parseFloat(item.total_quantity));
+                                            const purchasePrice = Number(item.purchase_price);
+                                            const salePrice = Number(item.sale_price);
+                                            return sum + ((salePrice - purchasePrice) * Number(item.total_quantity));
                                         }, 0).toLocaleString()}</td>
                                     </tr>
                                 </tbody>
@@ -260,13 +260,13 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                         </div>
                         <div className="p-3 bg-gray-50 dark:bg-gray-800">
                             <div className="font-bold text-[14px] dark:text-white mb-2">
-                                In Stock: {data.stock_data.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0).toLocaleString()}
+                                In Stock: {data.stock_data.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()}
                             </div>
                             <div className="font-bold text-[14px] dark:text-white mb-2">
                                 Total Profit: {[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => {
-                                    const purchasePrice = parseFloat(item.purchase_price);
-                                    const salePrice = parseFloat(item.sale_price);
-                                    return sum + ((salePrice - purchasePrice) * parseFloat(item.total_quantity));
+                                    const purchasePrice = Number(item.purchase_price);
+                                    const salePrice = Number(item.sale_price);
+                                    return sum + ((salePrice - purchasePrice) * Number(item.total_quantity));
                                 }, 0).toLocaleString()}
                             </div>
                         </div>
@@ -313,7 +313,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                         </div>
                         <div className="p-3 bg-gray-50 dark:bg-gray-800">
                             <div className="font-bold text-[14px] dark:text-white">
-                                In Stock: {data.stock_data.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0).toLocaleString()}
+                                In Stock: {data.stock_data.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()}
                             </div>
                         </div>
                     </CardContent>

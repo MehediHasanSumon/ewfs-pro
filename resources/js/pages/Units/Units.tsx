@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -447,28 +448,39 @@ export default function Units({ units, filters }: UnitsProps) {
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="name" className="dark:text-gray-200">Unit Name</Label>
                         <Input
                             id="name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., Kilogram"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="value" className="dark:text-gray-200">Unit Value</Label>
                         <Input
                             id="value"
+                            name="value"
                             value={data.value}
                             onChange={(e) => setData('value', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., kg"
+                            required
+                            maxLength={50}
+                            aria-invalid={Boolean(errors.value)}
+                            aria-describedby={errors.value ? 'value-error' : undefined}
                         />
-                        {errors.value && <span className="text-red-500 text-sm">{errors.value}</span>}
+                        <InputError id="value-error" message={errors.value} />
                     </div>
                     <div>
                         <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
@@ -491,26 +503,37 @@ export default function Units({ units, filters }: UnitsProps) {
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-name" className="dark:text-gray-200">Unit Name</Label>
                         <Input
                             id="edit-name"
+                            name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                            maxLength={100}
+                            aria-invalid={Boolean(errors.name)}
+                            aria-describedby={errors.name ? 'edit-name-error' : undefined}
                         />
-                        {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
+                        <InputError id="edit-name-error" message={errors.name} />
                     </div>
                     <div>
                         <Label htmlFor="edit-value" className="dark:text-gray-200">Unit Value</Label>
                         <Input
                             id="edit-value"
+                            name="value"
                             value={data.value}
                             onChange={(e) => setData('value', e.target.value)}
                             className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                            maxLength={50}
+                            aria-invalid={Boolean(errors.value)}
+                            aria-describedby={errors.value ? 'edit-value-error' : undefined}
                         />
-                        {errors.value && <span className="text-red-500 text-sm">{errors.value}</span>}
+                        <InputError id="edit-value-error" message={errors.value} />
                     </div>
                     <div>
                         <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>
