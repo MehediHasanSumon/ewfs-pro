@@ -35,7 +35,7 @@ class DispenserController extends Controller implements HasMiddleware
         $dispensers = $this->filteredQuery($request)
             ->with([
                 'product:id,product_name',
-                'product.activeRate:id,product_id,sales_price,effective_date,status',
+                'product.activeRate',
                 'latestReading:id,dispenser_id,start_reading,end_reading,unit_price',
             ])
             ->paginate($perPage)

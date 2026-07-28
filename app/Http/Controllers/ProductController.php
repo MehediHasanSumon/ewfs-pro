@@ -37,7 +37,7 @@ class ProductController extends Controller implements HasMiddleware
             ->with([
                 'category:id,name',
                 'unit:id,name',
-                'activeRate:id,product_id,purchase_price,sales_price,effective_date,status',
+                'activeRate',
             ])
             ->paginate($perPage)
             ->withQueryString()
