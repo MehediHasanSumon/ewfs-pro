@@ -38,7 +38,6 @@ class Dispenser extends Model
 
     public function latestReading(): HasOne
     {
-        return $this->hasOne(DispenserReading::class)
-            ->latestOfMany('dispenser_readings.id');
+        return $this->hasOne(DispenserReading::class)->latestOfMany();
     }
 }

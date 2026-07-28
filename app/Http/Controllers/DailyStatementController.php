@@ -16,8 +16,7 @@ class DailyStatementController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly DailyStatementReportService $reports
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {

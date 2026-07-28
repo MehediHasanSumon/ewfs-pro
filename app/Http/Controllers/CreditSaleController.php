@@ -145,7 +145,10 @@ class CreditSaleController extends Controller implements HasMiddleware
         $query = CreditSale::query()
             ->with([
                 'shift',
-                'customer:id,name',
+                'customer' => fn ($query) => $query->select([
+                    'customers.id',
+                    'customers.name',
+                ]),
                 'customers.customer',
                 'customers.items.product',
                 'customers.items.category',

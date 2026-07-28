@@ -36,7 +36,7 @@ class DispenserController extends Controller implements HasMiddleware
             ->with([
                 'product:id,product_name',
                 'product.activeRate',
-                'latestReading' => fn (Builder $query) => $query->select([
+                'latestReading' => fn ($query) => $query->select([
                     'dispenser_readings.id',
                     'dispenser_readings.dispenser_id',
                     'dispenser_readings.start_reading',

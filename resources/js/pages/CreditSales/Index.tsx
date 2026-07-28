@@ -261,6 +261,7 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
         }
     };
 
+    /* eslint-disable react-hooks/exhaustive-deps -- Existing debounced filter behavior intentionally reacts only to the search value. */
     useEffect(() => {
         const timer = setTimeout(() => {
             if (search !== (filters.search || '')) {
@@ -269,6 +270,7 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
         }, 500);
         return () => clearTimeout(timer);
     }, [search]);
+    /* eslint-enable react-hooks/exhaustive-deps */
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
