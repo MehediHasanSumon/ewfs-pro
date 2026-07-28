@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
 import { FormModal } from '@/components/ui/form-modal';
+import InputError from '@/components/input-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination } from '@/components/ui/pagination';
@@ -715,7 +716,10 @@ export default function Customers({ customers, groups = [], products = [], lastC
                                         onChange={(e) => setData('vehicle_type', e.target.value)}
                                         placeholder="e.g., Car, Truck"
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        aria-invalid={Boolean(errors.vehicle_type)}
+                                        aria-describedby={errors.vehicle_type ? 'vehicle-type-error' : undefined}
                                     />
+                                    <InputError id="vehicle-type-error" message={errors.vehicle_type} />
                                 </div>
                                 <div>
                                     <Label htmlFor="vehicle_name" className="dark:text-gray-200">Vehicle Name</Label>
@@ -725,7 +729,10 @@ export default function Customers({ customers, groups = [], products = [], lastC
                                         onChange={(e) => setData('vehicle_name', e.target.value)}
                                         placeholder="e.g., Toyota Corolla"
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        aria-invalid={Boolean(errors.vehicle_name)}
+                                        aria-describedby={errors.vehicle_name ? 'vehicle-name-error' : undefined}
                                     />
+                                    <InputError id="vehicle-name-error" message={errors.vehicle_name} />
                                 </div>
                             </div>
                             
@@ -738,7 +745,10 @@ export default function Customers({ customers, groups = [], products = [], lastC
                                         onChange={(e) => setData('vehicle_number', e.target.value)}
                                         placeholder="e.g., ABC-1234"
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        aria-invalid={Boolean(errors.vehicle_number)}
+                                        aria-describedby={errors.vehicle_number ? 'vehicle-number-error' : undefined}
                                     />
+                                    <InputError id="vehicle-number-error" message={errors.vehicle_number} />
                                 </div>
                                 <div>
                                     <Label htmlFor="reg_date" className="dark:text-gray-200">Registration Date</Label>
@@ -748,7 +758,10 @@ export default function Customers({ customers, groups = [], products = [], lastC
                                         value={data.reg_date}
                                         onChange={(e) => setData('reg_date', e.target.value)}
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        aria-invalid={Boolean(errors.reg_date)}
+                                        aria-describedby={errors.reg_date ? 'registration-date-error' : undefined}
                                     />
+                                    <InputError id="registration-date-error" message={errors.reg_date} />
                                 </div>
                             </div>
                             
@@ -773,6 +786,7 @@ export default function Customers({ customers, groups = [], products = [], lastC
                                         </label>
                                     ))}
                                 </div>
+                                <InputError id="product-ids-error" message={errors.product_ids} />
                             </div>
                         </div>
                     </div>

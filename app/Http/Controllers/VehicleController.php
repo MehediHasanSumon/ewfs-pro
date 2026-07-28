@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class VehicleController extends Controller implements HasMiddleware
@@ -93,10 +94,16 @@ class VehicleController extends Controller implements HasMiddleware
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'product_ids' => 'nullable|array',
-            'product_ids.*' => 'exists:products,id',
+            'product_ids.*' => 'integer|distinct|exists:products,id',
             'vehicle_type' => 'nullable|string|max:150',
             'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => 'nullable|string|max:50',
+            'vehicle_number' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('vehicles', 'vehicle_number')
+                    ->where(fn ($query) => $query->where('customer_id', $request->input('customer_id'))),
+            ],
             'reg_date' => 'nullable|date',
             'status' => 'boolean',
         ]);
@@ -122,10 +129,17 @@ class VehicleController extends Controller implements HasMiddleware
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'product_ids' => 'nullable|array',
-            'product_ids.*' => 'exists:products,id',
+            'product_ids.*' => 'integer|distinct|exists:products,id',
             'vehicle_type' => 'nullable|string|max:150',
             'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => 'nullable|string|max:50',
+            'vehicle_number' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('vehicles', 'vehicle_number')
+                    ->where(fn ($query) => $query->where('customer_id', $request->input('customer_id')))
+                    ->ignore($vehicle->id),
+            ],
             'reg_date' => 'nullable|date',
             'status' => 'boolean',
         ]);

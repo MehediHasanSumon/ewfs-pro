@@ -141,11 +141,13 @@ class CustomerController extends Controller implements HasMiddleware
             'address' => 'nullable|string',
             'status' => 'boolean',
             'product_ids' => 'nullable|array',
-            'product_ids.*' => 'exists:products,id',
+            'product_ids.*' => 'integer|distinct|exists:products,id',
             'vehicle_type' => 'nullable|string|max:150',
             'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => 'nullable|string|max:50',
-            'reg_date' => 'nullable|date'
+            'vehicle_number' => 'nullable|required_with:vehicle_type,vehicle_name,reg_date,product_ids|string|max:50',
+            'reg_date' => 'nullable|date',
+        ], [
+            'vehicle_number.required_with' => 'Vehicle number is required when vehicle details or products are provided.',
         ]);
 
         DB::transaction(function () use ($request) {
@@ -167,12 +169,7 @@ class CustomerController extends Controller implements HasMiddleware
                 'status' => $status,
             ]);
 
-            if (
-                $request->filled('product_ids')
-                || $request->filled('vehicle_type')
-                || $request->filled('vehicle_name')
-                || $request->filled('vehicle_number')
-            ) {
+            if ($request->filled('vehicle_number')) {
                 $vehicle = Vehicle::query()->create([
                     'customer_id' => $customer->id,
                     'vehicle_type' => $request->vehicle_type,
