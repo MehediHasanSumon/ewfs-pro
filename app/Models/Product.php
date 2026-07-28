@@ -60,9 +60,15 @@ class Product extends Model
     public function activeRate(): HasOne
     {
         return $this->hasOne(ProductRate::class)
-            ->ofMany('effective_date', 'max', fn (Builder $query) => $query
-                ->where('status', true)
-                ->whereDate('effective_date', '<=', now()->toDateString()));
+            ->ofMany(
+                [
+                    'effective_date' => 'max',
+                    'id' => 'max',
+                ],
+                fn (Builder $query) => $query
+                    ->where('status', true)
+                    ->whereDate('effective_date', '<=', now()->toDateString())
+            );
     }
 
     public function vehicles(): BelongsToMany
