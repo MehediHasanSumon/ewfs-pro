@@ -2,25 +2,37 @@
 
 namespace Database\Seeders;
 
-use App\Models\Customer;
-use App\Models\Account;
 use App\Helpers\AccountHelper;
 use App\Helpers\CustomerHelper;
+use App\Models\Account;
+use App\Models\Customer;
+use App\Models\Group;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class CustomerSeeder extends Seeder
 {
     public function run(): void
     {
+        $groupId = Group::query()
+            ->where('code', '100020001')
+            ->value('id');
+
+        if (! $groupId) {
+            throw new RuntimeException(
+                'Customer receivable group is missing. Run GroupSeeder before CustomerSeeder.'
+            );
+        }
+
         for ($i = 1; $i <= 10; $i++) {
-            // Create account first
-            $account = Account::create([
+            $account = Account::query()->create([
+                'group_id' => $groupId,
                 'name' => "Customer $i",
                 'ac_number' => AccountHelper::generateAccountNumber(),
-                'group_id' => 7,
-                'group_code' => '100020001',
-                'due_amount' => 0,
-                'paid_amount' => 0,
+                'currency' => 'BDT',
+                'is_control_account' => false,
+                'allow_manual_posting' => true,
+                'is_system' => false,
                 'status' => true,
             ]);
 
@@ -35,7 +47,6 @@ class CustomerSeeder extends Seeder
                 'tin_no' => "TIN00$i",
                 'trade_license' => "TL00$i",
                 'discount_rate' => 5.00,
-                'security_deposit' => 1000.00,
                 'credit_limit' => 10000.00,
                 'address' => "Customer Address $i",
                 'status' => true,

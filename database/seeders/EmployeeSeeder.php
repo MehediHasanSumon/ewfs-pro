@@ -2,22 +2,36 @@
 
 namespace Database\Seeders;
 
-use App\Models\Employee;
-use App\Models\Account;
 use App\Helpers\AccountHelper;
+use App\Models\Account;
+use App\Models\Employee;
+use App\Models\Group;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class EmployeeSeeder extends Seeder
 {
     public function run(): void
     {
+        $groupId = Group::query()
+            ->where('code', '40002')
+            ->value('id');
+
+        if (! $groupId) {
+            throw new RuntimeException(
+                'Employee account group is missing. Run GroupSeeder before EmployeeSeeder.'
+            );
+        }
+
         for ($i = 1; $i <= 10; $i++) {
-            // Create account first
-            $account = Account::create([
+            $account = Account::query()->create([
+                'group_id' => $groupId,
                 'name' => "Employee $i",
                 'ac_number' => AccountHelper::generateAccountNumber(),
-                'group_id' => 16,
-                'group_code' => '40002',
+                'currency' => 'BDT',
+                'is_control_account' => false,
+                'allow_manual_posting' => true,
+                'is_system' => false,
                 'status' => true,
             ]);
 

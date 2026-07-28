@@ -2,15 +2,27 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Supplier;
-use App\Models\Account;
 use App\Helpers\AccountHelper;
+use App\Models\Account;
+use App\Models\Group;
+use App\Models\Supplier;
+use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class SupplierSeeder extends Seeder
 {
     public function run(): void
     {
+        $groupId = Group::query()
+            ->where('code', '400010001')
+            ->value('id');
+
+        if (! $groupId) {
+            throw new RuntimeException(
+                'Supplier payable group is missing. Run GroupSeeder before SupplierSeeder.'
+            );
+        }
+
         $suppliers = [
             ['name' => 'ABC Traders', 'mobile' => '01711111111', 'email' => 'abc@example.com', 'address' => 'Dhaka'],
             ['name' => 'XYZ Suppliers', 'mobile' => '01722222222', 'email' => 'xyz@example.com', 'address' => 'Chittagong'],
@@ -18,14 +30,14 @@ class SupplierSeeder extends Seeder
         ];
 
         foreach ($suppliers as $supplierData) {
-            $account = Account::create([
+            $account = Account::query()->create([
+                'group_id' => $groupId,
                 'name' => $supplierData['name'],
                 'ac_number' => AccountHelper::generateAccountNumber(),
-                'group_id' => 11,
-                'group_code' => '400010001',
-                'due_amount' => 0,
-                'paid_amount' => 0,
-                'total_amount' => 0,
+                'currency' => 'BDT',
+                'is_control_account' => false,
+                'allow_manual_posting' => true,
+                'is_system' => false,
                 'status' => true,
             ]);
 
