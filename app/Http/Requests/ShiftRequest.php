@@ -16,7 +16,11 @@ class ShiftRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'start_time' => ['required', 'date_format:H:i:s'],
-            'end_time' => ['required', 'date_format:H:i:s', 'after:start_time'],
+            'end_time' => [
+                'required',
+                'date_format:H:i:s',
+                'different:start_time',
+            ],
             'status' => ['sometimes', 'boolean'],
         ];
     }
@@ -28,7 +32,7 @@ class ShiftRequest extends FormRequest
             'start_time.date_format' => 'Start Time must use the hh:mm AM/PM format.',
             'end_time.required' => 'End Time is required.',
             'end_time.date_format' => 'End Time must use the hh:mm AM/PM format.',
-            'end_time.after' => 'End Time must be after Start Time.',
+            'end_time.different' => 'End Time must be different from Start Time.',
         ];
     }
 }

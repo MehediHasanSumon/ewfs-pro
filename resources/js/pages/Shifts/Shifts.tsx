@@ -97,8 +97,11 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
         if (!data.end_time) {
             setError('end_time', 'End Time is required.');
             hasTimeError = true;
-        } else if (data.start_time && data.end_time <= data.start_time) {
-            setError('end_time', 'End Time must be after Start Time.');
+        } else if (data.start_time && data.end_time === data.start_time) {
+            setError(
+                'end_time',
+                'End Time must be different from Start Time.',
+            );
             hasTimeError = true;
         }
 
