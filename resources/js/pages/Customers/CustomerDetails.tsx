@@ -698,6 +698,7 @@ export default function CustomerDetails({
                                                                             >
                                                                                 {productIndex +
                                                                                     1}
+
                                                                                 .{' '}
                                                                                 {
                                                                                     p.product_name
@@ -769,7 +770,7 @@ export default function CustomerDetails({
                                 setCustomMessage('');
                                 setPhoneNumber(customer.mobile || '');
                             },
-                            onError: (errors) => {
+                            onError: () => {
                                 setProcessing(false);
                             },
                         },

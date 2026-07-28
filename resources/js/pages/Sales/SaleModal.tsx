@@ -153,19 +153,7 @@ export function SaleModal({
     const [processing, setProcessing] = useState(false);
     const [availableShifts, setAvailableShifts] = useState<Shift[]>(shifts);
 
-    useEffect(() => {
-        if (editingSale && isOpen) {
-            loadEditData();
-        } else if (isOpen) {
-            const initialState = buildInitialState();
-            setDataState(initialState);
-            setAvailableShifts(getAvailableShifts(initialState.sale_date));
-        } else if (!isOpen) {
-            reset();
-        }
-    }, [editingSale, isOpen]);
-
-    const loadEditData = async () => {
+    async function loadEditData() {
         if (!editingSale) return;
         try {
             const response = await fetch(`/sales/${editingSale.id}/edit`);
@@ -225,13 +213,13 @@ export function SaleModal({
         } catch (error) {
             console.error('Error loading sale:', error);
         }
-    };
+    }
 
-    const reset = () => {
+    function reset() {
         const initialState = buildInitialState();
         setDataState(initialState);
         setAvailableShifts(getAvailableShifts(initialState.sale_date));
-    };
+    }
 
     const setData = (key: string, value: string) => {
         setDataState((prev) => ({ ...prev, [key]: value }));
@@ -462,7 +450,7 @@ export function SaleModal({
         return [];
     };
 
-    const getAvailableShifts = (selectedDate: string) => {
+    function getAvailableShifts(selectedDate: string) {
         if (!selectedDate) return shifts;
 
         const closedShiftIds = closedShifts
@@ -470,7 +458,7 @@ export function SaleModal({
             .map((cs) => cs.shift_id);
 
         return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
-    };
+    }
 
     const getFilteredProducts = (vehicleNumber: string) => {
         if (!vehicleNumber) return [];
@@ -551,6 +539,20 @@ export function SaleModal({
             return { ...prevData, products: newProducts };
         });
     };
+
+    /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- Opening the modal synchronizes its local form snapshot. */
+    useEffect(() => {
+        if (editingSale && isOpen) {
+            loadEditData();
+        } else if (isOpen) {
+            const initialState = buildInitialState();
+            setDataState(initialState);
+            setAvailableShifts(getAvailableShifts(initialState.sale_date));
+        } else if (!isOpen) {
+            reset();
+        }
+    }, [editingSale, isOpen]);
+    /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
     return (
         <FormModal

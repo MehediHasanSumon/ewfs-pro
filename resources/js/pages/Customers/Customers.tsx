@@ -119,10 +119,8 @@ interface CustomersProps {
 
 export default function Customers({
     customers,
-    groups = [],
     products = [],
     vehicleProductLimit,
-    lastCustomerGroup,
     filters,
 }: CustomersProps) {
     const { can } = usePermission();
