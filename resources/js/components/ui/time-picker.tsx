@@ -104,7 +104,7 @@ export function TimePicker({
     const containerRef = useRef<HTMLDivElement>(null);
     const [isOpen, setIsOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [draft, setDraft] = useState(() => formatTimeForDisplay(value));
+    const [draft, setDraft] = useState('');
     const [pickerTime, setPickerTime] = useState<TimeParts>(
         () =>
             parseTime(value) || {
@@ -113,12 +113,7 @@ export function TimePicker({
                 period: 'AM',
             },
     );
-
-    useEffect(() => {
-        if (!isEditing) {
-            setDraft(formatTimeForDisplay(value));
-        }
-    }, [isEditing, value]);
+    const displayValue = isEditing ? draft : formatTimeForDisplay(value);
 
     useEffect(() => {
         if (!isOpen) {
@@ -143,13 +138,13 @@ export function TimePicker({
         };
     }, [isOpen]);
 
-    const openPicker = () => {
+    const openPicker = (sourceValue = displayValue) => {
         if (disabled) {
             return;
         }
 
         setPickerTime(
-            parseTime(draft || value) || {
+            parseTime(sourceValue || value) || {
                 hour: '12',
                 minute: '00',
                 period: 'AM',
@@ -162,6 +157,7 @@ export function TimePicker({
         const nextDraft = event.target.value;
         const storageValue = formatTimeForStorage(nextDraft);
 
+        setIsEditing(true);
         setDraft(nextDraft);
         onChange(storageValue || '');
     };
@@ -198,6 +194,7 @@ export function TimePicker({
 
         onChange(storageValue);
         setDraft(formatTimeForDisplay(storageValue));
+        setIsEditing(false);
         setIsOpen(false);
     };
 
@@ -208,10 +205,13 @@ export function TimePicker({
                 type="text"
                 inputMode="text"
                 autoComplete="off"
-                value={draft}
+                value={displayValue}
                 onFocus={() => {
+                    const formattedValue = formatTimeForDisplay(value);
+
+                    setDraft(formattedValue);
                     setIsEditing(true);
-                    openPicker();
+                    openPicker(formattedValue);
                 }}
                 onChange={handleInputChange}
                 onBlur={handleBlur}

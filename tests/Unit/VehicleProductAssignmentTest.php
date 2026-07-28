@@ -207,6 +207,24 @@ it('returns sales context with the owner and first product in pivot order', func
         ->and($context['products'][0]['sort_order'])->toBe(1);
 });
 
+it('serializes sales selection products with top-level pivot order', function () {
+    [, $productIds, $vehicle] = createAssignmentFixture();
+    app(VehicleProductAssignmentService::class)->sync($vehicle, [
+        ['product_id' => $productIds[1], 'sort_order' => 3],
+        ['product_id' => $productIds[2], 'sort_order' => 1],
+        ['product_id' => $productIds[0], 'sort_order' => 2],
+    ]);
+
+    $vehicleContext = app(VehicleSalesContextService::class)
+        ->forSalesSelection()
+        ->firstWhere('id', $vehicle->id);
+
+    expect(collect($vehicleContext['products'])->pluck('id')->all())
+        ->toBe([$productIds[2], $productIds[0], $productIds[1]])
+        ->and(collect($vehicleContext['products'])->pluck('sort_order')->all())
+        ->toBe([1, 2, 3]);
+});
+
 it('rejects a vehicle without an active customer sales context', function () {
     $vehicle = Vehicle::query()->create([
         'customer_id' => null,

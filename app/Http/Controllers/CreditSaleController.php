@@ -8,8 +8,8 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
-use App\Models\Vehicle;
 use App\Services\CreditSalePostingService;
+use App\Services\VehicleSalesContextService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -19,7 +19,8 @@ use Inertia\Inertia;
 class CreditSaleController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly CreditSalePostingService $creditSales
+        private readonly CreditSalePostingService $creditSales,
+        private readonly VehicleSalesContextService $vehicleSalesContext
     ) {}
 
     public static function middleware(): array
@@ -39,16 +40,7 @@ class CreditSaleController extends Controller implements HasMiddleware
             'creditSales' => $this->filteredQuery($request)
                 ->paginate($this->perPage($request))
                 ->withQueryString(),
-            'vehicles' => Vehicle::query()
-                ->where('status', true)
-                ->whereHas('customer', fn ($query) => $query->active())
-                ->with([
-                    'customer:id,name',
-                    'products' => fn ($query) => $query
-                        ->where('products.status', true)
-                        ->select('products.id', 'products.product_name'),
-                ])
-                ->get(['id', 'vehicle_number', 'customer_id']),
+            'vehicles' => $this->vehicleSalesContext->forSalesSelection(),
             'customers' => Customer::query()->active()->get(['id', 'name']),
             'products' => Product::query()
                 ->with('activeRate')

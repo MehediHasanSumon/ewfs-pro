@@ -11,9 +11,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    type AssignedVehicleProduct,
+    getOrderedVehicleProducts,
+} from '@/lib/vehicle-products';
 import { router } from '@inertiajs/react';
 import { Edit, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface Sale {
     id: number;
@@ -57,11 +61,9 @@ interface Vehicle {
     id: number;
     vehicle_number: string;
     customer_id: number | null;
-    products?: {
-        id: number;
+    products?: (AssignedVehicleProduct & {
         product_name: string;
-        sort_order?: number;
-    }[];
+    })[];
     customer?: {
         id: number;
         name: string;
@@ -462,28 +464,28 @@ export function SaleModal({
         return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
     }
 
-    const getFilteredProducts = (vehicleNumber: string) => {
-        if (!vehicleNumber) return [];
-
-        const vehicle = vehicles.find(
-            (item) => item.vehicle_number === vehicleNumber,
-        );
-
-        if (!vehicle) {
-            return [];
-        }
-
-        return [...(vehicle.products || [])]
-            .sort(
-                (first, second) =>
-                    (first.sort_order ?? Number.MAX_SAFE_INTEGER) -
-                    (second.sort_order ?? Number.MAX_SAFE_INTEGER),
-            )
-            .map((assignedProduct) =>
-                products.find((product) => product.id === assignedProduct.id),
-            )
-            .filter((product): product is Product => Boolean(product));
-    };
+    const selectedVehicleNumber = data.products[0]?.vehicle_no || '';
+    const selectedProductId = data.products[0]?.product_id || '';
+    const selectedVehicle = useMemo(
+        () =>
+            vehicles.find(
+                (vehicle) =>
+                    vehicle.vehicle_number === selectedVehicleNumber,
+            ),
+        [selectedVehicleNumber, vehicles],
+    );
+    const filteredProducts = useMemo(
+        () =>
+            getOrderedVehicleProducts(selectedVehicle?.products, products),
+        [products, selectedVehicle?.products],
+    );
+    const selectedProduct = useMemo(
+        () =>
+            filteredProducts.find(
+                (product) => product.id.toString() === selectedProductId,
+            ),
+        [filteredProducts, selectedProductId],
+    );
 
     const getFilteredVehicleNumbers = (customerName: string) => {
         const managedVehicleNumbers = new Set(
@@ -506,37 +508,47 @@ export function SaleModal({
               ).sort();
     };
 
-    const clearProductSelection = (
-        product: ReturnType<typeof buildInitialState>['products'][number],
-    ) => {
-        product.product_id = '';
-        product.amount = '';
-        product.paid_amount = '';
-        product.due_amount = '';
-    };
+    const clearProductSelection = useCallback(
+        (
+            product: ReturnType<
+                typeof buildInitialState
+            >['products'][number],
+        ) => {
+            product.product_id = '';
+            product.amount = '';
+            product.paid_amount = '';
+            product.due_amount = '';
+        },
+        [],
+    );
 
-    const selectProductForLine = (
-        line: ReturnType<typeof buildInitialState>['products'][number],
-        productId: string,
-    ) => {
-        line.product_id = productId;
-        const selectedProduct = products.find(
-            (product) => product.id.toString() === productId,
-        );
+    const selectProductForLine = useCallback(
+        (
+            line: ReturnType<typeof buildInitialState>['products'][number],
+            productId: string,
+        ) => {
+            line.product_id = productId;
+            const selectedProduct = products.find(
+                (product) => product.id.toString() === productId,
+            );
 
-        if (!selectedProduct) {
-            clearProductSelection(line);
-            return;
-        }
+            if (!selectedProduct) {
+                clearProductSelection(line);
+                return;
+            }
 
-        const quantity = parseFloat(line.quantity) || 0;
-        const amount = selectedProduct.sales_price * quantity;
-        const discount = parseFloat(line.discount) || 0;
-        line.amount = quantity > 0 ? amount.toString() : '';
-        line.paid_amount =
-            quantity > 0 ? Math.max(0, amount - discount).toFixed(2) : '';
-        line.due_amount = quantity > 0 ? '0.00' : '';
-    };
+            const quantity = parseFloat(line.quantity) || 0;
+            const amount = selectedProduct.sales_price * quantity;
+            const discount = parseFloat(line.discount) || 0;
+            line.amount = quantity > 0 ? amount.toString() : '';
+            line.paid_amount =
+                quantity > 0
+                    ? Math.max(0, amount - discount).toFixed(2)
+                    : '';
+            line.due_amount = quantity > 0 ? '0.00' : '';
+        },
+        [clearProductSelection, products],
+    );
 
     const handleVehicleChange = (index: number, value: string) => {
         const vehicle = vehicles.find((item) => item.vehicle_number === value);
@@ -566,13 +578,7 @@ export function SaleModal({
                     clearProductSelection(line);
                 } else {
                     line.customer = vehicle.customer.name;
-                    const firstProduct = getFilteredProducts(value)[0];
-
-                    if (firstProduct) {
-                        selectProductForLine(line, firstProduct.id.toString());
-                    } else {
-                        clearProductSelection(line);
-                    }
+                    clearProductSelection(line);
                 }
             } else {
                 line.vehicle_no = '';
@@ -585,6 +591,54 @@ export function SaleModal({
             return { ...prevData, products: newProducts };
         });
     };
+
+    /* eslint-disable react-hooks/set-state-in-effect -- Reconcile the controlled product only after the selected vehicle's dynamic product list is available. */
+    useEffect(() => {
+        if (!selectedVehicleNumber || !selectedVehicle?.products) {
+            return;
+        }
+
+        setDataState((prevData) => {
+            const currentLine = prevData.products[0];
+
+            if (
+                !currentLine ||
+                currentLine.vehicle_no !== selectedVehicleNumber
+            ) {
+                return prevData;
+            }
+
+            const currentProductIsAvailable = filteredProducts.some(
+                (product) =>
+                    product.id.toString() === currentLine.product_id,
+            );
+
+            if (currentProductIsAvailable) {
+                return prevData;
+            }
+
+            const newProducts = [...prevData.products];
+            const line = { ...currentLine };
+            const firstProduct = filteredProducts[0];
+
+            if (firstProduct) {
+                selectProductForLine(line, firstProduct.id.toString());
+            } else {
+                clearProductSelection(line);
+            }
+
+            newProducts[0] = line;
+
+            return { ...prevData, products: newProducts };
+        });
+    }, [
+        clearProductSelection,
+        filteredProducts,
+        selectedVehicle,
+        selectedVehicleNumber,
+        selectProductForLine,
+    ]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- Opening the modal synchronizes its local form snapshot. */
     useEffect(() => {
@@ -752,28 +806,24 @@ export function SaleModal({
                                 updateProduct(0, 'product_id', value)
                             }
                             disabled={
-                                !data.products[0]?.vehicle_no ||
-                                getFilteredProducts(
-                                    data.products[0]?.vehicle_no || '',
-                                ).length === 0
+                                !selectedVehicleNumber ||
+                                filteredProducts.length === 0
                             }
                         >
                             <SelectTrigger>
                                 <SelectValue
                                     placeholder={
-                                        data.products[0]?.vehicle_no &&
-                                        getFilteredProducts(
-                                            data.products[0]?.vehicle_no || '',
-                                        ).length === 0
+                                        selectedVehicleNumber &&
+                                        filteredProducts.length === 0
                                             ? 'No assigned products'
                                             : 'Select product'
                                     }
-                                />
+                                >
+                                    {selectedProduct?.product_name}
+                                </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                                {getFilteredProducts(
-                                    data.products[0]?.vehicle_no || '',
-                                ).map((product) => (
+                                {filteredProducts.map((product) => (
                                     <SelectItem
                                         key={product.id}
                                         value={product.id.toString()}
@@ -792,13 +842,7 @@ export function SaleModal({
                             type="number"
                             step="0.01"
                             value={
-                                getFilteredProducts(
-                                    data.products[0]?.vehicle_no || '',
-                                ).find(
-                                    (p) =>
-                                        p.id.toString() ===
-                                        data.products[0]?.product_id,
-                                )?.sales_price || ''
+                                selectedProduct?.sales_price || ''
                             }
                             readOnly
                             className="bg-gray-100 dark:border-gray-600 dark:bg-gray-600 dark:text-white"

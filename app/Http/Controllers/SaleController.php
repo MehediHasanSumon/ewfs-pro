@@ -9,8 +9,8 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
-use App\Models\Vehicle;
 use App\Services\SalePostingService;
+use App\Services\VehicleSalesContextService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -20,7 +20,8 @@ use Inertia\Inertia;
 class SaleController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly SalePostingService $sales
+        private readonly SalePostingService $sales,
+        private readonly VehicleSalesContextService $vehicleSalesContext
     ) {}
 
     public static function middleware(): array
@@ -47,16 +48,7 @@ class SaleController extends Controller implements HasMiddleware
             'sales' => $sales,
             'accounts' => $accounts,
             'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
-            'vehicles' => Vehicle::query()
-                ->where('status', true)
-                ->whereHas('customer', fn ($query) => $query->active())
-                ->with([
-                    'customer:id,name',
-                    'products' => fn ($query) => $query
-                        ->where('products.status', true)
-                        ->select('products.id', 'products.product_name'),
-                ])
-                ->get(['id', 'vehicle_number', 'customer_id']),
+            'vehicles' => $this->vehicleSalesContext->forSalesSelection(),
             'salesHistory' => Sale::query()
                 ->with('items:id,sale_id,product_id')
                 ->where('sale_type', 'regular')

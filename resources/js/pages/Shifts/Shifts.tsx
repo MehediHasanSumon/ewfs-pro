@@ -293,6 +293,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
         }
     };
 
+    /* eslint-disable react-hooks/exhaustive-deps -- Existing debounced filter behavior intentionally reacts only to the search value. */
     useEffect(() => {
         const timer = setTimeout(() => {
             if (search !== (filters?.search || '')) {
@@ -307,6 +308,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
             applyFilters();
         }
     }, [status]);
+    /* eslint-enable react-hooks/exhaustive-deps */
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

@@ -2,10 +2,13 @@
 
 use App\Http\Requests\ShiftRequest;
 use Illuminate\Support\Facades\Validator;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 function validateShiftTimes(array $data)
 {
-    $request = app(ShiftRequest::class);
+    $request = new ShiftRequest;
 
     return Validator::make($data, $request->rules(), $request->messages());
 }

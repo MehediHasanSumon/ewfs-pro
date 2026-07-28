@@ -3,10 +3,42 @@
 namespace App\Services;
 
 use App\Models\Vehicle;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class VehicleSalesContextService
 {
+    public function forSalesSelection(): Collection
+    {
+        return Vehicle::query()
+            ->where('status', true)
+            ->whereHas('customer', fn ($query) => $query->active())
+            ->with([
+                'customer:id,name',
+                'products' => fn ($query) => $query
+                    ->where('products.status', true)
+                    ->select('products.id', 'products.product_name'),
+            ])
+            ->get(['id', 'vehicle_number', 'customer_id'])
+            ->map(fn (Vehicle $vehicle) => [
+                'id' => $vehicle->id,
+                'vehicle_number' => $vehicle->vehicle_number,
+                'customer_id' => $vehicle->customer_id,
+                'customer' => [
+                    'id' => $vehicle->customer->id,
+                    'name' => $vehicle->customer->name,
+                ],
+                'products' => $vehicle->products
+                    ->values()
+                    ->map(fn ($product) => [
+                        'id' => $product->id,
+                        'product_name' => $product->product_name,
+                        'sort_order' => (int) $product->pivot->sort_order,
+                    ])
+                    ->all(),
+            ]);
+    }
+
     public function resolve(Vehicle $vehicle): array
     {
         if (! $vehicle->status) {
