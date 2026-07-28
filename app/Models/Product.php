@@ -73,7 +73,9 @@ class Product extends Model
 
     public function vehicles(): BelongsToMany
     {
-        return $this->belongsToMany(Vehicle::class, 'vehicle_products')->withTimestamps();
+        return $this->belongsToMany(Vehicle::class, 'vehicle_products')
+            ->withPivot('sort_order')
+            ->withTimestamps();
     }
 
     public function saleItems(): HasMany

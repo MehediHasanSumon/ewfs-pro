@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\CreditSale;
-use App\Models\Product;
 use App\Models\Customer;
+use App\Models\Product;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 
@@ -14,9 +14,9 @@ class CreditSalePostingService
         private readonly AccountingService $accounting,
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
-        private readonly DocumentNumberService $numbers
-    ) {
-    }
+        private readonly DocumentNumberService $numbers,
+        private readonly VehicleProductAssignmentService $vehicleProducts
+    ) {}
 
     public function createMany(array $data): array
     {
@@ -59,6 +59,9 @@ class CreditSalePostingService
         $product = Product::query()
             ->with(['category', 'unit', 'activeRate'])
             ->findOrFail($productData['product_id']);
+
+        $this->vehicleProducts->assertBelongsToCustomer($vehicle, $customer);
+        $this->vehicleProducts->assertAssigned($vehicle, $product->id);
 
         $quantity = (float) $productData['quantity'];
         $subtotal = (float) $productData['amount'];

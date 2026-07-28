@@ -2,26 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CustomerRequest;
+use App\Http\Resources\CustomerResource;
+use App\Models\CompanySetting;
+use App\Models\CreditSaleCustomer;
 use App\Models\Customer;
 use App\Models\Group;
-use App\Models\Vehicle;
 use App\Models\Product;
-use App\Models\CompanySetting;
-use App\Models\SMSTemplate;
-use App\Models\SMSSetting;
 use App\Models\SMSLog;
-use App\Models\CreditSaleCustomer;
+use App\Models\SMSSetting;
+use App\Models\SMSTemplate;
+use App\Models\Vehicle;
 use App\Services\DocumentNumberService;
 use App\Services\OpeningBalanceService;
 use App\Services\PartyAccountService;
 use App\Services\PartyLedgerService;
+use App\Services\VehicleProductAssignmentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Routing\Controllers\HasMiddleware;
 
 class CustomerController extends Controller implements HasMiddleware
 {
@@ -29,9 +32,9 @@ class CustomerController extends Controller implements HasMiddleware
         private readonly DocumentNumberService $numbers,
         private readonly OpeningBalanceService $openingBalances,
         private readonly PartyAccountService $partyAccounts,
-        private readonly PartyLedgerService $partyLedger
-    ) {
-    }
+        private readonly PartyLedgerService $partyLedger,
+        private readonly VehicleProductAssignmentService $vehicleProducts
+    ) {}
 
     public static function middleware(): array
     {
@@ -44,18 +47,20 @@ class CustomerController extends Controller implements HasMiddleware
             new Middleware('permission:view-customer', only: ['sendSMS']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = Customer::select('id', 'account_id', 'code', 'name', 'mobile', 'email', 'nid_number', 'vat_reg_no', 'tin_no', 'trade_license', 'discount_rate', 'credit_limit', 'credit_days', 'address', 'status', 'created_at')
+        $query = Customer::select('id', 'account_id', 'code', 'name', 'proprietor_name', 'mobile', 'email', 'nid_number', 'vat_reg_no', 'tin_no', 'trade_license', 'discount_rate', 'credit_limit', 'credit_days', 'address', 'status', 'created_at')
             ->with('account:id,name,ac_number,group_id', 'account.group:id,code,name');
 
         // Apply filters
         if ($request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('code', 'like', '%' . $request->search . '%')
-                    ->orWhere('mobile', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+                $q->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('proprietor_name', 'like', '%'.$request->search.'%')
+                    ->orWhere('code', 'like', '%'.$request->search.'%')
+                    ->orWhere('mobile', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -65,7 +70,7 @@ class CustomerController extends Controller implements HasMiddleware
 
         $sortBy = in_array(
             $request->get('sort_by'),
-            ['id', 'code', 'name', 'mobile', 'email', 'status', 'created_at'],
+            ['id', 'code', 'name', 'proprietor_name', 'mobile', 'email', 'status', 'created_at'],
             true
         ) ? $request->get('sort_by') : 'created_at';
         $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
@@ -79,39 +84,43 @@ class CustomerController extends Controller implements HasMiddleware
                 $metric = $metrics->get($customer->id);
 
                 return [
-                'id' => $customer->id,
-                'account_id' => $customer->account_id,
-                'code' => $customer->code,
-                'name' => $customer->name,
-                'mobile' => $customer->mobile,
-                'email' => $customer->email,
-                'nid_number' => $customer->nid_number,
-                'vat_reg_no' => $customer->vat_reg_no,
-                'tin_no' => $customer->tin_no,
-                'trade_license' => $customer->trade_license,
-                'discount_rate' => $customer->discount_rate,
-                'security_deposit' => $metric['security_deposit'],
-                'credit_limit' => $customer->credit_limit,
-                'address' => $customer->address,
-                'status' => $customer->status,
-                'account' => $customer->account,
-                'total_sales' => $metric['total_sales'],
-                'total_paid' => $metric['total_paid'],
-                'current_due' => $metric['current_due'],
-                'created_at' => $customer->created_at->format('Y-m-d'),
+                    'id' => $customer->id,
+                    'account_id' => $customer->account_id,
+                    'code' => $customer->code,
+                    'name' => $customer->name,
+                    'proprietor_name' => $customer->proprietor_name,
+                    'mobile' => $customer->mobile,
+                    'email' => $customer->email,
+                    'nid_number' => $customer->nid_number,
+                    'vat_reg_no' => $customer->vat_reg_no,
+                    'tin_no' => $customer->tin_no,
+                    'trade_license' => $customer->trade_license,
+                    'discount_rate' => $customer->discount_rate,
+                    'security_deposit' => $metric['security_deposit'],
+                    'credit_limit' => $customer->credit_limit,
+                    'address' => $customer->address,
+                    'status' => $customer->status,
+                    'account' => $customer->account,
+                    'total_sales' => $metric['total_sales'],
+                    'total_paid' => $metric['total_paid'],
+                    'current_due' => $metric['current_due'],
+                    'created_at' => $customer->created_at->format('Y-m-d'),
                 ];
             })
         );
 
         $groups = Group::where('status', true)->get(['id', 'code', 'name']);
-        $products = Product::where('status', 1)->get(['id', 'product_name as name']);
+        $products = Product::query()
+            ->active()
+            ->orderBy('product_name')
+            ->get(['id', 'product_name as name']);
 
         $lastCustomerGroup = null;
         $lastCustomer = Customer::with('account.group')->latest()->first();
         if ($lastCustomer && $lastCustomer->account && $lastCustomer->account->group) {
             $lastCustomerGroup = [
                 'id' => $lastCustomer->account->group->id,
-                'code' => $lastCustomer->account->group->code
+                'code' => $lastCustomer->account->group->code,
             ];
         }
 
@@ -119,80 +128,58 @@ class CustomerController extends Controller implements HasMiddleware
             'customers' => $customers,
             'groups' => $groups,
             'products' => $products,
+            'vehicleProductLimit' => max(1, (int) config('erp.vehicle_products.max_assigned', 50)),
             'lastCustomerGroup' => $lastCustomerGroup,
-            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(CustomerRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:150',
-            'mobile' => 'nullable|string|max:100',
-            'email' => 'nullable|email|max:50',
-            'nid_number' => 'nullable|string|max:100',
-            'vat_reg_no' => 'nullable|string|max:100',
-            'tin_no' => 'nullable|string|max:100',
-            'trade_license' => 'nullable|string|max:100',
-            'discount_rate' => 'nullable|numeric|min:0',
-            'security_deposit' => 'nullable|numeric|min:0',
-            'credit_limit' => 'nullable|numeric|min:0',
-            'previous_due' => 'nullable|numeric|min:0',
-            'address' => 'nullable|string',
-            'status' => 'boolean',
-            'product_ids' => 'nullable|array',
-            'product_ids.*' => 'integer|distinct|exists:products,id',
-            'vehicle_type' => 'nullable|string|max:150',
-            'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => 'nullable|required_with:vehicle_type,vehicle_name,reg_date,product_ids|string|max:50',
-            'reg_date' => 'nullable|date',
-        ], [
-            'vehicle_number.required_with' => 'Vehicle number is required when vehicle details or products are provided.',
-        ]);
+        $validated = $request->validated();
 
-        DB::transaction(function () use ($request) {
-            $status = $request->boolean('status', true);
-            $account = $this->partyAccounts->createCustomerAccount($request->name, $status);
+        DB::transaction(function () use ($validated) {
+            $status = (bool) ($validated['status'] ?? true);
+            $account = $this->partyAccounts->createCustomerAccount($validated['name'], $status);
             $customer = Customer::query()->create([
                 'account_id' => $account->id,
                 'code' => $this->numbers->next('customer', 'CC', null, 3),
-                'name' => $request->name,
-                'mobile' => $request->mobile,
-                'email' => $request->email,
-                'nid_number' => $request->nid_number,
-                'vat_reg_no' => $request->vat_reg_no,
-                'tin_no' => $request->tin_no,
-                'trade_license' => $request->trade_license,
-                'discount_rate' => $request->input('discount_rate', 0),
-                'credit_limit' => $request->input('credit_limit', 0),
-                'address' => $request->address,
+                'name' => $validated['name'],
+                'proprietor_name' => $validated['proprietor_name'] ?? null,
+                'mobile' => $validated['mobile'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'nid_number' => $validated['nid_number'] ?? null,
+                'vat_reg_no' => $validated['vat_reg_no'] ?? null,
+                'tin_no' => $validated['tin_no'] ?? null,
+                'trade_license' => $validated['trade_license'] ?? null,
+                'discount_rate' => $validated['discount_rate'] ?? 0,
+                'credit_limit' => $validated['credit_limit'] ?? 0,
+                'address' => $validated['address'] ?? null,
                 'status' => $status,
             ]);
 
-            if ($request->filled('vehicle_number')) {
+            if (! empty($validated['vehicle_number'])) {
                 $vehicle = Vehicle::query()->create([
                     'customer_id' => $customer->id,
-                    'vehicle_type' => $request->vehicle_type,
-                    'vehicle_name' => $request->vehicle_name,
-                    'vehicle_number' => $request->vehicle_number,
-                    'reg_date' => $request->reg_date,
+                    'vehicle_type' => $validated['vehicle_type'] ?? null,
+                    'vehicle_name' => $validated['vehicle_name'] ?? null,
+                    'vehicle_number' => $validated['vehicle_number'],
+                    'reg_date' => $validated['reg_date'] ?? null,
                     'status' => $status,
                 ]);
 
-                if ($request->filled('product_ids')) {
-                    $vehicle->products()->sync($request->product_ids);
-                }
+                $this->vehicleProducts->sync($vehicle, $validated['products'] ?? []);
             }
 
             $businessDate = now()->toDateString();
             $this->openingBalances->customerPreviousDue(
                 $customer,
-                (float) $request->input('previous_due', 0),
+                (float) ($validated['previous_due'] ?? 0),
                 $businessDate
             );
             $this->openingBalances->customerDeposit(
                 $customer,
-                (float) $request->input('security_deposit', 0),
+                (float) ($validated['security_deposit'] ?? 0),
                 $businessDate
             );
         });
@@ -204,8 +191,8 @@ class CustomerController extends Controller implements HasMiddleware
     {
         $customer->load([
             'account:id,name,ac_number',
-            'vehicles:id,customer_id,vehicle_number,vehicle_name,vehicle_type,reg_date',
-            'vehicles.products:id,product_name'
+            'vehicles:id,customer_id,vehicle_number,vehicle_name,vehicle_type,reg_date,status,created_at',
+            'vehicles.products:id,product_name',
         ]);
 
         $paymentQuery = $this->partyLedger->vouchers(
@@ -259,25 +246,12 @@ class CustomerController extends Controller implements HasMiddleware
             ->get();
 
         return Inertia::render('Customers/CustomerDetails', [
-            'customer' => [
-                'id' => $customer->id,
-                'code' => $customer->code,
-                'name' => $customer->name,
-                'mobile' => $customer->mobile,
-                'email' => $customer->email,
-                'nid_number' => $customer->nid_number,
-                'vat_reg_no' => $customer->vat_reg_no,
-                'tin_no' => $customer->tin_no,
-                'trade_license' => $customer->trade_license,
-                'discount_rate' => $customer->discount_rate,
-                'security_deposit' => $metric['security_deposit'],
-                'credit_limit' => $customer->credit_limit,
-                'address' => $customer->address,
-                'status' => $customer->status,
-                'account' => $customer->account,
-                'vehicles' => $customer->vehicles,
-                'created_at' => $customer->created_at->format('Y-m-d H:i:s'),
-            ],
+            'customer' => array_merge(
+                (new CustomerResource($customer))->resolve(),
+                [
+                    'security_deposit' => $metric['security_deposit'],
+                ]
+            ),
             'recentPayments' => $recentPayments,
             'recentSales' => $recentSales,
             'totalSales' => $metric['total_sales'],
@@ -285,7 +259,7 @@ class CustomerController extends Controller implements HasMiddleware
             'totalPaid' => $metric['total_paid'],
             'paymentCount' => $paymentCount,
             'currentDue' => $metric['current_due'],
-            'smsTemplates' => $smsTemplates
+            'smsTemplates' => $smsTemplates,
         ]);
     }
 
@@ -330,66 +304,52 @@ class CustomerController extends Controller implements HasMiddleware
             'currentBalance' => $metric['current_due'],
             'monthlySales' => $monthlySales,
             'availableYears' => $availableYears,
-            'recentPayments' => $recentPayments
+            'recentPayments' => $recentPayments,
         ]);
     }
 
-    public function update(Request $request, Customer $customer)
+    public function update(CustomerRequest $request, Customer $customer)
     {
-        $request->validate([
-            'code' => 'nullable|string|max:150',
-            'name' => 'required|string|max:150',
-            'mobile' => 'nullable|string|max:100',
-            'email' => 'nullable|email|max:50',
-            'nid_number' => 'nullable|string|max:100',
-            'vat_reg_no' => 'nullable|string|max:100',
-            'tin_no' => 'nullable|string|max:100',
-            'trade_license' => 'nullable|string|max:100',
-            'discount_rate' => 'nullable|numeric|min:0',
-            'security_deposit' => 'nullable|numeric|min:0',
-            'credit_limit' => 'nullable|numeric|min:0',
-            'previous_due' => 'nullable|numeric|min:0',
-            'address' => 'nullable|string',
-            'status' => 'boolean'
-        ]);
+        $validated = $request->validated();
 
-        DB::transaction(function () use ($request, $customer) {
-            $status = $request->boolean('status', true);
+        DB::transaction(function () use ($validated, $customer) {
+            $status = (bool) ($validated['status'] ?? true);
             $customer->loadMissing('account');
             $customer->account?->update([
-                'name' => $request->name,
+                'name' => $validated['name'],
                 'status' => $status,
             ]);
 
             $customer->update([
-                'code' => $request->input('code', $customer->code),
-                'name' => $request->name,
-                'mobile' => $request->mobile,
-                'email' => $request->email,
-                'nid_number' => $request->nid_number,
-                'vat_reg_no' => $request->vat_reg_no,
-                'tin_no' => $request->tin_no,
-                'trade_license' => $request->trade_license,
-                'discount_rate' => $request->input('discount_rate', 0),
-                'credit_limit' => $request->input('credit_limit', 0),
-                'address' => $request->address,
+                'code' => $validated['code'] ?? $customer->code,
+                'name' => $validated['name'],
+                'proprietor_name' => $validated['proprietor_name'] ?? null,
+                'mobile' => $validated['mobile'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'nid_number' => $validated['nid_number'] ?? null,
+                'vat_reg_no' => $validated['vat_reg_no'] ?? null,
+                'tin_no' => $validated['tin_no'] ?? null,
+                'trade_license' => $validated['trade_license'] ?? null,
+                'discount_rate' => $validated['discount_rate'] ?? 0,
+                'credit_limit' => $validated['credit_limit'] ?? 0,
+                'address' => $validated['address'] ?? null,
                 'status' => $status,
             ]);
 
             $businessDate = now()->toDateString();
 
-            if ($request->has('previous_due')) {
+            if (array_key_exists('previous_due', $validated)) {
                 $this->openingBalances->setCustomerPreviousDue(
                     $customer,
-                    (float) $request->input('previous_due', 0),
+                    (float) ($validated['previous_due'] ?? 0),
                     $businessDate
                 );
             }
 
-            if ($request->has('security_deposit')) {
+            if (array_key_exists('security_deposit', $validated)) {
                 $this->openingBalances->setCustomerDeposit(
                     $customer,
-                    (float) $request->input('security_deposit', 0),
+                    (float) ($validated['security_deposit'] ?? 0),
                     $businessDate
                 );
             }
@@ -409,7 +369,7 @@ class CustomerController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:customers,id'
+            'ids.*' => 'exists:customers,id',
         ]);
 
         $customers = Customer::query()
@@ -434,20 +394,21 @@ class CustomerController extends Controller implements HasMiddleware
             }
         });
 
-        return redirect()->back()->with('success', count($request->ids) . ' customers deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' customers deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
     {
-        $query = Customer::select('id', 'account_id', 'code', 'name', 'mobile', 'email', 'status', 'created_at')
+        $query = Customer::select('id', 'account_id', 'code', 'name', 'proprietor_name', 'mobile', 'email', 'status', 'created_at')
             ->with('account:id,name,ac_number');
 
         if ($request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('code', 'like', '%' . $request->search . '%')
-                    ->orWhere('mobile', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+                $q->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('proprietor_name', 'like', '%'.$request->search.'%')
+                    ->orWhere('code', 'like', '%'.$request->search.'%')
+                    ->orWhere('mobile', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -457,7 +418,7 @@ class CustomerController extends Controller implements HasMiddleware
 
         $sortBy = in_array(
             $request->get('sort_by'),
-            ['id', 'code', 'name', 'mobile', 'email', 'status', 'created_at'],
+            ['id', 'code', 'name', 'proprietor_name', 'mobile', 'email', 'status', 'created_at'],
             true
         ) ? $request->get('sort_by') : 'created_at';
         $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
@@ -478,6 +439,7 @@ class CustomerController extends Controller implements HasMiddleware
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.customers', compact('customers', 'companySetting'));
+
         return $pdf->stream('customers.pdf');
     }
 
@@ -495,6 +457,7 @@ class CustomerController extends Controller implements HasMiddleware
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.customer-sales', compact('customer', 'monthlySales', 'year', 'companySetting'));
+
         return $pdf->stream('customer-sales.pdf');
     }
 
@@ -519,6 +482,7 @@ class CustomerController extends Controller implements HasMiddleware
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.customer-payments', compact('customer', 'payments', 'companySetting'));
+
         return $pdf->stream('customer-payments.pdf');
     }
 
@@ -533,7 +497,7 @@ class CustomerController extends Controller implements HasMiddleware
 
         // Get SMS settings
         $smsSetting = SMSSetting::where('status', true)->first();
-        if (!$smsSetting) {
+        if (! $smsSetting) {
             return redirect()->back()->with('error', 'SMS configuration not found.');
         }
 
@@ -543,7 +507,7 @@ class CustomerController extends Controller implements HasMiddleware
 
         if ($request->message_type === 'template') {
             $template = SMSTemplate::find($request->template_id);
-            if (!$template) {
+            if (! $template) {
                 return redirect()->back()->with('error', 'SMS template not found.');
             }
             $message = $template->message;
@@ -573,7 +537,7 @@ class CustomerController extends Controller implements HasMiddleware
         if ($response['success']) {
             return redirect()->back()->with('success', 'SMS sent successfully.');
         } else {
-            return redirect()->back()->with('error', 'Failed to send SMS: ' . $response['message']);
+            return redirect()->back()->with('error', 'Failed to send SMS: '.$response['message']);
         }
     }
 
@@ -636,7 +600,7 @@ class CustomerController extends Controller implements HasMiddleware
             'api_key' => $smsSetting->api_key,
             'senderid' => $smsSetting->sender_id,
             'number' => $phoneNumber,
-            'message' => $message
+            'message' => $message,
         ];
 
         $ch = curl_init();
@@ -653,11 +617,11 @@ class CustomerController extends Controller implements HasMiddleware
         curl_close($ch);
 
         if ($error) {
-            return ['success' => false, 'message' => 'cURL Error: ' . $error];
+            return ['success' => false, 'message' => 'cURL Error: '.$error];
         }
 
         if ($httpCode !== 200) {
-            return ['success' => false, 'message' => 'HTTP Error: ' . $httpCode];
+            return ['success' => false, 'message' => 'HTTP Error: '.$httpCode];
         }
 
         // Assuming successful response

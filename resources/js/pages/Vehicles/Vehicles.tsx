@@ -6,14 +6,33 @@ import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination } from '@/components/ui/pagination';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    ProductAssignment,
+    VehicleProductSelector,
+} from '@/components/vehicle-product-selector';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Edit, FileText, Filter, Plus, Trash2, X, Car } from 'lucide-react';
+import {
+    Car,
+    Edit,
+    Eye,
+    FileText,
+    Filter,
+    Plus,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { usePermission } from '@/hooks/usePermission';
 
 interface Customer {
     id: number;
@@ -24,6 +43,7 @@ interface Product {
     id: number;
     name: string;
     product_name: string;
+    sort_order?: number;
 }
 
 interface Vehicle {
@@ -62,6 +82,7 @@ interface VehiclesProps {
     };
     customers: Customer[];
     products: Product[];
+    vehicleProductLimit: number;
     filters: {
         search?: string;
         customer?: string;
@@ -72,14 +93,23 @@ interface VehiclesProps {
     };
 }
 
-export default function Vehicles({ vehicles, customers = [], products = [], filters }: VehiclesProps) {
+export default function Vehicles({
+    vehicles,
+    customers = [],
+    products = [],
+    vehicleProductLimit,
+    filters,
+}: VehiclesProps) {
     const { can } = usePermission();
-    const hasActionPermission = can('update-vehicle') || can('delete-vehicle');
+    const hasActionPermission =
+        can('view-vehicle') || can('update-vehicle') || can('delete-vehicle');
     const canFilter = can('can-vehicle-filter');
     const canDownload = can('can-vehicle-download');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
-    const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
+    const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(
+        null,
+    );
     const [selectedVehicles, setSelectedVehicles] = useState<number[]>([]);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
     const [search, setSearch] = useState(filters?.search || '');
@@ -89,13 +119,18 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
 
     const { data, setData, post, put, processing, errors, reset } = useForm({
         customer_id: '',
-        product_ids: [] as string[],
+        products: [] as ProductAssignment[],
         vehicle_type: '',
         vehicle_name: '',
         vehicle_number: '',
         reg_date: '',
-        status: true
+        status: true,
     });
+    const productAssignmentError =
+        errors.products ||
+        Object.entries(errors).find(([key]) =>
+            key.startsWith('products.'),
+        )?.[1];
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -120,12 +155,16 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
         setEditingVehicle(vehicle);
         setData({
             customer_id: vehicle.customer_id.toString(),
-            product_ids: vehicle.products?.map(p => p.id.toString()) || [],
+            products:
+                vehicle.products?.map((product, index) => ({
+                    product_id: product.id,
+                    sort_order: product.sort_order ?? index + 1,
+                })) || [],
             vehicle_type: vehicle.vehicle_type || '',
             vehicle_name: vehicle.vehicle_name || '',
             vehicle_number: vehicle.vehicle_number || '',
             reg_date: vehicle.reg_date || '',
-            status: vehicle.status
+            status: vehicle.status,
         });
     };
 
@@ -165,7 +204,9 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
 
     const toggleSelectVehicle = (vehicleId: number) => {
         if (selectedVehicles.includes(vehicleId)) {
-            setSelectedVehicles(selectedVehicles.filter((id) => id !== vehicleId));
+            setSelectedVehicles(
+                selectedVehicles.filter((id) => id !== vehicleId),
+            );
         } else {
             setSelectedVehicles([...selectedVehicles, vehicleId]);
         }
@@ -227,139 +268,184 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold dark:text-white">Vehicles</h1>
+                        <h1 className="text-3xl font-bold dark:text-white">
+                            Vehicles
+                        </h1>
                         <p className="text-gray-600 dark:text-gray-400">
                             Manage vehicle information
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        {selectedVehicles.length > 0 && can('delete-vehicle') && (
+                        {selectedVehicles.length > 0 &&
+                            can('delete-vehicle') && (
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleBulkDelete}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Selected ({selectedVehicles.length})
+                                </Button>
+                            )}
+                        {canDownload && (
                             <Button
-                                variant="destructive"
-                                onClick={handleBulkDelete}
+                                variant="success"
+                                onClick={() => {
+                                    const params = new URLSearchParams();
+                                    if (search) params.append('search', search);
+                                    if (customer !== 'all')
+                                        params.append('customer', customer);
+                                    if (status !== 'all')
+                                        params.append('status', status);
+                                    window.location.href = `/vehicles/download-pdf?${params.toString()}`;
+                                }}
                             >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Selected ({selectedVehicles.length})
+                                <FileText className="mr-2 h-4 w-4" />
+                                Download
                             </Button>
                         )}
-                        {canDownload && (
-                        <Button
-                            variant="success"
-                            onClick={() => {
-                                const params = new URLSearchParams();
-                                if (search) params.append('search', search);
-                                if (customer !== 'all') params.append('customer', customer);
-                                if (status !== 'all') params.append('status', status);
-                                window.location.href = `/vehicles/download-pdf?${params.toString()}`;
-                            }}
-                        >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Download
-                        </Button>
-                        )}
                         {can('create-vehicle') && (
-                        <Button onClick={() => {
-                            setIsCreateOpen(true);
-                            reset();
-                        }}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Vehicle
-                        </Button>
+                            <Button
+                                onClick={() => {
+                                    setIsCreateOpen(true);
+                                    reset();
+                                }}
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Vehicle
+                            </Button>
                         )}
                     </div>
                 </div>
 
                 {/* Filter Card */}
                 {canFilter && (
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 dark:text-white">
-                            <Filter className="h-5 w-5" />
-                            Filters
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                            <div>
-                                <Label className="dark:text-gray-200">Search</Label>
-                                <Input
-                                    placeholder="Search vehicles..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                            <div>
-                                <Label className="dark:text-gray-200">Customer</Label>
-                                <Select
-                                    value={customer}
-                                    onValueChange={(value) => {
-                                        setCustomer(value);
-                                        router.get(
-                                            '/vehicles',
-                                            {
-                                                search: search || undefined,
-                                                customer: value === 'all' ? undefined : value,
-                                                status: status === 'all' ? undefined : status,
-                                                per_page: perPage,
-                                            },
-                                            { preserveState: true },
-                                        );
-                                    }}
-                                >
-                                    <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                        <SelectValue placeholder="All customers" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All customers</SelectItem>
-                                        {customers.map((c) => (
-                                            <SelectItem key={c.id} value={c.id.toString()}>
-                                                {c.name}
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 dark:text-white">
+                                <Filter className="h-5 w-5" />
+                                Filters
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Search
+                                    </Label>
+                                    <Input
+                                        placeholder="Search vehicles..."
+                                        value={search}
+                                        onChange={(e) =>
+                                            setSearch(e.target.value)
+                                        }
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Customer
+                                    </Label>
+                                    <Select
+                                        value={customer}
+                                        onValueChange={(value) => {
+                                            setCustomer(value);
+                                            router.get(
+                                                '/vehicles',
+                                                {
+                                                    search: search || undefined,
+                                                    customer:
+                                                        value === 'all'
+                                                            ? undefined
+                                                            : value,
+                                                    status:
+                                                        status === 'all'
+                                                            ? undefined
+                                                            : status,
+                                                    per_page: perPage,
+                                                },
+                                                { preserveState: true },
+                                            );
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All customers" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                All customers
                                             </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                            {customers.map((c) => (
+                                                <SelectItem
+                                                    key={c.id}
+                                                    value={c.id.toString()}
+                                                >
+                                                    {c.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Status
+                                    </Label>
+                                    <Select
+                                        value={status}
+                                        onValueChange={(value) => {
+                                            setStatus(value);
+                                            router.get(
+                                                '/vehicles',
+                                                {
+                                                    search: search || undefined,
+                                                    customer:
+                                                        customer === 'all'
+                                                            ? undefined
+                                                            : customer,
+                                                    status:
+                                                        value === 'all'
+                                                            ? undefined
+                                                            : value,
+                                                    per_page: perPage,
+                                                },
+                                                { preserveState: true },
+                                            );
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                All status
+                                            </SelectItem>
+                                            <SelectItem value="active">
+                                                Active
+                                            </SelectItem>
+                                            <SelectItem value="inactive">
+                                                Inactive
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-end gap-2">
+                                    <Button
+                                        onClick={applyFilters}
+                                        className="px-4"
+                                    >
+                                        Apply Filters
+                                    </Button>
+                                    <Button
+                                        onClick={clearFilters}
+                                        variant="secondary"
+                                        className="px-4"
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
                             </div>
-                            <div>
-                                <Label className="dark:text-gray-200">Status</Label>
-                                <Select
-                                    value={status}
-                                    onValueChange={(value) => {
-                                        setStatus(value);
-                                        router.get(
-                                            '/vehicles',
-                                            {
-                                                search: search || undefined,
-                                                customer: customer === 'all' ? undefined : customer,
-                                                status: value === 'all' ? undefined : value,
-                                                per_page: perPage,
-                                            },
-                                            { preserveState: true },
-                                        );
-                                    }}
-                                >
-                                    <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                        <SelectValue placeholder="All status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All status</SelectItem>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="inactive">Inactive</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex items-end gap-2">
-                                <Button onClick={applyFilters} className="px-4">
-                                    Apply Filters
-                                </Button>
-                                <Button onClick={clearFilters} variant="secondary" className="px-4">
-                                    <X className="mr-2 h-4 w-4" />
-                                    Clear
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
                 )}
 
                 <Card className="dark:border-gray-700 dark:bg-gray-800">
@@ -373,7 +459,7 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                                                 type="checkbox"
                                                 checked={
                                                     selectedVehicles.length ===
-                                                    vehicles.data.length &&
+                                                        vehicles.data.length &&
                                                     vehicles.data.length > 0
                                                 }
                                                 onChange={toggleSelectAll}
@@ -402,9 +488,9 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                                             Status
                                         </th>
                                         {hasActionPermission && (
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
-                                            Actions
-                                        </th>
+                                            <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                                Actions
+                                            </th>
                                         )}
                                     </tr>
                                 </thead>
@@ -430,70 +516,129 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                                                     />
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {(vehicles.current_page - 1) * vehicles.per_page + index + 1}
+                                                    {(vehicles.current_page -
+                                                        1) *
+                                                        vehicles.per_page +
+                                                        index +
+                                                        1}
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-white">
-                                                    {vehicle.customer?.name || 'N/A'}
+                                                    {vehicle.customer?.name ||
+                                                        'N/A'}
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {vehicle.vehicle_name || 'N/A'}
+                                                    {vehicle.vehicle_name ||
+                                                        'N/A'}
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {vehicle.vehicle_number || 'N/A'}
+                                                    {vehicle.vehicle_number ||
+                                                        'N/A'}
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {vehicle.vehicle_type || 'N/A'}
+                                                    {vehicle.vehicle_type ||
+                                                        'N/A'}
                                                 </td>
                                                 <td className="p-4">
-                                                    {vehicle.products && vehicle.products.length > 0 ? (
+                                                    {vehicle.products &&
+                                                    vehicle.products.length >
+                                                        0 ? (
                                                         <div className="flex flex-wrap gap-1">
-                                                            {vehicle.products.map(p => (
-                                                                <Badge key={p.id} variant="secondary">
-                                                                    {p.product_name}
-                                                                </Badge>
-                                                            ))}
+                                                            {vehicle.products.map(
+                                                                (p) => (
+                                                                    <Badge
+                                                                        key={
+                                                                            p.id
+                                                                        }
+                                                                        variant="secondary"
+                                                                    >
+                                                                        {
+                                                                            p.product_name
+                                                                        }
+                                                                    </Badge>
+                                                                ),
+                                                            )}
                                                         </div>
                                                     ) : (
-                                                        <span className="text-[13px] dark:text-gray-300">N/A</span>
+                                                        <span className="text-[13px] dark:text-gray-300">
+                                                            N/A
+                                                        </span>
                                                     )}
                                                 </td>
                                                 <td className="p-4">
-                                                    <Badge variant={vehicle.status ? 'success' : 'destructive'}>
-                                                        {vehicle.status ? 'Active' : 'Inactive'}
+                                                    <Badge
+                                                        variant={
+                                                            vehicle.status
+                                                                ? 'success'
+                                                                : 'destructive'
+                                                        }
+                                                    >
+                                                        {vehicle.status
+                                                            ? 'Active'
+                                                            : 'Inactive'}
                                                     </Badge>
                                                 </td>
                                                 {hasActionPermission && (
-                                                <td className="p-4">
-                                                    <div className="flex gap-2">
-                                                        {can('update-vehicle') && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleEdit(vehicle)}
-                                                            className="text-indigo-600 hover:text-indigo-800"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                        )}
-                                                        {can('delete-vehicle') && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleDelete(vehicle)}
-                                                            className="text-red-600 hover:text-red-800"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                        )}
-                                                    </div>
-                                                </td>
+                                                    <td className="p-4">
+                                                        <div className="flex gap-2">
+                                                            {can(
+                                                                'view-vehicle',
+                                                            ) && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        router.get(
+                                                                            `/vehicles/${vehicle.id}`,
+                                                                        )
+                                                                    }
+                                                                    className="text-blue-600 hover:text-blue-800"
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {can(
+                                                                'update-vehicle',
+                                                            ) && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleEdit(
+                                                                            vehicle,
+                                                                        )
+                                                                    }
+                                                                    className="text-indigo-600 hover:text-indigo-800"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {can(
+                                                                'delete-vehicle',
+                                                            ) && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleDelete(
+                                                                            vehicle,
+                                                                        )
+                                                                    }
+                                                                    className="text-red-600 hover:text-red-800"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                 )}
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={hasActionPermission ? 9 : 8}
+                                                colSpan={
+                                                    hasActionPermission ? 9 : 8
+                                                }
                                                 className="p-8 text-center text-gray-500 dark:text-gray-400"
                                             >
                                                 <Car className="mx-auto mb-4 h-12 w-12 text-gray-400" />
@@ -519,8 +664,14 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                                     '/vehicles',
                                     {
                                         search: search || undefined,
-                                        customer: customer === 'all' ? undefined : customer,
-                                        status: status === 'all' ? undefined : status,
+                                        customer:
+                                            customer === 'all'
+                                                ? undefined
+                                                : customer,
+                                        status:
+                                            status === 'all'
+                                                ? undefined
+                                                : status,
                                         per_page: newPerPage,
                                     },
                                     { preserveState: true },
@@ -545,39 +696,62 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                         <Label className="dark:text-gray-200">Customer *</Label>
                         <Select
                             value={data.customer_id}
-                            onValueChange={(value) => setData('customer_id', value)}
+                            onValueChange={(value) =>
+                                setData('customer_id', value)
+                            }
                         >
                             <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 <SelectValue placeholder="Select Customer" />
                             </SelectTrigger>
                             <SelectContent>
                                 {customers.map((customer) => (
-                                    <SelectItem key={customer.id} value={customer.id.toString()}>
+                                    <SelectItem
+                                        key={customer.id}
+                                        value={customer.id.toString()}
+                                    >
                                         {customer.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.customer_id && <span className="text-sm text-red-500">{errors.customer_id}</span>}
+                        {errors.customer_id && (
+                            <span className="text-sm text-red-500">
+                                {errors.customer_id}
+                            </span>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="vehicle_type" className="dark:text-gray-200">Vehicle Type</Label>
+                            <Label
+                                htmlFor="vehicle_type"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Type
+                            </Label>
                             <Input
                                 id="vehicle_type"
                                 value={data.vehicle_type}
-                                onChange={(e) => setData('vehicle_type', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_type', e.target.value)
+                                }
                                 placeholder="e.g., Car, Truck"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                         <div>
-                            <Label htmlFor="vehicle_name" className="dark:text-gray-200">Vehicle Name</Label>
+                            <Label
+                                htmlFor="vehicle_name"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Name
+                            </Label>
                             <Input
                                 id="vehicle_name"
                                 value={data.vehicle_name}
-                                onChange={(e) => setData('vehicle_name', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_name', e.target.value)
+                                }
                                 placeholder="e.g., Toyota Corolla"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
@@ -586,62 +760,73 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="vehicle_number" className="dark:text-gray-200">Vehicle Number</Label>
+                            <Label
+                                htmlFor="vehicle_number"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Number
+                            </Label>
                             <Input
                                 id="vehicle_number"
                                 value={data.vehicle_number}
-                                onChange={(e) => setData('vehicle_number', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_number', e.target.value)
+                                }
                                 placeholder="e.g., ABC-1234"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                         <div>
-                            <Label htmlFor="reg_date" className="dark:text-gray-200">Registration Date</Label>
+                            <Label
+                                htmlFor="reg_date"
+                                className="dark:text-gray-200"
+                            >
+                                Registration Date
+                            </Label>
                             <Input
                                 id="reg_date"
                                 type="date"
                                 value={data.reg_date}
-                                onChange={(e) => setData('reg_date', e.target.value)}
+                                onChange={(e) =>
+                                    setData('reg_date', e.target.value)
+                                }
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <Label className="dark:text-gray-200">Products</Label>
-                        <div className="grid grid-cols-3 gap-2 max-h-32 overflow-y-auto border rounded p-2 dark:border-gray-600 dark:bg-gray-700">
-                            {products.map((product) => (
-                                <label key={product.id} className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={data.product_ids.includes(product.id.toString())}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setData('product_ids', [...data.product_ids, product.id.toString()]);
-                                            } else {
-                                                setData('product_ids', data.product_ids.filter(id => id !== product.id.toString()));
-                                            }
-                                        }}
-                                        className="rounded border-gray-300 dark:border-gray-600"
-                                    />
-                                    <span className="text-sm dark:text-white">{product.name}</span>
-                                </label>
-                            ))}
-                        </div>
+                        <Label className="mb-2 block dark:text-gray-200">
+                            Vehicle Products
+                        </Label>
+                        <VehicleProductSelector
+                            products={products}
+                            value={data.products}
+                            onChange={(assignments) =>
+                                setData('products', assignments)
+                            }
+                            error={productAssignmentError}
+                            disabled={processing}
+                            maxProducts={vehicleProductLimit}
+                        />
                     </div>
 
                     <div>
                         <Label className="dark:text-gray-200">Status</Label>
                         <Select
                             value={data.status ? 'active' : 'inactive'}
-                            onValueChange={(value) => setData('status', value === 'active')}
+                            onValueChange={(value) =>
+                                setData('status', value === 'active')
+                            }
                         >
                             <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 <SelectValue placeholder="Select Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="inactive">
+                                    Inactive
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -662,39 +847,62 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
                         <Label className="dark:text-gray-200">Customer *</Label>
                         <Select
                             value={data.customer_id}
-                            onValueChange={(value) => setData('customer_id', value)}
+                            onValueChange={(value) =>
+                                setData('customer_id', value)
+                            }
                         >
                             <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 <SelectValue placeholder="Select Customer" />
                             </SelectTrigger>
                             <SelectContent>
                                 {customers.map((customer) => (
-                                    <SelectItem key={customer.id} value={customer.id.toString()}>
+                                    <SelectItem
+                                        key={customer.id}
+                                        value={customer.id.toString()}
+                                    >
                                         {customer.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.customer_id && <span className="text-sm text-red-500">{errors.customer_id}</span>}
+                        {errors.customer_id && (
+                            <span className="text-sm text-red-500">
+                                {errors.customer_id}
+                            </span>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="edit-vehicle_type" className="dark:text-gray-200">Vehicle Type</Label>
+                            <Label
+                                htmlFor="edit-vehicle_type"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Type
+                            </Label>
                             <Input
                                 id="edit-vehicle_type"
                                 value={data.vehicle_type}
-                                onChange={(e) => setData('vehicle_type', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_type', e.target.value)
+                                }
                                 placeholder="e.g., Car, Truck"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                         <div>
-                            <Label htmlFor="edit-vehicle_name" className="dark:text-gray-200">Vehicle Name</Label>
+                            <Label
+                                htmlFor="edit-vehicle_name"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Name
+                            </Label>
                             <Input
                                 id="edit-vehicle_name"
                                 value={data.vehicle_name}
-                                onChange={(e) => setData('vehicle_name', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_name', e.target.value)
+                                }
                                 placeholder="e.g., Toyota Corolla"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
@@ -703,62 +911,73 @@ export default function Vehicles({ vehicles, customers = [], products = [], filt
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="edit-vehicle_number" className="dark:text-gray-200">Vehicle Number</Label>
+                            <Label
+                                htmlFor="edit-vehicle_number"
+                                className="dark:text-gray-200"
+                            >
+                                Vehicle Number
+                            </Label>
                             <Input
                                 id="edit-vehicle_number"
                                 value={data.vehicle_number}
-                                onChange={(e) => setData('vehicle_number', e.target.value)}
+                                onChange={(e) =>
+                                    setData('vehicle_number', e.target.value)
+                                }
                                 placeholder="e.g., ABC-1234"
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                         <div>
-                            <Label htmlFor="edit-reg_date" className="dark:text-gray-200">Registration Date</Label>
+                            <Label
+                                htmlFor="edit-reg_date"
+                                className="dark:text-gray-200"
+                            >
+                                Registration Date
+                            </Label>
                             <Input
                                 id="edit-reg_date"
                                 type="date"
                                 value={data.reg_date}
-                                onChange={(e) => setData('reg_date', e.target.value)}
+                                onChange={(e) =>
+                                    setData('reg_date', e.target.value)
+                                }
                                 className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <Label className="dark:text-gray-200">Products</Label>
-                        <div className="grid grid-cols-3 gap-2 max-h-32 overflow-y-auto border rounded p-2 dark:border-gray-600 dark:bg-gray-700">
-                            {products.map((product) => (
-                                <label key={product.id} className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={data.product_ids.includes(product.id.toString())}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setData('product_ids', [...data.product_ids, product.id.toString()]);
-                                            } else {
-                                                setData('product_ids', data.product_ids.filter(id => id !== product.id.toString()));
-                                            }
-                                        }}
-                                        className="rounded border-gray-300 dark:border-gray-600"
-                                    />
-                                    <span className="text-sm dark:text-white">{product.name}</span>
-                                </label>
-                            ))}
-                        </div>
+                        <Label className="mb-2 block dark:text-gray-200">
+                            Vehicle Products
+                        </Label>
+                        <VehicleProductSelector
+                            products={products}
+                            value={data.products}
+                            onChange={(assignments) =>
+                                setData('products', assignments)
+                            }
+                            error={productAssignmentError}
+                            disabled={processing}
+                            maxProducts={vehicleProductLimit}
+                        />
                     </div>
 
                     <div>
                         <Label className="dark:text-gray-200">Status</Label>
                         <Select
                             value={data.status ? 'active' : 'inactive'}
-                            onValueChange={(value) => setData('status', value === 'active')}
+                            onValueChange={(value) =>
+                                setData('status', value === 'active')
+                            }
                         >
                             <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 <SelectValue placeholder="Select Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="inactive">
+                                    Inactive
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

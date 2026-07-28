@@ -40,6 +40,7 @@ class CustomerSeeder extends Seeder
                 'account_id' => $account->id,
                 'code' => CustomerHelper::generateCustomerCode(),
                 'name' => "Customer $i",
+                'proprietor_name' => "Proprietor $i",
                 'mobile' => "01800000$i",
                 'email' => "customer$i@example.com",
                 'nid_number' => "987654321$i",

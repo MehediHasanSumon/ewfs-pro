@@ -7,7 +7,6 @@ use App\Models\Account;
 use App\Models\CompanySetting;
 use App\Models\Product;
 use App\Models\Sale;
-use App\Models\SaleBatch;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Vehicle;
@@ -22,8 +21,7 @@ class SaleController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly SalePostingService $sales
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -53,11 +51,12 @@ class SaleController extends Controller implements HasMiddleware
                 ->with(['customer:id,name', 'products:id,product_name'])
                 ->get(['id', 'vehicle_number', 'customer_id']),
             'salesHistory' => Sale::query()
+                ->with('items:id,sale_id,product_id')
                 ->where('sale_type', 'regular')
                 ->whereHas('journalEntry', fn ($query) => $query->posted())
                 ->whereNotNull('vehicle_number_snapshot')
                 ->latest('id')
-                ->get(['vehicle_number_snapshot', 'customer_name_snapshot'])
+                ->get(['id', 'vehicle_number_snapshot', 'customer_name_snapshot'])
                 ->unique('vehicle_number_snapshot')
                 ->map(fn (Sale $sale) => [
                     'vehicle_no' => $sale->vehicle_number_snapshot,

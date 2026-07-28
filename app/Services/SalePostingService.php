@@ -16,9 +16,9 @@ class SalePostingService
         private readonly AccountingService $accounting,
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
-        private readonly DocumentNumberService $numbers
-    ) {
-    }
+        private readonly DocumentNumberService $numbers,
+        private readonly VehicleProductAssignmentService $vehicleProducts
+    ) {}
 
     public function createMany(array $data, string $saleType = 'regular'): array
     {
@@ -244,6 +244,10 @@ class SalePostingService
         $paymentMethod = $this->normalizePaymentMethod($productData);
         $customer = $this->resolveCustomer($productData);
         $vehicle = $this->resolveVehicle($productData, $customer?->id);
+
+        if ($vehicle) {
+            $this->vehicleProducts->assertAssigned($vehicle, $product->id);
+        }
 
         $sale = Sale::query()->create([
             'shift_id' => $headerData['shift_id'],

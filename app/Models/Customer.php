@@ -13,6 +13,7 @@ class Customer extends Model
         'account_id',
         'code',
         'name',
+        'proprietor_name',
         'mobile',
         'email',
         'nid_number',

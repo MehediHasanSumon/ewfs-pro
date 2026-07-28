@@ -15,12 +15,12 @@ class Vehicle extends Model
         'vehicle_name',
         'vehicle_number',
         'reg_date',
-        'status'
+        'status',
     ];
 
     protected $casts = [
         'reg_date' => 'date',
-        'status' => 'boolean'
+        'status' => 'boolean',
     ];
 
     public function customer(): BelongsTo
@@ -30,7 +30,11 @@ class Vehicle extends Model
 
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'vehicle_products');
+        return $this->belongsToMany(Product::class, 'vehicle_products')
+            ->withPivot('sort_order')
+            ->withTimestamps()
+            ->orderByPivot('sort_order')
+            ->orderBy('products.id');
     }
 
     public function sales(): HasMany

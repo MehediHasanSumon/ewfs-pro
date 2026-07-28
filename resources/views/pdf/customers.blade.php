@@ -178,6 +178,7 @@
             <tr>
                 <th class="text-center" style="width: 30px; font-size: 10px;">SL</th>
                 <th style="width: 120px; font-size: 10px;">Name</th>
+                <th style="width: 110px; font-size: 10px;">Proprietor Name</th>
                 <th style="width: 80px; font-size: 10px;">Account Number</th>
                 <th style="width: 80px; font-size: 10px;">Mobile</th>
                 <th style="width: 70px; text-align: right; font-size: 10px;">Total Sale</th>
@@ -190,6 +191,7 @@
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td>{{ $customer->name }}</td>
+                <td>{{ $customer->proprietor_name ?? 'N/A' }}</td>
                 <td>{{ $customer->account->ac_number ?? 'N/A' }}</td>
                 <td>{{ $customer->mobile ?? 'N/A' }}</td>
                 <td style="text-align: right;">{{ number_format($customer->total_sales ?? 0, 2) }}</td>
@@ -200,7 +202,7 @@
             </tr>
             @empty
             <tr>
-                <td colspan="7" class="text-center" style="padding: 20px; color: #999;">No customers found</td>
+                <td colspan="8" class="text-center" style="padding: 20px; color: #999;">No customers found</td>
             </tr>
             @endforelse
             @if(count($customers) > 0)
@@ -239,7 +241,7 @@
                 }
             @endphp
             <tr style="font-weight: bold; background-color: #e0e0e0; border-top: 2px solid #000;">
-                <td colspan="4" style="text-align: center; font-size: 10px;">Grand Total:</td>
+                <td colspan="5" style="text-align: center; font-size: 10px;">Grand Total:</td>
                 <td style="text-align: right; font-size: 10px;">{{ number_format($grandTotalSales, 2) }}</td>
                 <td style="text-align: right; font-size: 10px;">{{ number_format($grandTotalPaid, 2) }}</td>
                 <td style="text-align: right; font-size: 10px; color: {{ $grandTotalDue > 0 ? '#dc2626' : ($grandTotalDue < 0 ? '#16a34a' : '#333') }}">
@@ -247,7 +249,7 @@
                 </td>
             </tr>
             <tr style="background-color: #f5f5f5;">
-                <td colspan="7" style="padding: 8px; font-style: italic; font-size: 9px;">
+                <td colspan="8" style="padding: 8px; font-style: italic; font-size: 9px;">
                     Total Due/Advanced in words: {{ numberToWords(floor(abs($grandTotalDue))) }} Taka Only
                 </td>
             </tr>

@@ -2,24 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\VehicleRequest;
+use App\Http\Resources\VehicleResource;
 use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Vehicle;
+use App\Services\VehicleProductAssignmentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class VehicleController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly VehicleProductAssignmentService $vehicleProducts
+    ) {}
+
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:view-vehicle', only: ['index']),
+            new Middleware('permission:view-vehicle', only: ['index', 'show']),
             new Middleware('permission:create-vehicle', only: ['store']),
             new Middleware('permission:update-vehicle', only: ['update']),
             new Middleware('permission:delete-vehicle', only: ['destroy', 'bulkDelete']),
@@ -63,101 +69,75 @@ class VehicleController extends Controller implements HasMiddleware
 
         // Paginate
         $perPage = max(1, min((int) $request->get('per_page', 10), 100));
-        $vehicles = $query->paginate($perPage)->withQueryString()->through(function ($vehicle) {
-            return [
-                'id' => $vehicle->id,
-                'customer_id' => $vehicle->customer_id,
-                'vehicle_type' => $vehicle->vehicle_type,
-                'vehicle_name' => $vehicle->vehicle_name,
-                'vehicle_number' => $vehicle->vehicle_number,
-                'reg_date' => $vehicle->reg_date?->format('Y-m-d'),
-                'status' => $vehicle->status,
-                'customer' => $vehicle->customer,
-                'products' => $vehicle->products,
-                'created_at' => $vehicle->created_at->format('Y-m-d'),
-            ];
-        });
+        $vehicles = $query->paginate($perPage)->withQueryString()->through(
+            fn (Vehicle $vehicle) => (new VehicleResource($vehicle))->resolve()
+        );
 
         $customers = Customer::where('status', true)->get(['id', 'name']);
-        $products = Product::where('status', 1)->get(['id', 'product_name as name']);
+        $products = Product::query()
+            ->active()
+            ->orderBy('product_name')
+            ->get(['id', 'product_name as name']);
 
         return Inertia::render('Vehicles/Vehicles', [
             'vehicles' => $vehicles,
             'customers' => $customers,
             'products' => $products,
+            'vehicleProductLimit' => max(1, (int) config('erp.vehicle_products.max_assigned', 50)),
             'filters' => $request->only(['search', 'customer', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(VehicleRequest $request)
     {
-        $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'product_ids' => 'nullable|array',
-            'product_ids.*' => 'integer|distinct|exists:products,id',
-            'vehicle_type' => 'nullable|string|max:150',
-            'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('vehicles', 'vehicle_number')
-                    ->where(fn ($query) => $query->where('customer_id', $request->input('customer_id'))),
-            ],
-            'reg_date' => 'nullable|date',
-            'status' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         DB::transaction(function () use ($validated): void {
-            $vehicle = Vehicle::create([
+            $vehicle = Vehicle::query()->create([
                 'customer_id' => $validated['customer_id'],
                 'vehicle_type' => $validated['vehicle_type'] ?? null,
                 'vehicle_name' => $validated['vehicle_name'] ?? null,
-                'vehicle_number' => $validated['vehicle_number'] ?? null,
+                'vehicle_number' => $validated['vehicle_number'],
                 'reg_date' => $validated['reg_date'] ?? null,
                 'status' => $validated['status'] ?? true,
             ]);
 
-            $vehicle->products()->sync($validated['product_ids'] ?? []);
+            $this->vehicleProducts->sync($vehicle, $validated['products'] ?? []);
         });
 
         return redirect()->back()->with('success', 'Vehicle created successfully.');
     }
 
-    public function update(Request $request, Vehicle $vehicle)
+    public function update(VehicleRequest $request, Vehicle $vehicle)
     {
-        $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'product_ids' => 'nullable|array',
-            'product_ids.*' => 'integer|distinct|exists:products,id',
-            'vehicle_type' => 'nullable|string|max:150',
-            'vehicle_name' => 'nullable|string|max:150',
-            'vehicle_number' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('vehicles', 'vehicle_number')
-                    ->where(fn ($query) => $query->where('customer_id', $request->input('customer_id')))
-                    ->ignore($vehicle->id),
-            ],
-            'reg_date' => 'nullable|date',
-            'status' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         DB::transaction(function () use ($vehicle, $validated): void {
             $vehicle->update([
                 'customer_id' => $validated['customer_id'],
                 'vehicle_type' => $validated['vehicle_type'] ?? null,
                 'vehicle_name' => $validated['vehicle_name'] ?? null,
-                'vehicle_number' => $validated['vehicle_number'] ?? null,
+                'vehicle_number' => $validated['vehicle_number'],
                 'reg_date' => $validated['reg_date'] ?? null,
                 'status' => $validated['status'] ?? true,
             ]);
 
-            $vehicle->products()->sync($validated['product_ids'] ?? []);
+            $this->vehicleProducts->sync($vehicle, $validated['products'] ?? []);
         });
 
         return redirect()->back()->with('success', 'Vehicle updated successfully.');
+    }
+
+    public function show(Vehicle $vehicle)
+    {
+        $vehicle->load([
+            'customer:id,name,proprietor_name,mobile',
+            'products:id,product_name',
+        ]);
+
+        return Inertia::render('Vehicles/Show', [
+            'vehicle' => (new VehicleResource($vehicle))->resolve(),
+        ]);
     }
 
     public function destroy(Vehicle $vehicle)

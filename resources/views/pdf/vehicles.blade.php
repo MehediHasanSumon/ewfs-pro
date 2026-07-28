@@ -179,6 +179,7 @@
                 <th>Vehicle Name</th>
                 <th>Vehicle Number</th>
                 <th>Type</th>
+                <th>Assigned Products</th>
             </tr>
         </thead>
         <tbody>
@@ -189,10 +190,11 @@
                 <td>{{ $vehicle->vehicle_name ?? 'N/A' }}</td>
                 <td>{{ $vehicle->vehicle_number ?? 'N/A' }}</td>
                 <td>{{ $vehicle->vehicle_type ?? 'N/A' }}</td>
+                <td>{{ $vehicle->products->pluck('product_name')->implode(', ') ?: 'N/A' }}</td>
             </tr>
             @empty
             <tr>
-                <td colspan="5" class="text-center" style="padding: 20px; color: #999;">No vehicles found</td>
+                <td colspan="6" class="text-center" style="padding: 20px; color: #999;">No vehicles found</td>
             </tr>
             @endforelse
         </tbody>
