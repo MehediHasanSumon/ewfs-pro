@@ -29,7 +29,7 @@ interface Product {
     purchase_price?: number;
     sales_price?: number;
     remarks?: string;
-    status: number;
+    status: boolean;
     created_at: string;
 }
 
@@ -109,7 +109,7 @@ export default function Products({ products, categories, units, filters }: Produ
         country_Of_origin: '',
 
         remarks: '',
-        status: 1
+        status: true
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -142,7 +142,7 @@ export default function Products({ products, categories, units, filters }: Produ
             country_Of_origin: product.country_Of_origin || '',
 
             remarks: product.remarks || '',
-            status: product.status || 1
+            status: product.status
         });
     };
 
@@ -477,11 +477,11 @@ export default function Products({ products, categories, units, filters }: Produ
                                             <td className="p-4 text-[13px] dark:text-gray-300">{product.sales_price || '-'}</td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded text-xs ${
-                                                    product.status === 1 
-                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                                    product.status
+                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                                                         : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                                 }`}>
-                                                    {product.status === 1 ? 'Active' : 'Inactive'}
+                                                    {product.status ? 'Active' : 'Inactive'}
                                                 </span>
                                             </td>
                                             {hasActionPermission && (
@@ -655,7 +655,7 @@ export default function Products({ products, categories, units, filters }: Produ
                         </div>
                         <div>
                             <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
-                            <Select value={data.status.toString()} onValueChange={(value) => setData('status', parseInt(value))}>
+                            <Select value={data.status ? '1' : '0'} onValueChange={(value) => setData('status', value === '1')}>
                                 <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
@@ -783,7 +783,7 @@ export default function Products({ products, categories, units, filters }: Produ
                         </div>
                         <div>
                             <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>
-                            <Select value={data.status.toString()} onValueChange={(value) => setData('status', parseInt(value))}>
+                            <Select value={data.status ? '1' : '0'} onValueChange={(value) => setData('status', value === '1')}>
                                 <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
