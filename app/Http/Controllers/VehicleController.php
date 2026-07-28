@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Vehicle;
 use App\Services\VehicleProductAssignmentService;
+use App\Services\VehicleSalesContextService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -19,13 +20,18 @@ use Inertia\Inertia;
 class VehicleController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly VehicleProductAssignmentService $vehicleProducts
+        private readonly VehicleProductAssignmentService $vehicleProducts,
+        private readonly VehicleSalesContextService $salesContext
     ) {}
 
     public static function middleware(): array
     {
         return [
             new Middleware('permission:view-vehicle', only: ['index', 'show']),
+            new Middleware(
+                'permission:view-sale|create-sale|update-sale|view-credit-sale|create-credit-sale|update-credit-sale',
+                only: ['salesContext']
+            ),
             new Middleware('permission:create-vehicle', only: ['store']),
             new Middleware('permission:update-vehicle', only: ['update']),
             new Middleware('permission:delete-vehicle', only: ['destroy', 'bulkDelete']),
@@ -138,6 +144,11 @@ class VehicleController extends Controller implements HasMiddleware
         return Inertia::render('Vehicles/Show', [
             'vehicle' => (new VehicleResource($vehicle))->resolve(),
         ]);
+    }
+
+    public function salesContext(Vehicle $vehicle)
+    {
+        return response()->json($this->salesContext->resolve($vehicle));
     }
 
     public function destroy(Vehicle $vehicle)

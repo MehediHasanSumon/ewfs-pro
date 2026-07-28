@@ -48,7 +48,14 @@ class SaleController extends Controller implements HasMiddleware
             'accounts' => $accounts,
             'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
             'vehicles' => Vehicle::query()
-                ->with(['customer:id,name', 'products:id,product_name'])
+                ->where('status', true)
+                ->whereHas('customer', fn ($query) => $query->active())
+                ->with([
+                    'customer:id,name',
+                    'products' => fn ($query) => $query
+                        ->where('products.status', true)
+                        ->select('products.id', 'products.product_name'),
+                ])
                 ->get(['id', 'vehicle_number', 'customer_id']),
             'salesHistory' => Sale::query()
                 ->with('items:id,sale_id,product_id')

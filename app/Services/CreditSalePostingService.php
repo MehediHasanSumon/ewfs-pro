@@ -15,7 +15,8 @@ class CreditSalePostingService
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
-        private readonly VehicleProductAssignmentService $vehicleProducts
+        private readonly VehicleProductAssignmentService $vehicleProducts,
+        private readonly VehicleSalesContextService $vehicleSalesContext
     ) {}
 
     public function createMany(array $data): array
@@ -60,6 +61,7 @@ class CreditSalePostingService
             ->with(['category', 'unit', 'activeRate'])
             ->findOrFail($productData['product_id']);
 
+        $this->vehicleSalesContext->resolve($vehicle);
         $this->vehicleProducts->assertBelongsToCustomer($vehicle, $customer);
         $this->vehicleProducts->assertAssigned($vehicle, $product->id);
 

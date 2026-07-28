@@ -1,3 +1,4 @@
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,7 @@ interface Product {
 interface Vehicle {
     id: number;
     vehicle_number: string;
-    customer_id: number;
+    customer_id: number | null;
     products?: {
         id: number;
         product_name: string;
@@ -115,6 +116,7 @@ export function CreditSaleModal({
 
     const [processing, setProcessing] = useState(false);
     const [availableShifts, setAvailableShifts] = useState<Shift[]>(shifts);
+    const [vehicleError, setVehicleError] = useState('');
 
     const getAvailableShifts = (selectedDate: string) => {
         if (!selectedDate) return shifts;
@@ -160,6 +162,7 @@ export function CreditSaleModal({
         const initialState = buildInitialState();
         setDataState(initialState);
         setAvailableShifts(getAvailableShifts(initialState.sale_date));
+        setVehicleError('');
     }
 
     const setData = (key: string, value: string) => {
@@ -221,41 +224,97 @@ export function CreditSaleModal({
         }
     };
 
+    const clearProductSelection = (
+        line: ReturnType<typeof buildInitialState>['products'][number],
+    ) => {
+        line.product_id = '';
+        line.amount = '';
+        line.due_amount = '';
+    };
+
+    const selectProductForLine = (
+        line: ReturnType<typeof buildInitialState>['products'][number],
+        productId: string,
+    ) => {
+        line.product_id = productId;
+        const selectedProduct = products.find(
+            (product) => product.id.toString() === productId,
+        );
+
+        if (!selectedProduct) {
+            clearProductSelection(line);
+            return;
+        }
+
+        const quantity = parseFloat(line.quantity) || 0;
+        const amount = selectedProduct.sales_price * quantity;
+        line.amount = quantity > 0 ? amount.toString() : '';
+        line.due_amount = quantity > 0 ? amount.toFixed(2) : '';
+    };
+
     const updateProduct = (index: number, field: string, value: string) => {
+        const selectedVehicle =
+            field === 'vehicle_id'
+                ? vehicles.find((vehicle) => vehicle.id.toString() === value)
+                : null;
+
+        if (field === 'customer_id') {
+            setVehicleError('');
+        } else if (field === 'vehicle_id') {
+            if (!value) {
+                setVehicleError('');
+            } else if (!selectedVehicle) {
+                setVehicleError('The selected vehicle is unavailable.');
+            } else if (
+                !selectedVehicle.customer ||
+                !selectedVehicle.customer_id
+            ) {
+                setVehicleError(
+                    'This vehicle is not assigned to any customer.',
+                );
+            } else if (
+                !selectedVehicle.products ||
+                selectedVehicle.products.length === 0
+            ) {
+                setVehicleError('This vehicle has no assigned products.');
+            } else {
+                setVehicleError('');
+            }
+        }
+
         setDataState((prevData) => {
             const newProducts = [...prevData.products];
             newProducts[index] = { ...newProducts[index], [field]: value };
 
             if (field === 'customer_id') {
                 newProducts[index].vehicle_id = '';
-                newProducts[index].product_id = '';
-                newProducts[index].amount = '';
-                newProducts[index].due_amount = '';
+                clearProductSelection(newProducts[index]);
             }
 
             if (field === 'vehicle_id') {
-                if (value) {
-                    const selectedVehicle = vehicles.find(
-                        (v) => v.id.toString() === value,
-                    );
-                    if (selectedVehicle) {
-                        newProducts[index].customer_id =
-                            selectedVehicle.customer_id.toString();
-                        const assignedIds = new Set(
-                            (selectedVehicle.products || []).map((product) =>
-                                product.id.toString(),
-                            ),
+                if (
+                    value &&
+                    selectedVehicle &&
+                    selectedVehicle.customer &&
+                    selectedVehicle.customer_id
+                ) {
+                    newProducts[index].customer_id =
+                        selectedVehicle.customer_id.toString();
+                    const firstProduct = getFilteredProducts(value)[0];
+
+                    if (firstProduct) {
+                        selectProductForLine(
+                            newProducts[index],
+                            firstProduct.id.toString(),
                         );
-                        if (!assignedIds.has(newProducts[index].product_id)) {
-                            newProducts[index].product_id = '';
-                            newProducts[index].amount = '';
-                            newProducts[index].due_amount = '';
-                        }
+                    } else {
+                        clearProductSelection(newProducts[index]);
                     }
                 } else {
-                    newProducts[index].product_id = '';
-                    newProducts[index].amount = '';
-                    newProducts[index].due_amount = '';
+                    if (value) {
+                        newProducts[index].vehicle_id = '';
+                    }
+                    clearProductSelection(newProducts[index]);
                 }
             }
 
@@ -346,8 +405,10 @@ export function CreditSaleModal({
     };
 
     const getFilteredVehicles = (customerId: string) => {
-        if (!customerId) return [];
-        return vehicles.filter((v) => v.customer_id.toString() === customerId);
+        if (!customerId) return vehicles;
+        return vehicles.filter(
+            (vehicle) => vehicle.customer_id?.toString() === customerId,
+        );
     };
 
     const getFilteredProducts = (vehicleId: string) => {
@@ -362,7 +423,12 @@ export function CreditSaleModal({
         ) {
             return [];
         }
-        return selectedVehicle.products
+        return [...selectedVehicle.products]
+            .sort(
+                (first, second) =>
+                    (first.sort_order ?? Number.MAX_SAFE_INTEGER) -
+                    (second.sort_order ?? Number.MAX_SAFE_INTEGER),
+            )
             .map((assignedProduct) =>
                 products.find((product) => product.id === assignedProduct.id),
             )
@@ -487,6 +553,7 @@ export function CreditSaleModal({
                             placeholder="Select vehicle"
                             searchPlaceholder="Search vehicles..."
                         />
+                        <InputError message={vehicleError} />
                     </div>
                 </div>
 
@@ -500,9 +567,24 @@ export function CreditSaleModal({
                             onValueChange={(value) =>
                                 updateProduct(0, 'product_id', value)
                             }
+                            disabled={
+                                !data.products[0]?.vehicle_id ||
+                                getFilteredProducts(
+                                    data.products[0]?.vehicle_id,
+                                ).length === 0
+                            }
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Select product" />
+                                <SelectValue
+                                    placeholder={
+                                        data.products[0]?.vehicle_id &&
+                                        getFilteredProducts(
+                                            data.products[0]?.vehicle_id,
+                                        ).length === 0
+                                            ? 'No assigned products'
+                                            : 'Select product'
+                                    }
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 {getFilteredProducts(
@@ -601,6 +683,10 @@ export function CreditSaleModal({
                             <Button
                                 type="button"
                                 onClick={addProduct}
+                                disabled={
+                                    Boolean(vehicleError) ||
+                                    !data.products[0]?.product_id
+                                }
                                 className="bg-blue-600 hover:bg-blue-700"
                             >
                                 <Plus className="mr-1 h-4 w-4" />

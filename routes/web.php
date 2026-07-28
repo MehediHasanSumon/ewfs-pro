@@ -236,6 +236,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('vehicles/download-pdf', [VehicleController::class, 'downloadPdf'])->name('vehicles.download.pdf');
     Route::delete('vehicles/bulk/delete', [VehicleController::class, 'bulkDelete'])->name('vehicles.bulk.delete');
     Route::post('vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+    Route::get('vehicles/{vehicle}/sales-context', [VehicleController::class, 'salesContext'])->name('vehicles.sales-context');
     Route::get('vehicles/{vehicle}', [VehicleController::class, 'show'])->name('vehicles.show');
     Route::put('vehicles/{vehicle}', [VehicleController::class, 'update'])->name('vehicles.update');
     Route::delete('vehicles/{vehicle}', [VehicleController::class, 'destroy'])->name('vehicles.destroy');

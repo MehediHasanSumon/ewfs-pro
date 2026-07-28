@@ -1,3 +1,4 @@
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { FormModal } from '@/components/ui/form-modal';
@@ -55,7 +56,7 @@ interface Product {
 interface Vehicle {
     id: number;
     vehicle_number: string;
-    customer_id: number;
+    customer_id: number | null;
     products?: {
         id: number;
         product_name: string;
@@ -110,7 +111,6 @@ export function SaleModal({
     groupedAccounts,
     products,
     vehicles,
-    salesHistory = [],
     shifts,
     closedShifts,
     uniqueCustomers = [],
@@ -152,6 +152,7 @@ export function SaleModal({
 
     const [processing, setProcessing] = useState(false);
     const [availableShifts, setAvailableShifts] = useState<Shift[]>(shifts);
+    const [vehicleError, setVehicleError] = useState('');
 
     async function loadEditData() {
         if (!editingSale) return;
@@ -219,6 +220,7 @@ export function SaleModal({
         const initialState = buildInitialState();
         setDataState(initialState);
         setAvailableShifts(getAvailableShifts(initialState.sale_date));
+        setVehicleError('');
     }
 
     const setData = (key: string, value: string) => {
@@ -468,10 +470,15 @@ export function SaleModal({
         );
 
         if (!vehicle) {
-            return products;
+            return [];
         }
 
-        return (vehicle.products || [])
+        return [...(vehicle.products || [])]
+            .sort(
+                (first, second) =>
+                    (first.sort_order ?? Number.MAX_SAFE_INTEGER) -
+                    (second.sort_order ?? Number.MAX_SAFE_INTEGER),
+            )
             .map((assignedProduct) =>
                 products.find((product) => product.id === assignedProduct.id),
             )
@@ -492,9 +499,11 @@ export function SaleModal({
             (vehicleNumber) => !managedVehicleNumbers.has(vehicleNumber),
         );
 
-        return Array.from(
-            new Set([...managedVehicles, ...legacyVehicles]),
-        ).sort();
+        return customerName
+            ? Array.from(new Set(managedVehicles)).sort()
+            : Array.from(
+                  new Set([...managedVehicles, ...legacyVehicles]),
+              ).sort();
     };
 
     const clearProductSelection = (
@@ -506,32 +515,69 @@ export function SaleModal({
         product.due_amount = '';
     };
 
+    const selectProductForLine = (
+        line: ReturnType<typeof buildInitialState>['products'][number],
+        productId: string,
+    ) => {
+        line.product_id = productId;
+        const selectedProduct = products.find(
+            (product) => product.id.toString() === productId,
+        );
+
+        if (!selectedProduct) {
+            clearProductSelection(line);
+            return;
+        }
+
+        const quantity = parseFloat(line.quantity) || 0;
+        const amount = selectedProduct.sales_price * quantity;
+        const discount = parseFloat(line.discount) || 0;
+        line.amount = quantity > 0 ? amount.toString() : '';
+        line.paid_amount =
+            quantity > 0 ? Math.max(0, amount - discount).toFixed(2) : '';
+        line.due_amount = quantity > 0 ? '0.00' : '';
+    };
+
     const handleVehicleChange = (index: number, value: string) => {
+        const vehicle = vehicles.find((item) => item.vehicle_number === value);
+
+        if (!value) {
+            setVehicleError('');
+        } else if (!vehicle) {
+            setVehicleError('The selected vehicle is unavailable.');
+        } else if (!vehicle.customer || !vehicle.customer_id) {
+            setVehicleError('This vehicle is not assigned to any customer.');
+        } else if (!vehicle.products || vehicle.products.length === 0) {
+            setVehicleError('This vehicle has no assigned products.');
+        } else {
+            setVehicleError('');
+        }
+
         setDataState((prevData) => {
             const newProducts = [...prevData.products];
             const line = { ...newProducts[index], vehicle_no: value };
-            const vehicle = vehicles.find(
-                (item) => item.vehicle_number === value,
-            );
 
             if (!value) {
                 clearProductSelection(line);
             } else if (vehicle) {
-                line.customer = vehicle.customer?.name || line.customer;
-                const allowedIds = new Set(
-                    (vehicle.products || []).map((product) =>
-                        product.id.toString(),
-                    ),
-                );
-
-                if (!allowedIds.has(line.product_id)) {
+                if (!vehicle.customer || !vehicle.customer_id) {
+                    line.vehicle_no = '';
+                    line.customer = '';
                     clearProductSelection(line);
+                } else {
+                    line.customer = vehicle.customer.name;
+                    const firstProduct = getFilteredProducts(value)[0];
+
+                    if (firstProduct) {
+                        selectProductForLine(line, firstProduct.id.toString());
+                    } else {
+                        clearProductSelection(line);
+                    }
                 }
             } else {
-                const history = salesHistory.find(
-                    (sale) => sale.vehicle_no === value,
-                );
-                line.customer = history?.customer || line.customer;
+                line.vehicle_no = '';
+                line.customer = '';
+                clearProductSelection(line);
             }
 
             newProducts[index] = line;
@@ -637,25 +683,15 @@ export function SaleModal({
                             ).sort()}
                             value={data.products[0]?.customer || ''}
                             onValueChange={(value) => {
+                                setVehicleError('');
                                 setDataState((prevData) => {
                                     const newProducts = [...prevData.products];
                                     const line = {
                                         ...newProducts[0],
                                         customer: value,
                                     };
-                                    const selectedVehicle = vehicles.find(
-                                        (vehicle) =>
-                                            vehicle.vehicle_number ===
-                                            line.vehicle_no,
-                                    );
-
-                                    if (
-                                        selectedVehicle &&
-                                        selectedVehicle.customer?.name !== value
-                                    ) {
-                                        line.vehicle_no = '';
-                                        clearProductSelection(line);
-                                    }
+                                    line.vehicle_no = '';
+                                    clearProductSelection(line);
 
                                     newProducts[0] = line;
 
@@ -684,6 +720,7 @@ export function SaleModal({
                             placeholder="Type vehicle number"
                             className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
+                        <InputError message={vehicleError} />
                     </div>
                 </div>
 
@@ -714,9 +751,24 @@ export function SaleModal({
                             onValueChange={(value) =>
                                 updateProduct(0, 'product_id', value)
                             }
+                            disabled={
+                                !data.products[0]?.vehicle_no ||
+                                getFilteredProducts(
+                                    data.products[0]?.vehicle_no || '',
+                                ).length === 0
+                            }
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Select product" />
+                                <SelectValue
+                                    placeholder={
+                                        data.products[0]?.vehicle_no &&
+                                        getFilteredProducts(
+                                            data.products[0]?.vehicle_no || '',
+                                        ).length === 0
+                                            ? 'No assigned products'
+                                            : 'Select product'
+                                    }
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 {getFilteredProducts(
@@ -993,6 +1045,10 @@ export function SaleModal({
                             <Button
                                 type="button"
                                 onClick={addProduct}
+                                disabled={
+                                    Boolean(vehicleError) ||
+                                    !data.products[0]?.product_id
+                                }
                                 className="bg-blue-600 hover:bg-blue-700"
                             >
                                 <Plus className="mr-1 h-4 w-4" />

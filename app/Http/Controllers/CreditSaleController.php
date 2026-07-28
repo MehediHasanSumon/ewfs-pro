@@ -20,8 +20,7 @@ class CreditSaleController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly CreditSalePostingService $creditSales
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -41,7 +40,14 @@ class CreditSaleController extends Controller implements HasMiddleware
                 ->paginate($this->perPage($request))
                 ->withQueryString(),
             'vehicles' => Vehicle::query()
-                ->with(['customer:id,name', 'products:id,product_name'])
+                ->where('status', true)
+                ->whereHas('customer', fn ($query) => $query->active())
+                ->with([
+                    'customer:id,name',
+                    'products' => fn ($query) => $query
+                        ->where('products.status', true)
+                        ->select('products.id', 'products.product_name'),
+                ])
                 ->get(['id', 'vehicle_number', 'customer_id']),
             'customers' => Customer::query()->active()->get(['id', 'name']),
             'products' => Product::query()

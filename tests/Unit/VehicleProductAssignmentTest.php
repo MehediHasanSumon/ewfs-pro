@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Vehicle;
 use App\Services\VehicleProductAssignmentService;
+use App\Services\VehicleSalesContextService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +22,7 @@ beforeEach(function () {
         $table->id();
         $table->string('name');
         $table->string('proprietor_name')->nullable();
+        $table->boolean('status')->default(true);
         $table->timestamps();
     });
 
@@ -33,7 +35,7 @@ beforeEach(function () {
 
     Schema::create('vehicles', function (Blueprint $table) {
         $table->id();
-        $table->foreignId('customer_id');
+        $table->foreignId('customer_id')->nullable();
         $table->string('vehicle_type')->nullable();
         $table->string('vehicle_name')->nullable();
         $table->string('vehicle_number');
@@ -59,6 +61,7 @@ function createAssignmentFixture(): array
     $customerId = DB::table('customers')->insertGetId([
         'name' => 'Acme Transport',
         'proprietor_name' => 'A. Rahman',
+        'status' => true,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -185,4 +188,32 @@ it('serializes proprietor name and ordered vehicle products', function () {
                 ->pluck('id')
                 ->all()
         )->toBe([$productIds[2], $productIds[0]]);
+});
+
+it('returns sales context with the owner and first product in pivot order', function () {
+    [, $productIds, $vehicle] = createAssignmentFixture();
+    app(VehicleProductAssignmentService::class)->sync($vehicle, [
+        ['product_id' => $productIds[1], 'sort_order' => 3],
+        ['product_id' => $productIds[2], 'sort_order' => 1],
+        ['product_id' => $productIds[0], 'sort_order' => 2],
+    ]);
+
+    $context = app(VehicleSalesContextService::class)->resolve($vehicle);
+
+    expect($context['customer']['name'])->toBe('Acme Transport')
+        ->and($context['vehicle']['number'])->toBe('DHAKA-1001')
+        ->and(collect($context['products'])->pluck('id')->all())
+        ->toBe([$productIds[2], $productIds[0], $productIds[1]])
+        ->and($context['products'][0]['sort_order'])->toBe(1);
+});
+
+it('rejects a vehicle without an active customer sales context', function () {
+    $vehicle = Vehicle::query()->create([
+        'customer_id' => null,
+        'vehicle_number' => 'DHAKA-ORPHAN',
+        'status' => true,
+    ]);
+
+    expect(fn () => app(VehicleSalesContextService::class)->resolve($vehicle))
+        ->toThrow(ValidationException::class);
 });

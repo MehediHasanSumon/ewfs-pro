@@ -9,6 +9,7 @@ use App\Models\SaleBatch;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class SalePostingService
 {
@@ -17,7 +18,8 @@ class SalePostingService
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
-        private readonly VehicleProductAssignmentService $vehicleProducts
+        private readonly VehicleProductAssignmentService $vehicleProducts,
+        private readonly VehicleSalesContextService $vehicleSalesContext
     ) {}
 
     public function createMany(array $data, string $saleType = 'regular'): array
@@ -245,9 +247,20 @@ class SalePostingService
         $customer = $this->resolveCustomer($productData);
         $vehicle = $this->resolveVehicle($productData, $customer?->id);
 
-        if ($vehicle) {
-            $this->vehicleProducts->assertAssigned($vehicle, $product->id);
+        if (! $vehicle) {
+            throw ValidationException::withMessages([
+                'vehicle_no' => 'The selected vehicle is unavailable.',
+            ]);
         }
+
+        $this->vehicleSalesContext->resolve($vehicle);
+        $customer ??= $vehicle->customer;
+        $this->vehicleProducts->assertBelongsToCustomer(
+            $vehicle,
+            $customer,
+            'vehicle_no'
+        );
+        $this->vehicleProducts->assertAssigned($vehicle, $product->id);
 
         $sale = Sale::query()->create([
             'shift_id' => $headerData['shift_id'],
@@ -258,7 +271,8 @@ class SalePostingService
             'sale_time' => now()->format('H:i:s'),
             'invoice_no' => $this->numbers->next('invoice', 'IN', $businessDate, 4),
             'memo_no' => $productData['memo_no'] ?? $headerData['memo_no'] ?? null,
-            'customer_name_snapshot' => $productData['customer']
+            'customer_name_snapshot' => $customer?->name
+                ?? $productData['customer']
                 ?? $headerData['company_name']
                 ?? null,
             'customer_mobile_snapshot' => $productData['mobile_number']
