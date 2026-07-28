@@ -1,8 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import InputError from '@/components/input-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TimePicker } from '@/components/ui/time-picker';
 import { Pagination } from '@/components/ui/pagination';
 import { FormModal } from '@/components/ui/form-modal';
 import { DeleteModal } from '@/components/ui/delete-modal';
@@ -74,7 +76,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
     const [sortOrder, setSortOrder] = useState(filters?.sort_order || 'asc');
     const [perPage, setPerPage] = useState(filters?.per_page || 10);
     
-    const { data, setData, post, put, processing, errors, reset } = useForm({
+    const { data, setData, post, put, processing, errors, reset, setError, clearErrors } = useForm({
         name: '',
         start_time: '',
         end_time: '',
@@ -83,6 +85,27 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        clearErrors('start_time', 'end_time');
+
+        let hasTimeError = false;
+
+        if (!data.start_time) {
+            setError('start_time', 'Start Time is required.');
+            hasTimeError = true;
+        }
+
+        if (!data.end_time) {
+            setError('end_time', 'End Time is required.');
+            hasTimeError = true;
+        } else if (data.start_time && data.end_time <= data.start_time) {
+            setError('end_time', 'End Time must be after Start Time.');
+            hasTimeError = true;
+        }
+
+        if (hasTimeError) {
+            return;
+        }
+
         if (editingShift) {
             put(`/shifts/${editingShift.id}`, {
                 onSuccess: () => {
@@ -101,6 +124,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
     };
 
     const handleEdit = (shift: Shift) => {
+        clearErrors();
         setEditingShift(shift);
         setData({
             name: shift.name,
@@ -109,6 +133,71 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
             status: shift.status
         });
     };
+
+    const handleTimeChange = (
+        field: 'start_time' | 'end_time',
+        value: string,
+    ) => {
+        setData(field, value);
+        clearErrors(field);
+
+        if (field === 'start_time') {
+            clearErrors('end_time');
+        }
+    };
+
+    const renderTimeFields = (idPrefix: string) => (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+                <Label
+                    htmlFor={`${idPrefix}start_time`}
+                    className="dark:text-gray-200"
+                >
+                    Start Time
+                </Label>
+                <TimePicker
+                    id={`${idPrefix}start_time`}
+                    value={data.start_time}
+                    onChange={(value) =>
+                        handleTimeChange('start_time', value)
+                    }
+                    error={Boolean(errors.start_time)}
+                    aria-describedby={
+                        errors.start_time
+                            ? `${idPrefix}start_time-error`
+                            : undefined
+                    }
+                />
+                <InputError
+                    id={`${idPrefix}start_time-error`}
+                    message={errors.start_time}
+                />
+            </div>
+            <div>
+                <Label
+                    htmlFor={`${idPrefix}end_time`}
+                    className="dark:text-gray-200"
+                >
+                    End Time
+                </Label>
+                <TimePicker
+                    id={`${idPrefix}end_time`}
+                    value={data.end_time}
+                    onChange={(value) => handleTimeChange('end_time', value)}
+                    error={Boolean(errors.end_time)}
+                    aria-describedby={
+                        errors.end_time
+                            ? `${idPrefix}end_time-error`
+                            : undefined
+                    }
+                />
+                <InputError
+                    id={`${idPrefix}end_time-error`}
+                    message={errors.end_time}
+                />
+            </div>
+        </div>
+    );
 
     const handleDelete = (shift: Shift) => {
         setDeletingShift(shift);
@@ -441,11 +530,15 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
 
                 <FormModal
                     isOpen={isCreateOpen}
-                    onClose={() => setIsCreateOpen(false)}
+                    onClose={() => {
+                        setIsCreateOpen(false);
+                        clearErrors();
+                    }}
                     title="Create Shift"
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Create"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="name" className="dark:text-gray-200">Shift Name</Label>
@@ -458,30 +551,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
                         />
                         {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
                     </div>
-                    <div>
-                        <Label htmlFor="start_time" className="dark:text-gray-200">Start Time</Label>
-                        <Input
-                            id="start_time"
-                            type="text"
-                            value={data.start_time}
-                            onChange={(e) => setData('start_time', e.target.value)}
-                            className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., 09:00 AM"
-                        />
-                        {errors.start_time && <span className="text-red-500 text-sm">{errors.start_time}</span>}
-                    </div>
-                    <div>
-                        <Label htmlFor="end_time" className="dark:text-gray-200">End Time</Label>
-                        <Input
-                            id="end_time"
-                            type="text"
-                            value={data.end_time}
-                            onChange={(e) => setData('end_time', e.target.value)}
-                            className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., 05:00 PM"
-                        />
-                        {errors.end_time && <span className="text-red-500 text-sm">{errors.end_time}</span>}
-                    </div>
+                    {renderTimeFields('create-')}
                     <div>
                         <Label htmlFor="status" className="dark:text-gray-200">Status</Label>
                         <Select value={data.status ? '1' : '0'} onValueChange={(value) => setData('status', value === '1')}>
@@ -498,11 +568,15 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
 
                 <FormModal
                     isOpen={!!editingShift}
-                    onClose={() => setEditingShift(null)}
+                    onClose={() => {
+                        setEditingShift(null);
+                        clearErrors();
+                    }}
                     title="Edit Shift"
                     onSubmit={handleSubmit}
                     processing={processing}
                     submitText="Update"
+                    errors={errors}
                 >
                     <div>
                         <Label htmlFor="edit-name" className="dark:text-gray-200">Shift Name</Label>
@@ -514,30 +588,7 @@ export default function Shifts({ shifts, filters }: ShiftsProps) {
                         />
                         {errors.name && <span className="text-red-500 text-sm">{errors.name}</span>}
                     </div>
-                    <div>
-                        <Label htmlFor="edit-start_time" className="dark:text-gray-200">Start Time</Label>
-                        <Input
-                            id="edit-start_time"
-                            type="text"
-                            value={data.start_time}
-                            onChange={(e) => setData('start_time', e.target.value)}
-                            className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., 09:00 AM"
-                        />
-                        {errors.start_time && <span className="text-red-500 text-sm">{errors.start_time}</span>}
-                    </div>
-                    <div>
-                        <Label htmlFor="edit-end_time" className="dark:text-gray-200">End Time</Label>
-                        <Input
-                            id="edit-end_time"
-                            type="text"
-                            value={data.end_time}
-                            onChange={(e) => setData('end_time', e.target.value)}
-                            className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., 05:00 PM"
-                        />
-                        {errors.end_time && <span className="text-red-500 text-sm">{errors.end_time}</span>}
-                    </div>
+                    {renderTimeFields('edit-')}
                     <div>
                         <Label htmlFor="edit-status" className="dark:text-gray-200">Status</Label>
                         <Select value={data.status ? '1' : '0'} onValueChange={(value) => setData('status', value === '1')}>

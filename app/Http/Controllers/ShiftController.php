@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ShiftRequest;
 use App\Models\CompanySetting;
 use App\Models\Shift;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -69,39 +70,29 @@ class ShiftController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(ShiftRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'start_time' => 'required|string|max:255',
-            'end_time' => 'required|string|max:255',
-            'status' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         Shift::create([
-            'name' => $request->name,
-            'start_time' => $request->start_time,
-            'end_time' => $request->end_time,
-            'status' => $request->status ?? true,
+            'name' => $validated['name'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+            'status' => $validated['status'] ?? true,
         ]);
 
         return redirect()->back()->with('success', 'Shift created successfully.');
     }
 
-    public function update(Request $request, Shift $shift)
+    public function update(ShiftRequest $request, Shift $shift)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'start_time' => 'required|string|max:255',
-            'end_time' => 'required|string|max:255',
-            'status' => 'boolean',
-        ]);
+        $validated = $request->validated();
 
         $shift->update([
-            'name' => $request->name,
-            'start_time' => $request->start_time,
-            'end_time' => $request->end_time,
-            'status' => $request->status ?? true,
+            'name' => $validated['name'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+            'status' => $validated['status'] ?? true,
         ]);
 
         return redirect()->back()->with('success', 'Shift updated successfully.');
