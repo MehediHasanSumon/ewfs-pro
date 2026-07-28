@@ -2,40 +2,43 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Group;
+use Illuminate\Database\Seeder;
 
 class GroupSeeder extends Seeder
 {
     public function run(): void
     {
         Group::query()->delete();
-        
+
         $groups = [
-            [1, '1', 'Assets', 'ROOT', true],
-            [2, '2', 'Expenses', 'ROOT', true],
-            [3, '3', 'Income', 'ROOT', true],
-            [4, '4', 'Liabilities', 'ROOT', true],
-            [5, '10001', 'Fixed Asset', '1', true],
-            [6, '10002', 'Current Asset', '1', true],
-            [7, '100020001', 'Account Receivable', '10002', true],
-            [9, '100010001', 'Land', '10001', true],
-            [10, '40001', 'Current Liabilities', '4', true],
-            [11, '400010001', 'Account Payable', '40001', true],
-            [12, '400010002', 'Bank Loan', '40001', true],
-            [13, '100020002', 'Cash in hand', '10002', true],
-            [14, '100020003', 'Mobile Bank', '10002', true],
-            [15, '100020004', 'Bank Account', '10002', true],
-            [16, '40002', 'Employee Management', '4', true]
+            [1, null, '1', 'Assets', 'asset', 'debit'],
+            [2, null, '2', 'Expenses', 'expense', 'debit'],
+            [3, null, '3', 'Income', 'revenue', 'credit'],
+            [4, null, '4', 'Liabilities', 'liability', 'credit'],
+            [5, 1, '10001', 'Fixed Asset', 'asset', 'debit'],
+            [6, 1, '10002', 'Current Asset', 'asset', 'debit'],
+            [7, 6, '100020001', 'Account Receivable', 'asset', 'debit'],
+            [9, 5, '100010001', 'Land', 'asset', 'debit'],
+            [10, 4, '40001', 'Current Liabilities', 'liability', 'credit'],
+            [11, 10, '400010001', 'Account Payable', 'liability', 'credit'],
+            [12, 10, '400010002', 'Bank Loan', 'liability', 'credit'],
+            [13, 6, '100020002', 'Cash in hand', 'asset', 'debit'],
+            [14, 6, '100020003', 'Mobile Bank', 'asset', 'debit'],
+            [15, 6, '100020004', 'Bank Account', 'asset', 'debit'],
+            [16, 4, '40002', 'Employee Management', 'liability', 'credit'],
         ];
 
         foreach ($groups as $group) {
             Group::create([
                 'id' => $group[0],
-                'code' => $group[1],
-                'name' => $group[2],
-                'parents' => $group[3],
-                'status' => $group[4],
+                'parent_id' => $group[1],
+                'code' => $group[2],
+                'name' => $group[3],
+                'account_class' => $group[4],
+                'normal_balance' => $group[5],
+                'is_system' => true,
+                'status' => true,
             ]);
         }
     }

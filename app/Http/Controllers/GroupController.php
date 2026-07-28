@@ -8,6 +8,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class GroupController extends Controller implements HasMiddleware
@@ -33,9 +35,7 @@ class GroupController extends Controller implements HasMiddleware
 
     public function index(Request $request)
     {
-        $query = Group::select('groups.*', 'f2.name as parent_name')
-            ->leftJoin('groups as f2', 'f2.code', '=', 'groups.parents')
-            ->where('groups.parents', '!=', 'ROOT');
+        $query = $this->groupListingQuery();
 
         // Apply filters
         if ($request->search) {
@@ -72,7 +72,8 @@ class GroupController extends Controller implements HasMiddleware
         $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $finances = $query->paginate($perPage)->withQueryString();
 
-        $financeMasterGroup = Group::where('parents', 'ROOT')
+        $financeMasterGroup = Group::query()
+            ->whereNull('parent_id')
             ->pluck('name', 'code')
             ->all();
 
@@ -85,53 +86,85 @@ class GroupController extends Controller implements HasMiddleware
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'exists:groups,code'],
+            'parents' => ['nullable', 'string', 'exists:groups,code'],
             'name' => [
                 'required',
                 'string',
-                'max:255',
-                'unique:groups,name',
+                'max:150',
             ],
-        ], [
-            'name.unique' => 'The group name has already been taken.',
         ]);
 
-        $groupParents = $request->parents ?: 'ROOT';
+        DB::transaction(function () use ($validated) {
+            $parentCode = $validated['parents'] ?: $validated['code'];
+            $parent = Group::query()
+                ->where('code', $parentCode)
+                ->lockForUpdate()
+                ->first();
 
-        // Find the next available code
-        $count = 1;
-        do {
-            $new_code = $groupParents.str_pad($count, 4, '0', STR_PAD_LEFT);
-            $exists = Group::where('code', $new_code)->exists();
-            $count++;
-        } while ($exists);
+            if (! $parent) {
+                throw ValidationException::withMessages([
+                    'parents' => 'The selected parent group is invalid.',
+                ]);
+            }
 
-        Group::create([
-            'code' => $new_code,
-            'name' => strip_tags($request->name),
-            'parents' => $groupParents,
-            'status' => 1,
-        ]);
+            $name = strip_tags($validated['name']);
+            $duplicateName = Group::query()
+                ->where('parent_id', $parent->id)
+                ->where('name', $name)
+                ->exists();
+
+            if ($duplicateName) {
+                throw ValidationException::withMessages([
+                    'name' => 'The group name has already been taken under this parent.',
+                ]);
+            }
+
+            $lastChildCode = Group::query()
+                ->where('parent_id', $parent->id)
+                ->orderByDesc('code')
+                ->value('code');
+            $nextSequence = $lastChildCode
+                ? ((int) substr($lastChildCode, strlen($parent->code))) + 1
+                : 1;
+
+            if ($nextSequence > 9999) {
+                throw ValidationException::withMessages([
+                    'parents' => 'The selected parent group has reached its child group limit.',
+                ]);
+            }
+
+            Group::create([
+                'parent_id' => $parent->id,
+                'code' => $parent->code.str_pad((string) $nextSequence, 4, '0', STR_PAD_LEFT),
+                'name' => $name,
+                'account_class' => $parent->account_class,
+                'normal_balance' => $parent->normal_balance,
+                'is_system' => false,
+                'status' => true,
+            ]);
+        });
 
         return redirect()->back()->with('success', 'Group created successfully.');
     }
 
-    public function update(Request $request, Group $Group)
+    public function update(Request $request, Group $group)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:150',
         ]);
 
-        $Group->update([
+        $group->update([
             'name' => strip_tags($request->name),
         ]);
 
         return redirect()->back()->with('success', 'Group updated successfully.');
     }
 
-    public function destroy(Group $Group)
+    public function destroy(Group $group)
     {
-        $Group->delete();
+        $group->delete();
 
         return redirect()->back()->with('success', 'Group deleted successfully.');
     }
@@ -146,9 +179,7 @@ class GroupController extends Controller implements HasMiddleware
 
     public function downloadPdf(Request $request)
     {
-        $query = Group::select('groups.*', 'f2.name as parent_name')
-            ->leftJoin('groups as f2', 'f2.code', '=', 'groups.parents')
-            ->where('groups.parents', '!=', 'ROOT');
+        $query = $this->groupListingQuery();
 
         // Apply same filters as index method
         if ($request->search) {
@@ -187,5 +218,17 @@ class GroupController extends Controller implements HasMiddleware
         $pdf = Pdf::loadView('pdf.groups', compact('groups', 'companySetting'));
 
         return $pdf->stream('groups.pdf');
+    }
+
+    private function groupListingQuery()
+    {
+        return Group::query()
+            ->select(
+                'groups.*',
+                'f2.name as parent_name',
+                'f2.code as parents',
+            )
+            ->leftJoin('groups as f2', 'f2.id', '=', 'groups.parent_id')
+            ->whereNotNull('groups.parent_id');
     }
 }
