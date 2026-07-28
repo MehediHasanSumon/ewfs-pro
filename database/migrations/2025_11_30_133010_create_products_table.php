@@ -10,12 +10,11 @@ return new class extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->uuid('public_id')->unique();
             $table->foreignId('category_id')->constrained('categories')->restrictOnDelete();
             $table->foreignId('unit_id')->constrained('units')->restrictOnDelete();
-            $table->string('product_code', 64)->unique();
+            $table->string('product_code', 64)->nullable()->unique();
             $table->string('product_name', 150);
-            $table->string('product_slug', 180)->unique();
+            $table->string('product_slug', 180)->nullable()->unique();
             $table->string('country_of_origin', 100)->nullable();
             $table->string('sku', 100)->nullable()->unique();
             $table->boolean('is_inventory_item')->default(true);

@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('emp_departments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('emp_type_id')->nullable()->constrained('emp_types')->nullOnDelete();
-            $table->string('code', 32)->unique();
+            $table->string('code', 32)->nullable()->unique();
             $table->string('name', 100);
             $table->boolean('status')->default(true);
             $table->timestamps();

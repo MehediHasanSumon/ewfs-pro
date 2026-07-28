@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
@@ -17,31 +20,54 @@ class Customer extends Model
         'tin_no',
         'trade_license',
         'discount_rate',
-        'security_deposit',
         'credit_limit',
+        'credit_days',
         'address',
-        'status'
+        'status',
     ];
 
-    protected $casts = [
-        'discount_rate' => 'decimal:2',
-        'security_deposit' => 'decimal:2',
-        'credit_limit' => 'decimal:2',
-        'status' => 'boolean'
-    ];
+    protected function casts(): array
+    {
+        return [
+            'discount_rate' => 'decimal:4',
+            'credit_limit' => 'decimal:4',
+            'credit_days' => 'integer',
+            'status' => 'boolean',
+        ];
+    }
 
-    public function account()
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', true);
+    }
+
+    public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
     }
 
-    public function vehicles()
+    public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicle::class);
     }
 
-    public function sales()
+    public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);
+    }
+
+    public function creditSaleAllocations(): HasMany
+    {
+        return $this->hasMany(CreditSaleCustomer::class);
+    }
+
+    public function journalLines(): HasMany
+    {
+        return $this->hasMany(JournalLine::class);
+    }
+
+    public function openingBalances(): HasMany
+    {
+        return $this->hasMany(PartyOpeningBalance::class);
     }
 }

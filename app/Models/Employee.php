@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Employee extends Model
 {
     protected $fillable = [
         'account_id',
+        'user_id',
         'emp_type_id',
         'department_id',
         'designation_id',
@@ -45,35 +48,49 @@ class Employee extends Model
         'reference_two_address'
     ];
 
-    protected $casts = [
-        'dob' => 'date',
-        'joining_date' => 'date',
-        'status_date' => 'date',
-        'status' => 'boolean'
-    ];
+    protected function casts(): array
+    {
+        return [
+            'dob' => 'date',
+            'joining_date' => 'date',
+            'status_date' => 'date',
+            'salary' => 'decimal:4',
+            'status' => 'boolean',
+        ];
+    }
 
-    public function account()
+    public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'account_id');
     }
 
-    public function empType()
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function empType(): BelongsTo
     {
         return $this->belongsTo(EmpType::class);
     }
 
-    public function department()
+    public function department(): BelongsTo
     {
         return $this->belongsTo(EmpDepartment::class);
     }
 
-    public function designation()
+    public function designation(): BelongsTo
     {
         return $this->belongsTo(EmpDesignation::class);
     }
 
-    public function dailyOtherProductSales()
+    public function shiftClosingProductItems(): HasMany
     {
-        return $this->hasMany(DailyOtherProductSale::class);
+        return $this->hasMany(ShiftClosingProductItem::class);
+    }
+
+    public function journalLines(): HasMany
+    {
+        return $this->hasMany(JournalLine::class);
     }
 }

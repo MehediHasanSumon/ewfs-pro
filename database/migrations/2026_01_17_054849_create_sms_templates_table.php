@@ -13,11 +13,15 @@ return new class extends Migration
     {
         Schema::create('sms_templates', function (Blueprint $table) {
             $table->id();
-            $table->string('title');
-            $table->string('type');
+            $table->string('code', 64)->nullable()->unique();
+            $table->string('title', 150);
+            $table->string('type', 64);
             $table->text('message');
             $table->boolean('status')->default(true);
             $table->timestamps();
+
+            $table->unique(['title', 'type']);
+            $table->index(['type', 'status', 'id']);
         });
     }
 

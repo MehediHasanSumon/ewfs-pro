@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Vehicle extends Model
 {
@@ -20,18 +23,23 @@ class Vehicle extends Model
         'status' => 'boolean'
     ];
 
-    public function customer()
+    public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
     }
 
-    public function products()
+    public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'vehicle_products');
     }
 
-    public function sales()
+    public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);
+    }
+
+    public function creditSaleItems(): HasMany
+    {
+        return $this->hasMany(CreditSaleItem::class);
     }
 }

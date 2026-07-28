@@ -3,22 +3,29 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Shift extends Model
 {
-    protected $fillable = ['name', 'start_time', 'end_time', 'status'];
+    protected $fillable = ['code', 'name', 'start_time', 'end_time', 'display_order', 'status'];
 
     protected $casts = [
-        'status' => 'boolean'
+        'display_order' => 'integer',
+        'status' => 'boolean',
     ];
 
-    public function sales()
+    public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);
     }
 
-    public function dailyOtherProductSales()
+    public function closings(): HasMany
     {
-        return $this->hasMany(DailyOtherProductSale::class);
+        return $this->hasMany(ShiftClosing::class);
+    }
+
+    public function journalEntries(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class);
     }
 }

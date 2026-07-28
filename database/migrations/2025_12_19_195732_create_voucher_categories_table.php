@@ -10,10 +10,15 @@ return new class extends Migration
     {
         Schema::create('voucher_categories', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('code', 64)->nullable()->unique();
+            $table->string('name', 150)->unique();
+            $table->string('report_bucket_code', 100)->nullable();
             $table->text('description')->nullable();
             $table->boolean('status')->default(true);
             $table->timestamps();
+
+            $table->index(['status', 'name']);
+            $table->index(['report_bucket_code', 'status']);
         });
     }
 

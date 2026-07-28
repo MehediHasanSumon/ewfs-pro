@@ -10,7 +10,6 @@ return new class extends Migration
     {
         Schema::create('accounts', function (Blueprint $table) {
             $table->id();
-            $table->uuid('public_id')->unique();
             $table->foreignId('group_id')->constrained('groups')->restrictOnDelete();
             $table->string('ac_number', 150)->unique();
             $table->string('name', 150);

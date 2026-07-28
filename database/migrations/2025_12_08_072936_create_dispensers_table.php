@@ -10,11 +10,16 @@ return new class extends Migration
     {
         Schema::create('dispensers', function (Blueprint $table) {
             $table->id();
-            $table->string('dispenser_name', 150)->nullable();
-            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
-            $table->integer('dispenser_item')->nullable();
+            $table->string('code', 64)->nullable()->unique();
+            $table->string('dispenser_name', 150);
+            $table->foreignId('product_id')->constrained('products')->restrictOnDelete();
+            $table->unsignedInteger('dispenser_item')->nullable();
+            $table->decimal('opening_reading', 24, 6)->default(0);
             $table->boolean('status')->default(true);
             $table->timestamps();
+
+            $table->unique(['dispenser_name', 'product_id']);
+            $table->index(['product_id', 'status', 'id']);
         });
     }
 

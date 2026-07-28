@@ -13,12 +13,11 @@ return new class extends Migration
     {
         Schema::create('sale_batches', function (Blueprint $table) {
             $table->id();
-            $table->string('batch_code');
-            $table->unsignedBigInteger('sale_id');
+            $table->string('batch_code', 100);
+            $table->foreignId('sale_id')->unique()->constrained('sales')->cascadeOnDelete();
             $table->timestamps();
-            
-            $table->foreign('sale_id')->references('id')->on('sales')->onDelete('cascade');
-            $table->index(['batch_code']);
+
+            $table->index(['batch_code', 'sale_id']);
         });
     }
 

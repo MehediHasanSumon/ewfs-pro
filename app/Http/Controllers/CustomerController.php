@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\Account;
 use App\Models\Group;
 use App\Models\Vehicle;
 use App\Models\Product;
@@ -11,11 +10,14 @@ use App\Models\CompanySetting;
 use App\Models\SMSTemplate;
 use App\Models\SMSSetting;
 use App\Models\SMSLog;
-use App\Helpers\AccountHelper;
-use App\Helpers\CustomerHelper;
-use App\Models\CreditSale;
-use App\Models\Voucher;
+use App\Models\CreditSaleCustomer;
+use App\Services\DocumentNumberService;
+use App\Services\OpeningBalanceService;
+use App\Services\PartyAccountService;
+use App\Services\PartyLedgerService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Routing\Controllers\Middleware;
@@ -23,6 +25,14 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 
 class CustomerController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly DocumentNumberService $numbers,
+        private readonly OpeningBalanceService $openingBalances,
+        private readonly PartyAccountService $partyAccounts,
+        private readonly PartyLedgerService $partyLedger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -36,7 +46,7 @@ class CustomerController extends Controller implements HasMiddleware
     }
     public function index(Request $request)
     {
-        $query = Customer::select('id', 'account_id', 'code', 'name', 'mobile', 'email', 'nid_number', 'vat_reg_no', 'tin_no', 'trade_license', 'discount_rate', 'security_deposit', 'credit_limit', 'address', 'status', 'created_at')
+        $query = Customer::select('id', 'account_id', 'code', 'name', 'mobile', 'email', 'nid_number', 'vat_reg_no', 'tin_no', 'trade_license', 'discount_rate', 'credit_limit', 'credit_days', 'address', 'status', 'created_at')
             ->with('account:id,name,ac_number,group_id', 'account.group:id,code,name');
 
         // Apply filters
@@ -53,30 +63,22 @@ class CustomerController extends Controller implements HasMiddleware
             $query->where('status', $request->status === 'active');
         }
 
-        // Apply sorting
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'code', 'name', 'mobile', 'email', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        // Paginate
-        $perPage = $request->get('per_page', 10);
-        $customers = $query->paginate($perPage)->withQueryString()->through(function ($customer) {
-            // Calculate total sales for this customer
-            $totalSales = CreditSale::where('customer_id', $customer->id)->sum('total_amount');
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
+        $customers = $query->paginate($perPage)->withQueryString();
+        $metrics = $this->partyLedger->customerMetrics($customers->getCollection());
+        $customers->setCollection(
+            $customers->getCollection()->map(function (Customer $customer) use ($metrics) {
+                $metric = $metrics->get($customer->id);
 
-            // Calculate total paid for this customer
-            $totalPaid = 0;
-            if ($customer->account) {
-                $totalPaid = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                    ->where('vouchers.voucher_type', 'Receipt')
-                    ->where('vouchers.from_account_id', $customer->account->id)
-                    ->sum('transactions.amount');
-            }
-
-            // Calculate current due/advanced (Total Sales - Total Paid)
-            $currentDue = $totalSales - $totalPaid;
-
-            return [
+                return [
                 'id' => $customer->id,
                 'account_id' => $customer->account_id,
                 'code' => $customer->code,
@@ -88,17 +90,18 @@ class CustomerController extends Controller implements HasMiddleware
                 'tin_no' => $customer->tin_no,
                 'trade_license' => $customer->trade_license,
                 'discount_rate' => $customer->discount_rate,
-                'security_deposit' => $customer->security_deposit,
+                'security_deposit' => $metric['security_deposit'],
                 'credit_limit' => $customer->credit_limit,
                 'address' => $customer->address,
                 'status' => $customer->status,
                 'account' => $customer->account,
-                'total_sales' => $totalSales,
-                'total_paid' => $totalPaid,
-                'current_due' => $currentDue,
+                'total_sales' => $metric['total_sales'],
+                'total_paid' => $metric['total_paid'],
+                'current_due' => $metric['current_due'],
                 'created_at' => $customer->created_at->format('Y-m-d'),
-            ];
-        });
+                ];
+            })
+        );
 
         $groups = Group::where('status', true)->get(['id', 'code', 'name']);
         $products = Product::where('status', 1)->get(['id', 'product_name as name']);
@@ -145,56 +148,57 @@ class CustomerController extends Controller implements HasMiddleware
             'reg_date' => 'nullable|date'
         ]);
 
-        $account = Account::create([
-            'name' => $request->name,
-            'ac_number' => AccountHelper::generateAccountNumber(),
-            'group_id' => 7,
-            'group_code' => '100020001',
-            'status' => $request->status ?? true,
-        ]);
-
-        $customer = Customer::create([
-            'account_id' => $account->id,
-            'code' => CustomerHelper::generateCustomerCode(),
-            'name' => $request->name,
-            'mobile' => $request->mobile,
-            'email' => $request->email,
-            'nid_number' => $request->nid_number,
-            'vat_reg_no' => $request->vat_reg_no,
-            'tin_no' => $request->tin_no,
-            'trade_license' => $request->trade_license,
-            'discount_rate' => $request->discount_rate ?? 0,
-            'security_deposit' => $request->security_deposit ?? 0,
-            'credit_limit' => $request->credit_limit ?? 0,
-            'address' => $request->address,
-            'status' => $request->status ?? true,
-        ]);
-
-        if ($request->product_ids || $request->vehicle_type || $request->vehicle_name || $request->vehicle_number) {
-            $vehicle = Vehicle::create([
-                'customer_id' => $customer->id,
-                'vehicle_type' => $request->vehicle_type,
-                'vehicle_name' => $request->vehicle_name,
-                'vehicle_number' => $request->vehicle_number,
-                'reg_date' => $request->reg_date,
-                'status' => $request->status ?? true,
+        DB::transaction(function () use ($request) {
+            $status = $request->boolean('status', true);
+            $account = $this->partyAccounts->createCustomerAccount($request->name, $status);
+            $customer = Customer::query()->create([
+                'account_id' => $account->id,
+                'code' => $this->numbers->next('customer', 'CC', null, 3),
+                'name' => $request->name,
+                'mobile' => $request->mobile,
+                'email' => $request->email,
+                'nid_number' => $request->nid_number,
+                'vat_reg_no' => $request->vat_reg_no,
+                'tin_no' => $request->tin_no,
+                'trade_license' => $request->trade_license,
+                'discount_rate' => $request->input('discount_rate', 0),
+                'credit_limit' => $request->input('credit_limit', 0),
+                'address' => $request->address,
+                'status' => $status,
             ]);
 
-            if ($request->product_ids) {
-                $vehicle->products()->attach($request->product_ids);
+            if (
+                $request->filled('product_ids')
+                || $request->filled('vehicle_type')
+                || $request->filled('vehicle_name')
+                || $request->filled('vehicle_number')
+            ) {
+                $vehicle = Vehicle::query()->create([
+                    'customer_id' => $customer->id,
+                    'vehicle_type' => $request->vehicle_type,
+                    'vehicle_name' => $request->vehicle_name,
+                    'vehicle_number' => $request->vehicle_number,
+                    'reg_date' => $request->reg_date,
+                    'status' => $status,
+                ]);
+
+                if ($request->filled('product_ids')) {
+                    $vehicle->products()->sync($request->product_ids);
+                }
             }
-        }
 
-        if ($request->previous_due && $request->previous_due > 0) {
-            CreditSale::create([
-                'customer_id' => $customer->id,
-                'total_amount' => $request->previous_due,
-                'due_amount' => $request->previous_due,
-                'type' => 'previous',
-                'remarks' => 'Previous Due',
-                'status' => true,
-            ]);
-        }
+            $businessDate = now()->toDateString();
+            $this->openingBalances->customerPreviousDue(
+                $customer,
+                (float) $request->input('previous_due', 0),
+                $businessDate
+            );
+            $this->openingBalances->customerDeposit(
+                $customer,
+                (float) $request->input('security_deposit', 0),
+                $businessDate
+            );
+        });
 
         return redirect()->back()->with('success', 'Customer created successfully.');
     }
@@ -207,65 +211,51 @@ class CustomerController extends Controller implements HasMiddleware
             'vehicles.products:id,product_name'
         ]);
 
-        $recentPayments = [];
-        if ($customer->account) {
-            $recentPayments = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->where('vouchers.from_account_id', $customer->account->id)
-                ->select(
-                    'vouchers.id',
-                    'vouchers.voucher_no',
-                    'vouchers.date',
-                    'transactions.amount',
-                    'transactions.payment_type as type',
-                    'payment_sub_types.name as sub_type',
-                    'vouchers.description',
-                    \DB::raw("'Received' as status")
-                )
-                ->orderBy('vouchers.date', 'desc')
+        $paymentQuery = $this->partyLedger->vouchers(
+            'customer_id',
+            $customer->id,
+            'receipt'
+        );
+        $paymentCount = (clone $paymentQuery)->count();
+        $recentPayments = $this->partyLedger->voucherRows(
+            $paymentQuery
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
                 ->limit(5)
-                ->get();
-        }
+                ->get(),
+            'Received'
+        );
 
-        $recentSales = CreditSale::where('customer_id', $customer->id)
-            ->where('type', 'regular')
-            ->with('vehicle:id,vehicle_number')
-            ->orderBy('sale_date', 'desc')
+        $recentSales = CreditSaleCustomer::query()
+            ->where('customer_id', $customer->id)
+            ->whereHas('creditSale', fn ($sale) => $sale->posted())
+            ->with([
+                'creditSale:id,sale_date,invoice_no,status',
+                'items:id,credit_sale_customer_id,vehicle_id,vehicle_number_snapshot,quantity',
+                'items.vehicle:id,vehicle_number',
+            ])
+            ->latest('id')
             ->limit(5)
             ->get()
-            ->map(function ($sale) {
+            ->map(function (CreditSaleCustomer $allocation) {
+                $item = $allocation->items->first();
+
                 return [
-                    'id' => $sale->id,
-                    'date' => $sale->sale_date,
-                    'amount' => $sale->total_amount,
-                    'quantity' => $sale->quantity,
-                    'vehicle_number' => $sale->vehicle->vehicle_number ?? 'N/A',
-                    'invoice_no' => $sale->invoice_no,
-                    'status' => $sale->status,
+                    'id' => $allocation->id,
+                    'date' => $allocation->creditSale?->sale_date?->format('Y-m-d'),
+                    'amount' => (float) $allocation->grand_total,
+                    'quantity' => (float) $allocation->items->sum('quantity'),
+                    'vehicle_number' => $item?->vehicle?->vehicle_number
+                        ?? $item?->vehicle_number_snapshot
+                        ?? 'N/A',
+                    'invoice_no' => $allocation->creditSale?->invoice_no,
+                    'status' => $allocation->creditSale?->status,
                 ];
             });
 
-        $totalSales = CreditSale::where('customer_id', $customer->id)
-            ->sum('total_amount');
-
-        $salesCount = CreditSale::where('customer_id', $customer->id)
-            ->count();
-
-        $totalPaid = 0;
-        $paymentCount = 0;
-        if ($customer->account) {
-            $totalPaid = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->where('vouchers.from_account_id', $customer->account->id)
-                ->sum('transactions.amount');
-
-            $paymentCount = Voucher::where('voucher_type', 'Receipt')
-                ->where('from_account_id', $customer->account->id)
-                ->count();
-        }
-
-        $currentDue = $totalSales - $totalPaid;
+        $metric = $this->partyLedger
+            ->customerMetrics(collect([$customer]))
+            ->get($customer->id);
 
         $smsTemplates = SMSTemplate::where('status', true)
             ->select('id', 'title', 'type', 'message')
@@ -283,7 +273,7 @@ class CustomerController extends Controller implements HasMiddleware
                 'tin_no' => $customer->tin_no,
                 'trade_license' => $customer->trade_license,
                 'discount_rate' => $customer->discount_rate,
-                'security_deposit' => $customer->security_deposit,
+                'security_deposit' => $metric['security_deposit'],
                 'credit_limit' => $customer->credit_limit,
                 'address' => $customer->address,
                 'status' => $customer->status,
@@ -293,11 +283,11 @@ class CustomerController extends Controller implements HasMiddleware
             ],
             'recentPayments' => $recentPayments,
             'recentSales' => $recentSales,
-            'totalSales' => $totalSales,
-            'salesCount' => $salesCount,
-            'totalPaid' => $totalPaid,
+            'totalSales' => $metric['total_sales'],
+            'salesCount' => $metric['sales_count'],
+            'totalPaid' => $metric['total_paid'],
             'paymentCount' => $paymentCount,
-            'currentDue' => $currentDue,
+            'currentDue' => $metric['current_due'],
             'smsTemplates' => $smsTemplates
         ]);
     }
@@ -308,97 +298,26 @@ class CustomerController extends Controller implements HasMiddleware
 
         $year = $request->get('year', date('Y'));
 
-        $sales = CreditSale::where('customer_id', $customer->id)
-            ->with('vehicle:id,vehicle_number')
-            ->orderBy('sale_date', 'desc')
-            ->get()
-            ->map(function ($sale) {
-                return [
-                    'id' => $sale->id,
-                    'date' => $sale->sale_date,
-                    'type' => 'Sale',
-                    'description' => 'Credit Sale - ' . ($sale->vehicle->vehicle_number ?? 'N/A'),
-                    'debit' => $sale->total_amount,
-                    'credit' => 0,
-                    'invoice_no' => $sale->invoice_no,
-                ];
-            });
-
-        $payments = [];
-        if ($customer->account) {
-            $payments = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->where('vouchers.from_account_id', $customer->account->id)
-                ->orderBy('vouchers.date', 'desc')
-                ->select('vouchers.*', 'transactions.amount')
-                ->get()
-                ->map(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'date' => $voucher->date,
-                        'type' => 'Payment',
-                        'description' => 'Payment Received - ' . ($voucher->remarks ?? 'N/A'),
-                        'debit' => 0,
-                        'credit' => $voucher->amount,
-                        'voucher_no' => $voucher->voucher_no,
-                    ];
-                });
-        }
-
-        $transactions = collect($sales)->merge($payments)->sortByDesc('date')->values();
-
-        $balance = 0;
-        $transactions = $transactions->map(function ($transaction) use (&$balance) {
-            $balance += $transaction['debit'] - $transaction['credit'];
-            $transaction['balance'] = $balance;
-            return $transaction;
-        });
-
-        $monthlySales = CreditSale::where('customer_id', $customer->id)
-            ->whereYear('sale_date', $year)
-            ->selectRaw('YEAR(sale_date) as year, MONTH(sale_date) as month, SUM(total_amount) as total')
-            ->groupBy('year', 'month')
-            ->orderBy('month', 'asc')
-            ->get()
-            ->map(function ($sale) {
-                return [
-                    'month' => date('F Y', mktime(0, 0, 0, $sale->month, 1, $sale->year)),
-                    'total' => $sale->total
-                ];
-            });
-
-        $availableYears = CreditSale::where('customer_id', $customer->id)
-            ->selectRaw('DISTINCT YEAR(sale_date) as year')
-            ->orderBy('year', 'desc')
-            ->pluck('year')
-            ->toArray();
-
-        $recentPayments = collect([]);
-        if ($customer->account) {
-            $query = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->where('vouchers.from_account_id', $customer->account->id)
-                ->select('vouchers.*', 'transactions.amount');
-
-            if ($request->start_date) {
-                $query->whereDate('vouchers.date', '>=', $request->start_date);
-            }
-            if ($request->end_date) {
-                $query->whereDate('vouchers.date', '<=', $request->end_date);
-            }
-
-            $recentPayments = $query->orderBy('vouchers.date', 'desc')
-                ->paginate(10)
-                ->withQueryString()
-                ->through(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'date' => $voucher->date,
-                        'amount' => $voucher->amount,
-                        'remarks' => $voucher->remarks,
-                    ];
-                });
-        }
+        $transactions = $this->partyLedger->statement($customer->account, 'customer');
+        $metric = $this->partyLedger
+            ->customerMetrics(collect([$customer]))
+            ->get($customer->id);
+        $monthlySales = $this->partyLedger->customerMonthlySales(
+            $customer->id,
+            (int) $year
+        );
+        $availableYears = $this->partyLedger->customerSalesYears($customer->id);
+        $recentPayments = $this->partyLedger->paginatedVoucherRows(
+            $this->partyLedger->vouchers(
+                'customer_id',
+                $customer->id,
+                'receipt',
+                $request->start_date,
+                $request->end_date
+            ),
+            10,
+            'Received'
+        );
 
         return Inertia::render('Customers/CustomerStatement', [
             'customer' => [
@@ -407,11 +326,11 @@ class CustomerController extends Controller implements HasMiddleware
                 'name' => $customer->name,
                 'mobile' => $customer->mobile,
                 'address' => $customer->address,
-                'security_deposit' => $customer->security_deposit,
+                'security_deposit' => $metric['security_deposit'],
                 'account' => $customer->account,
             ],
             'transactions' => $transactions,
-            'currentBalance' => $balance,
+            'currentBalance' => $metric['current_due'],
             'monthlySales' => $monthlySales,
             'availableYears' => $availableYears,
             'recentPayments' => $recentPayments
@@ -437,46 +356,55 @@ class CustomerController extends Controller implements HasMiddleware
             'status' => 'boolean'
         ]);
 
-        if ($customer->account) {
-            $customer->account->update([
+        DB::transaction(function () use ($request, $customer) {
+            $status = $request->boolean('status', true);
+            $customer->loadMissing('account');
+            $customer->account?->update([
                 'name' => $request->name,
-                'status' => $request->status ?? true,
+                'status' => $status,
             ]);
-        }
 
-        $customer->update([
-            'code' => $request->code,
-            'name' => $request->name,
-            'mobile' => $request->mobile,
-            'email' => $request->email,
-            'nid_number' => $request->nid_number,
-            'vat_reg_no' => $request->vat_reg_no,
-            'tin_no' => $request->tin_no,
-            'trade_license' => $request->trade_license,
-            'discount_rate' => $request->discount_rate ?? 0,
-            'security_deposit' => $request->security_deposit ?? 0,
-            'credit_limit' => $request->credit_limit ?? 0,
-            'address' => $request->address,
-            'status' => $request->status ?? true,
-        ]);
-
-        if ($request->previous_due && $request->previous_due > 0) {
-            CreditSale::create([
-                'customer_id' => $customer->id,
-                'total_amount' => $request->previous_due,
-                'due_amount' => $request->previous_due,
-                'type' => 'previous',
-                'remarks' => 'Previous Due',
-                'status' => true,
+            $customer->update([
+                'code' => $request->input('code', $customer->code),
+                'name' => $request->name,
+                'mobile' => $request->mobile,
+                'email' => $request->email,
+                'nid_number' => $request->nid_number,
+                'vat_reg_no' => $request->vat_reg_no,
+                'tin_no' => $request->tin_no,
+                'trade_license' => $request->trade_license,
+                'discount_rate' => $request->input('discount_rate', 0),
+                'credit_limit' => $request->input('credit_limit', 0),
+                'address' => $request->address,
+                'status' => $status,
             ]);
-        }
+
+            $businessDate = now()->toDateString();
+
+            if ($request->has('previous_due')) {
+                $this->openingBalances->setCustomerPreviousDue(
+                    $customer,
+                    (float) $request->input('previous_due', 0),
+                    $businessDate
+                );
+            }
+
+            if ($request->has('security_deposit')) {
+                $this->openingBalances->setCustomerDeposit(
+                    $customer,
+                    (float) $request->input('security_deposit', 0),
+                    $businessDate
+                );
+            }
+        });
 
         return redirect()->back()->with('success', 'Customer updated successfully.');
     }
 
     public function destroy(Customer $customer)
     {
-        $customer->delete();
+        $this->deleteCustomer($customer);
+
         return redirect()->back()->with('success', 'Customer deleted successfully.');
     }
 
@@ -487,7 +415,27 @@ class CustomerController extends Controller implements HasMiddleware
             'ids.*' => 'exists:customers,id'
         ]);
 
-        Customer::whereIn('id', $request->ids)->delete();
+        $customers = Customer::query()
+            ->whereIn('id', $request->ids)
+            ->with(['account', 'vehicles.products'])
+            ->get();
+
+        DB::transaction(function () use ($customers) {
+            foreach ($customers as $customer) {
+                $this->assertCustomerCanBeDeleted($customer);
+            }
+
+            foreach ($customers as $customer) {
+                foreach ($customer->vehicles as $vehicle) {
+                    $vehicle->products()->detach();
+                    $vehicle->delete();
+                }
+
+                $account = $customer->account;
+                $customer->delete();
+                $account?->delete();
+            }
+        });
 
         return redirect()->back()->with('success', count($request->ids) . ' customers deleted successfully.');
     }
@@ -510,26 +458,22 @@ class CustomerController extends Controller implements HasMiddleware
             $query->where('status', $request->status === 'active');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'code', 'name', 'mobile', 'email', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $customers = $query->get()->map(function ($customer) {
-            $totalSales = CreditSale::where('customer_id', $customer->id)->sum('total_amount');
-
-            $totalPaid = 0;
-            if ($customer->account) {
-                $totalPaid = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                    ->where('vouchers.voucher_type', 'Receipt')
-                    ->where('vouchers.from_account_id', $customer->account->id)
-                    ->sum('transactions.amount');
-            }
-
-            $currentDue = $totalSales - $totalPaid;
-
-            $customer->total_sales = $totalSales;
-            $customer->total_paid = $totalPaid;
-            $customer->current_due = $currentDue;
+        $customers = $query->get();
+        $metrics = $this->partyLedger->customerMetrics($customers);
+        $customers->transform(function (Customer $customer) use ($metrics) {
+            $metric = $metrics->get($customer->id);
+            $customer->setAttribute('security_deposit', $metric['security_deposit']);
+            $customer->setAttribute('total_sales', $metric['total_sales']);
+            $customer->setAttribute('total_paid', $metric['total_paid']);
+            $customer->setAttribute('current_due', $metric['current_due']);
 
             return $customer;
         });
@@ -546,19 +490,10 @@ class CustomerController extends Controller implements HasMiddleware
 
         $year = $request->get('year', date('Y'));
 
-        $monthlySales = CreditSale::where('customer_id', $customer->id)
-            ->where('type', 'regular')
-            ->whereYear('sale_date', $year)
-            ->selectRaw('YEAR(sale_date) as year, MONTH(sale_date) as month, SUM(total_amount) as total')
-            ->groupBy('year', 'month')
-            ->orderBy('month', 'asc')
-            ->get()
-            ->map(function ($sale) {
-                return [
-                    'month' => date('F Y', mktime(0, 0, 0, $sale->month, 1, $sale->year)),
-                    'total' => $sale->total
-                ];
-            });
+        $monthlySales = $this->partyLedger->customerMonthlySales(
+            $customer->id,
+            (int) $year
+        );
 
         $companySetting = CompanySetting::first();
 
@@ -570,29 +505,19 @@ class CustomerController extends Controller implements HasMiddleware
     {
         $customer->load('account');
 
-        $query = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.voucher_type', 'Receipt')
-            ->where('vouchers.from_account_id', $customer->account->id)
-            ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type');
-
-        if ($request->start_date) {
-            $query->whereDate('vouchers.date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $query->whereDate('vouchers.date', '<=', $request->end_date);
-        }
-
-        $payments = $query->orderBy('vouchers.date', 'desc')
-            ->get()
-            ->map(function ($voucher) {
-                return [
-                    'id' => $voucher->id,
-                    'date' => $voucher->date,
-                    'amount' => $voucher->amount,
-                    'payment_type' => $voucher->payment_type,
-                    'remarks' => $voucher->remarks,
-                ];
-            });
+        $payments = $this->partyLedger->voucherRows(
+            $this->partyLedger->vouchers(
+                'customer_id',
+                $customer->id,
+                'receipt',
+                $request->start_date,
+                $request->end_date
+            )
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->get(),
+            'Received'
+        );
 
         $companySetting = CompanySetting::first();
 
@@ -657,30 +582,55 @@ class CustomerController extends Controller implements HasMiddleware
 
     private function replaceVariables($message, $customer)
     {
+        $customer->loadMissing('account');
+        $metric = $this->partyLedger
+            ->customerMetrics(collect([$customer]))
+            ->get($customer->id);
+
         $variables = [
             '{{customer_name}}' => $customer->name,
             '{{account_number}}' => $customer->account->ac_number ?? 'N/A',
             '{{customer_mobile}}' => $customer->mobile ?? 'N/A',
             '{{customer_email}}' => $customer->email ?? 'N/A',
-            '{{security_deposit}}' => number_format($customer->security_deposit ?? 0),
+            '{{security_deposit}}' => number_format($metric['security_deposit']),
             '{{total_cradit}}' => number_format($customer->credit_limit ?? 0),
         ];
 
-        // Calculate dynamic values
-        $totalSales = CreditSale::where('customer_id', $customer->id)->sum('total_amount');
-        $totalPaid = 0;
-        if ($customer->account) {
-            $totalPaid = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->where('vouchers.from_account_id', $customer->account->id)
-                ->sum('transactions.amount');
-        }
-        $currentDue = $totalSales - $totalPaid;
-
-        $variables['{{total_payment}}'] = number_format($totalPaid);
-        $variables['{{total_due}}'] = number_format($currentDue);
+        $variables['{{total_payment}}'] = number_format($metric['total_paid']);
+        $variables['{{total_due}}'] = number_format($metric['current_due']);
 
         return str_replace(array_keys($variables), array_values($variables), $message);
+    }
+
+    private function deleteCustomer(Customer $customer): void
+    {
+        DB::transaction(function () use ($customer) {
+            $customer->loadMissing(['account', 'vehicles.products']);
+            $this->assertCustomerCanBeDeleted($customer);
+
+            foreach ($customer->vehicles as $vehicle) {
+                $vehicle->products()->detach();
+                $vehicle->delete();
+            }
+
+            $account = $customer->account;
+            $customer->delete();
+            $account?->delete();
+        });
+    }
+
+    private function assertCustomerCanBeDeleted(Customer $customer): void
+    {
+        if (
+            $customer->journalLines()->exists()
+            || $customer->creditSaleAllocations()->exists()
+            || $customer->sales()->exists()
+            || $customer->openingBalances()->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'customer' => 'This customer has financial records and cannot be deleted.',
+            ]);
+        }
     }
 
     private function sendSMSAPI($smsSetting, $phoneNumber, $message)

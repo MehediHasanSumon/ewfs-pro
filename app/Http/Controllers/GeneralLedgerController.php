@@ -4,15 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\CompanySetting;
+use App\Services\LedgerQueryService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class GeneralLedgerController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly LedgerQueryService $ledger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -26,36 +31,17 @@ class GeneralLedgerController extends Controller implements HasMiddleware
         $endDate = $request->end_date ?? date('Y-m-d');
         $accountId = $request->account_id;
 
-        $accounts = Account::with('group')->where('status', true)->get();
+        $accounts = $this->ledger->activeAccounts();
 
         if ($accountId) {
-            $account = Account::with('group')->find($accountId);
-            
-            // Get all transactions for this account
-            $transactions = DB::table('transactions')
-                ->where('ac_number', $account->ac_number)
-                ->whereBetween('transaction_date', [$startDate, $endDate])
-                ->orderBy('transaction_date', 'asc')
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            // Calculate running balance
-            $runningBalance = 0;
-            $transactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-                if ($transaction->transaction_type === 'Dr') {
-                    $runningBalance -= $transaction->amount;
-                } else {
-                    $runningBalance += $transaction->amount;
-                }
-                $transaction->balance = $runningBalance;
-                return $transaction;
-            });
+            $account = Account::with('group')->findOrFail($accountId);
+            $result = $this->ledger->accountLedger($account, $startDate, $endDate);
 
             return Inertia::render('GeneralLedger/Index', [
                 'accounts' => $accounts,
                 'selectedAccount' => $account,
-                'transactions' => $transactions,
-                'currentBalance' => $runningBalance,
+                'transactions' => $result['transactions'],
+                'currentBalance' => $result['closing_balance'],
                 'filters' => $request->only(['account_id', 'start_date', 'end_date'])
             ]);
         }
@@ -79,25 +65,9 @@ class GeneralLedgerController extends Controller implements HasMiddleware
             return redirect()->back()->with('error', 'Please select an account.');
         }
 
-        $account = Account::with('group')->find($accountId);
-        
-        $transactions = DB::table('transactions')
-            ->where('ac_number', $account->ac_number)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        $runningBalance = 0;
-        $transactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-            if ($transaction->transaction_type === 'Dr') {
-                $runningBalance -= $transaction->amount;
-            } else {
-                $runningBalance += $transaction->amount;
-            }
-            $transaction->balance = $runningBalance;
-            return $transaction;
-        });
+        $account = Account::with('group')->findOrFail($accountId);
+        $transactions = $this->ledger
+            ->accountLedger($account, $startDate, $endDate)['transactions'];
 
         $companySetting = CompanySetting::first();
 

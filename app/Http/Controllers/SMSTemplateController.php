@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SMSTemplateRequest;
 use App\Models\SMSTemplate;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class SMSTemplateController extends Controller implements HasMiddleware
 {
@@ -24,57 +26,27 @@ class SMSTemplateController extends Controller implements HasMiddleware
 
     public function index(Request $request)
     {
-        $query = SMSTemplate::query();
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('type', 'like', "%{$search}%")
-                  ->orWhere('message', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->filled('sort_by')) {
-            $sortBy = $request->sort_by;
-            $sortOrder = $request->sort_order === 'desc' ? 'desc' : 'asc';
-            $query->orderBy($sortBy, $sortOrder);
-        } else {
-            $query->orderBy('created_at', 'desc');
-        }
-
-        $smsTemplates = $query->paginate(10)->withQueryString();
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+        $smsTemplates = $this->filteredQuery($request)
+            ->paginate($perPage)
+            ->withQueryString();
 
         return Inertia::render('SMS/SMSTemplate', [
             'smsTemplates' => $smsTemplates,
-            'filters' => $request->only(['search', 'sort_by', 'sort_order'])
+            'filters' => $request->only(['search', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(SMSTemplateRequest $request)
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'type' => 'required|string|max:255',
-            'message' => 'required|string',
-            'status' => 'boolean'
-        ]);
-
-        SMSTemplate::create($request->all());
+        SMSTemplate::create($request->validated());
 
         return redirect()->back()->with('success', 'SMS Template created successfully.');
     }
 
-    public function update(Request $request, SMSTemplate $smsTemplate)
+    public function update(SMSTemplateRequest $request, SMSTemplate $smsTemplate)
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'type' => 'required|string|max:255',
-            'message' => 'required|string',
-            'status' => 'boolean'
-        ]);
-
-        $smsTemplate->update($request->all());
+        $smsTemplate->update($request->validated());
 
         return redirect()->back()->with('success', 'SMS Template updated successfully.');
     }
@@ -82,45 +54,49 @@ class SMSTemplateController extends Controller implements HasMiddleware
     public function destroy(SMSTemplate $smsTemplate)
     {
         $smsTemplate->delete();
+
         return redirect()->back()->with('success', 'SMS Template deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:sms_templates,id'
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct', 'exists:sms_templates,id'],
         ]);
 
-        SMSTemplate::whereIn('id', $request->ids)->delete();
+        $deleted = SMSTemplate::query()->whereKey($validated['ids'])->delete();
 
-        return redirect()->back()->with('success', 'SMS Templates deleted successfully.');
+        return redirect()->back()->with('success', "{$deleted} SMS templates deleted successfully.");
     }
 
     public function downloadPdf(Request $request)
     {
+        $smsTemplates = $this->filteredQuery($request)->get();
+        $pdf = Pdf::loadView('pdf.sms-templates', compact('smsTemplates'));
+
+        return $pdf->download('sms-templates.pdf');
+    }
+
+    private function filteredQuery(Request $request): Builder
+    {
         $query = SMSTemplate::query();
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('type', 'like', "%{$search}%")
-                  ->orWhere('message', 'like', "%{$search}%");
+            $search = trim((string) $request->input('search'));
+            $query->where(function (Builder $builder) use ($search): void {
+                $builder->where('title', 'like', "%{$search}%")
+                    ->orWhere('type', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%");
             });
         }
 
-        if ($request->filled('sort_by')) {
-            $sortBy = $request->sort_by;
-            $sortOrder = $request->sort_order === 'desc' ? 'desc' : 'asc';
-            $query->orderBy($sortBy, $sortOrder);
-        } else {
-            $query->orderBy('created_at', 'desc');
-        }
+        $allowedSorts = ['id', 'title', 'type', 'status', 'created_at'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true)
+            ? $request->input('sort_by')
+            : 'created_at';
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
 
-        $smsTemplates = $query->get();
-
-        $pdf = Pdf::loadView('pdf.sms-templates', compact('smsTemplates'));
-        return $pdf->download('sms-templates.pdf');
+        return $query->orderBy($sortBy, $sortOrder)->orderByDesc('id');
     }
 }

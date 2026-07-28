@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SMSSetting;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Models\SMSSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class SMSConfigController extends Controller implements HasMiddleware
 {
@@ -29,10 +29,10 @@ class SMSConfigController extends Controller implements HasMiddleware
 
         // Apply filters
         if ($request->search) {
-            $query->where(function($q) use ($request) {
-                $q->where('url', 'like', '%' . $request->search . '%')
-                  ->orWhere('sender_id', 'like', '%' . $request->search . '%')
-                  ->orWhere('api_key', 'like', '%' . $request->search . '%');
+            $query->where(function ($q) use ($request) {
+                $q->where('url', 'like', '%'.$request->search.'%')
+                    ->orWhere('sender_id', 'like', '%'.$request->search.'%')
+                    ->orWhere('api_key', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -53,12 +53,16 @@ class SMSConfigController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'url', 'sender_id', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         // Paginate
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $configs = $query->paginate($perPage)->withQueryString()->through(function ($config) {
             return [
                 'id' => $config->id,
@@ -72,7 +76,7 @@ class SMSConfigController extends Controller implements HasMiddleware
 
         return Inertia::render('SMS/SMSConfig', [
             'configs' => $configs,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -82,10 +86,11 @@ class SMSConfigController extends Controller implements HasMiddleware
             'url' => 'required|url|max:255',
             'api_key' => 'required|string|max:255',
             'sender_id' => 'required|string|max:255',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         SMSSetting::create($validated);
+
         return redirect()->back()->with('success', 'SMS Config created successfully.');
     }
 
@@ -105,16 +110,18 @@ class SMSConfigController extends Controller implements HasMiddleware
             'url' => 'required|url|max:255',
             'api_key' => 'required|string|max:255',
             'sender_id' => 'required|string|max:255',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         $smsConfig->update($validated);
+
         return redirect()->back()->with('success', 'SMS Config updated successfully.');
     }
 
     public function destroy(SMSSetting $smsConfig)
     {
         $smsConfig->delete();
+
         return redirect()->back()->with('success', 'SMS Config deleted successfully.');
     }
 
@@ -122,12 +129,12 @@ class SMSConfigController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:sms_settings,id'
+            'ids.*' => 'exists:sms_settings,id',
         ]);
 
         SMSSetting::whereIn('id', $request->ids)->delete();
 
-        return redirect()->back()->with('success', count($request->ids) . ' SMS configs deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' SMS configs deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -136,10 +143,10 @@ class SMSConfigController extends Controller implements HasMiddleware
 
         // Apply same filters as index method
         if ($request->search) {
-            $query->where(function($q) use ($request) {
-                $q->where('url', 'like', '%' . $request->search . '%')
-                  ->orWhere('sender_id', 'like', '%' . $request->search . '%')
-                  ->orWhere('api_key', 'like', '%' . $request->search . '%');
+            $query->where(function ($q) use ($request) {
+                $q->where('url', 'like', '%'.$request->search.'%')
+                    ->orWhere('sender_id', 'like', '%'.$request->search.'%')
+                    ->orWhere('api_key', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -159,14 +166,19 @@ class SMSConfigController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'url', 'sender_id', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $configs = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.sms-configs', compact('configs', 'companySetting'));
+
         return $pdf->stream('sms-configs.pdf');
     }
 }

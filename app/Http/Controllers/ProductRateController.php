@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ProductRate;
-use App\Models\Product;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Models\Product;
+use App\Models\ProductRate;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class ProductRateController extends Controller implements HasMiddleware
 {
@@ -23,13 +23,14 @@ class ProductRateController extends Controller implements HasMiddleware
             new Middleware('permission:delete-product-rate', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
         $query = ProductRate::with('product');
 
         if ($request->search) {
-            $query->whereHas('product', function($q) use ($request) {
-                $q->where('product_name', 'like', '%' . $request->search . '%');
+            $query->whereHas('product', function ($q) use ($request) {
+                $q->where('product_name', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -49,11 +50,15 @@ class ProductRateController extends Controller implements HasMiddleware
             $query->whereDate('effective_date', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'effective_date');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'product_id', 'purchase_price', 'sales_price', 'effective_date', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'effective_date';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $rates = $query->paginate($perPage)->withQueryString()->through(function ($rate) {
             return [
                 'id' => $rate->id,
@@ -72,7 +77,7 @@ class ProductRateController extends Controller implements HasMiddleware
         return Inertia::render('ProductRates/Index', [
             'rates' => $rates,
             'products' => $products,
-            'filters' => $request->only(['search', 'status', 'product_id', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'product_id', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -83,7 +88,7 @@ class ProductRateController extends Controller implements HasMiddleware
             'purchase_price' => 'nullable|numeric|min:0',
             'sales_price' => 'nullable|numeric|min:0',
             'effective_date' => 'required|date',
-            'status' => 'required|boolean'
+            'status' => 'required|boolean',
         ]);
 
         ProductRate::create([
@@ -91,7 +96,7 @@ class ProductRateController extends Controller implements HasMiddleware
             'purchase_price' => $request->purchase_price,
             'sales_price' => $request->sales_price,
             'effective_date' => $request->effective_date,
-            'status' => $request->status
+            'status' => $request->status,
         ]);
 
         return redirect()->back()->with('success', 'Product rate created successfully.');
@@ -104,7 +109,7 @@ class ProductRateController extends Controller implements HasMiddleware
             'purchase_price' => 'nullable|numeric|min:0',
             'sales_price' => 'nullable|numeric|min:0',
             'effective_date' => 'required|date',
-            'status' => 'required|boolean'
+            'status' => 'required|boolean',
         ]);
 
         $productRate->update([
@@ -112,7 +117,7 @@ class ProductRateController extends Controller implements HasMiddleware
             'purchase_price' => $request->purchase_price,
             'sales_price' => $request->sales_price,
             'effective_date' => $request->effective_date,
-            'status' => $request->status
+            'status' => $request->status,
         ]);
 
         return redirect()->back()->with('success', 'Product rate updated successfully.');
@@ -121,6 +126,7 @@ class ProductRateController extends Controller implements HasMiddleware
     public function destroy(ProductRate $productRate)
     {
         $productRate->delete();
+
         return redirect()->back()->with('success', 'Product rate deleted successfully.');
     }
 
@@ -128,11 +134,12 @@ class ProductRateController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:product_rates,id'
+            'ids.*' => 'exists:product_rates,id',
         ]);
 
         ProductRate::whereIn('id', $request->ids)->delete();
-        return redirect()->back()->with('success', count($request->ids) . ' product rates deleted successfully.');
+
+        return redirect()->back()->with('success', count($request->ids).' product rates deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -140,8 +147,8 @@ class ProductRateController extends Controller implements HasMiddleware
         $query = ProductRate::with('product');
 
         if ($request->search) {
-            $query->whereHas('product', function($q) use ($request) {
-                $q->where('product_name', 'like', '%' . $request->search . '%');
+            $query->whereHas('product', function ($q) use ($request) {
+                $q->where('product_name', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -161,14 +168,19 @@ class ProductRateController extends Controller implements HasMiddleware
             $query->whereDate('effective_date', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'effective_date');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'product_id', 'purchase_price', 'sales_price', 'effective_date', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'effective_date';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $rates = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.product-rates', compact('rates', 'companySetting'));
+
         return $pdf->stream('product-rates.pdf');
     }
 }

@@ -2,24 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CompanySetting;
 use App\Models\CreditSale;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Shift;
-use App\Models\Stock;
+use App\Models\ShiftClosing;
 use App\Models\Vehicle;
-use App\Models\Customer;
-use App\Models\CompanySetting;
-use App\Models\IsShiftClose;
-use App\Helpers\InvoiceHelper;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use App\Services\CreditSalePostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class CreditSaleController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly CreditSalePostingService $creditSales
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -30,292 +33,182 @@ class CreditSaleController extends Controller implements HasMiddleware
             new Middleware('permission:delete-credit-sale', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = CreditSale::with(['product', 'shift', 'customer', 'vehicle'])
-            ->where('type', 'regular');
-
-        if ($request->search) {
-            $query->where(function($q) use ($request) {
-                $q->where('invoice_no', 'like', '%' . $request->search . '%')
-                  ->orWhereHas('customer', function($q) use ($request) {
-                      $q->where('name', 'like', '%' . $request->search . '%');
-                  });
-            });
-        }
-
-        if ($request->customer && $request->customer !== 'all') {
-            $query->where('customer_id', $request->customer);
-        }
-
-        if ($request->payment_status && $request->payment_status !== 'all') {
-            if ($request->payment_status === 'paid') {
-                $query->where('due_amount', 0);
-            } elseif ($request->payment_status === 'partial') {
-                $query->where('paid_amount', '>', 0)->where('due_amount', '>', 0);
-            } elseif ($request->payment_status === 'due') {
-                $query->where('paid_amount', 0);
-            }
-        }
-
-        if ($request->start_date) {
-            $query->where('sale_date', '>=', $request->start_date);
-        }
-
-        if ($request->end_date) {
-            $query->where('sale_date', '<=', $request->end_date);
-        }
-
-        $sortBy = $request->sort_by ?? 'created_at';
-        $sortOrder = $request->sort_order ?? 'desc';
-        $query->orderBy($sortBy, $sortOrder);
-
-        $creditSales = $query->paginate($request->per_page ?? 10);
-
-        $closedShifts = IsShiftClose::select('close_date', 'shift_id')->get()->map(function($item) {
-            return [
-                'close_date' => $item->close_date->format('Y-m-d'),
-                'shift_id' => $item->shift_id
-            ];
-        });
-
         return Inertia::render('CreditSales/Index', [
-            'creditSales' => $creditSales,
-            'vehicles' => Vehicle::with(['customer:id,name', 'products:id,product_name'])->select('id', 'vehicle_number', 'customer_id')->get(),
-            'customers' => Customer::where('status', true)->select('id', 'name')->get(),
-            'products' => Product::with('activeRate')->select('id', 'product_name')->get()->map(function($product) {
-                return [
+            'creditSales' => $this->filteredQuery($request)
+                ->paginate($this->perPage($request))
+                ->withQueryString(),
+            'vehicles' => Vehicle::query()
+                ->with(['customer:id,name', 'products:id,product_name'])
+                ->get(['id', 'vehicle_number', 'customer_id']),
+            'customers' => Customer::query()->active()->get(['id', 'name']),
+            'products' => Product::query()
+                ->with('activeRate')
+                ->active()
+                ->get(['id', 'product_name'])
+                ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'product_name' => $product->product_name,
-                    'sales_price' => $product->activeRate ? (float) $product->activeRate->sales_price : 0
-                ];
-            }),
-            'shifts' => Shift::where('status', true)->select('id', 'name')->get(),
-            'closedShifts' => $closedShifts,
-            'filters' => $request->only(['search', 'customer', 'payment_status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+                    'sales_price' => (float) ($product->activeRate?->sales_price ?? 0),
+                ]),
+            'shifts' => Shift::query()->where('status', true)->get(['id', 'name']),
+            'closedShifts' => ShiftClosing::query()
+                ->where('status', 'posted')
+                ->get(['business_date', 'shift_id'])
+                ->map(fn (ShiftClosing $closing) => [
+                    'close_date' => $closing->business_date->format('Y-m-d'),
+                    'shift_id' => $closing->shift_id,
+                ]),
+            'filters' => $request->only([
+                'search', 'customer', 'payment_status', 'start_date', 'end_date',
+                'sort_by', 'sort_order', 'per_page',
+            ]),
         ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'sale_date' => 'required|date',
-            'shift_id' => 'required|exists:shifts,id',
-            'memo_no' => 'nullable|string',
-            'products' => 'required|array|min:1',
-            'products.*.product_id' => 'required|exists:products,id',
-            'products.*.customer_id' => 'required|exists:customers,id',
-            'products.*.vehicle_id' => 'required|exists:vehicles,id',
-            'products.*.memo_no' => 'nullable|string',
-            'products.*.quantity' => 'required|numeric|min:0',
-            'products.*.amount' => 'required|numeric|min:0',
-            'products.*.due_amount' => 'required|numeric|min:0',
-            'products.*.remarks' => 'nullable|string',
-        ]);
+        $validated = $request->validate($this->storeRules());
+        $this->creditSales->createMany($validated);
 
-        DB::transaction(function () use ($request) {
-            $invoiceNo = InvoiceHelper::generateInvoiceId();
-            
-            foreach ($request->products as $productData) {
-                if (!isset($productData['product_id']) || !$productData['product_id']) {
-                    continue;
-                }
-
-                $product = Product::with('category')->find($productData['product_id']);
-                $amount = $productData['amount'];
-                $discount = $productData['discount'] ?? 0;
-                $totalAmount = $amount - $discount;
-                $dueAmount = $productData['due_amount'];
-                $categoryCode = $product->category ? $product->category->code : null;
-
-                CreditSale::create([
-                    'sale_date' => $request->sale_date,
-                    'sale_time' => now()->format('H:i:s'),
-                    'invoice_no' => $invoiceNo,
-                    'shift_id' => $request->shift_id,
-                    'transaction_id' => null,
-                    'customer_id' => $productData['customer_id'],
-                    'vehicle_id' => $productData['vehicle_id'],
-                    'product_id' => $productData['product_id'],
-                    'category_code' => $categoryCode,
-                    'type' => 'regular',
-                    'purchase_price' => $product->activeRate ? $product->activeRate->purchase_price : 0,
-                    'quantity' => $productData['quantity'],
-                    'amount' => $amount,
-                    'discount' => $discount,
-                    'total_amount' => $totalAmount,
-                    'paid_amount' => 0,
-                    'due_amount' => $dueAmount,
-                    'memo_no' => $productData['memo_no'] ?? $request->memo_no,
-                    'remarks' => $productData['remarks'],
-                ]);
-
-                $stock = Stock::where('product_id', $productData['product_id'])->first();
-                if ($stock) {
-                    $stock->decrement('current_stock', $productData['quantity']);
-                    $stock->decrement('available_stock', $productData['quantity']);
-                }
-            }
-        });
-
-        return redirect()->back()->with('success', 'Credit sale created successfully.');
+        return back()->with('success', 'Credit sale created successfully.');
     }
 
     public function edit(CreditSale $creditSale)
     {
-        if ($creditSale->type !== 'regular') {
-            abort(404);
-        }
-        $creditSale->load(['product', 'shift', 'customer', 'vehicle', 'transaction']);
-        return response()->json(['creditSale' => $creditSale]);
+        return response()->json([
+            'creditSale' => $creditSale->load([
+                'shift',
+                'customers.customer',
+                'customers.items.product',
+                'customers.items.category',
+                'customers.items.unit',
+                'customers.items.vehicle',
+            ]),
+        ]);
     }
 
     public function update(Request $request, CreditSale $creditSale)
     {
-        if ($creditSale->type !== 'regular') {
-            abort(404);
-        }
-        $request->validate([
-            'sale_date' => 'required|date',
-            'customer_id' => 'required|exists:customers,id',
-            'vehicle_id' => 'required|exists:vehicles,id',
-            'product_id' => 'required|exists:products,id',
-            'shift_id' => 'required|exists:shifts,id',
-            'memo_no' => 'nullable|string',
-            'quantity' => 'required|numeric|min:0',
-            'amount' => 'required|numeric|min:0',
-            'due_amount' => 'required|numeric|min:0',
-            'discount' => 'nullable|numeric|min:0',
-            'remarks' => 'nullable|string',
+        $validated = $request->validate([
+            'sale_date' => ['required', 'date'],
+            'customer_id' => ['required', 'exists:customers,id'],
+            'vehicle_id' => ['required', 'exists:vehicles,id'],
+            'product_id' => ['required', 'exists:products,id'],
+            'shift_id' => ['required', 'exists:shifts,id'],
+            'memo_no' => ['nullable', 'string', 'max:150'],
+            'quantity' => ['required', 'numeric', 'gt:0'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'due_amount' => ['required', 'numeric', 'min:0'],
+            'discount' => ['nullable', 'numeric', 'min:0'],
+            'remarks' => ['nullable', 'string'],
         ]);
 
-        DB::transaction(function () use ($request, $creditSale) {
-            $oldStock = Stock::where('product_id', $creditSale->product_id)->first();
-            if ($oldStock) {
-                $oldStock->increment('current_stock', $creditSale->quantity);
-                $oldStock->increment('available_stock', $creditSale->quantity);
-            }
+        $this->creditSales->replace($creditSale, $validated, $validated);
 
-            $product = Product::with('category')->find($request->product_id);
-            $amount = $request->amount;
-            $discount = $request->discount ?? 0;
-            $totalAmount = $amount - $discount;
-            $dueAmount = $request->due_amount;
-            $categoryCode = $product->category ? $product->category->code : null;
-
-            $creditSale->update([
-                'sale_date' => $request->sale_date,
-                'customer_id' => $request->customer_id,
-                'vehicle_id' => $request->vehicle_id,
-                'product_id' => $request->product_id,
-                'category_code' => $categoryCode,
-                'shift_id' => $request->shift_id,
-                'quantity' => $request->quantity,
-                'amount' => $amount,
-                'discount' => $discount,
-                'total_amount' => $totalAmount,
-                'paid_amount' => 0,
-                'due_amount' => $dueAmount,
-                'memo_no' => $request->memo_no,
-                'remarks' => $request->remarks,
-            ]);
-
-            $newStock = Stock::where('product_id', $request->product_id)->first();
-            if ($newStock) {
-                $newStock->decrement('current_stock', $request->quantity);
-                $newStock->decrement('available_stock', $request->quantity);
-            }
-        });
-
-        return redirect()->back()->with('success', 'Credit sale updated successfully.');
+        return back()->with('success', 'Credit sale updated successfully.');
     }
 
     public function destroy(CreditSale $creditSale)
     {
-        if ($creditSale->type !== 'regular') {
-            abort(404);
-        }
-        DB::transaction(function () use ($creditSale) {
-            $stock = Stock::where('product_id', $creditSale->product_id)->first();
-            if ($stock) {
-                $stock->increment('current_stock', $creditSale->quantity);
-                $stock->increment('available_stock', $creditSale->quantity);
-            }
+        $this->creditSales->reverse($creditSale);
 
-            $creditSale->delete();
-        });
-
-        return redirect()->back()->with('success', 'Credit sale deleted successfully.');
+        return back()->with('success', 'Credit sale deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:credit_sales,id'
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:credit_sales,id'],
         ]);
 
-        DB::transaction(function () use ($request) {
-            $creditSales = CreditSale::whereIn('id', $request->ids)->where('type', 'regular')->get();
+        CreditSale::query()
+            ->whereIn('id', $validated['ids'])
+            ->with('customers.journalEntry')
+            ->get()
+            ->each(fn (CreditSale $sale) => $this->creditSales->reverse($sale));
 
-            foreach ($creditSales as $creditSale) {
-                $stock = Stock::where('product_id', $creditSale->product_id)->first();
-                if ($stock) {
-                    $stock->increment('current_stock', $creditSale->quantity);
-                    $stock->increment('available_stock', $creditSale->quantity);
-                }
-
-                $creditSale->delete();
-            }
-        });
-
-        return redirect()->back()->with('success', 'Credit sales deleted successfully.');
+        return back()->with('success', 'Credit sales deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
     {
-        $query = CreditSale::with(['product', 'shift', 'customer', 'vehicle'])
-            ->where('type', 'regular');
+        return Pdf::loadView('pdf.credit-sales', [
+            'creditSales' => $this->filteredQuery($request)->get(),
+            'companySetting' => CompanySetting::query()->first(),
+        ])->stream('credit-sales.pdf');
+    }
 
-        if ($request->search) {
-            $query->where(function($q) use ($request) {
-                $q->where('invoice_no', 'like', '%' . $request->search . '%')
-                  ->orWhereHas('customer', function($q) use ($request) {
-                      $q->where('name', 'like', '%' . $request->search . '%');
-                  });
-            });
+    private function filteredQuery(Request $request)
+    {
+        $query = CreditSale::query()
+            ->with([
+                'shift',
+                'customers.customer',
+                'customers.items.product',
+                'customers.items.category',
+                'customers.items.unit',
+                'customers.items.vehicle',
+                'customers.paymentAllocations',
+            ])
+            ->whereHas('customers.journalEntry', fn ($entry) => $entry->posted());
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(fn ($nested) => $nested
+                ->where('invoice_no', 'like', "%{$search}%")
+                ->orWhereHas('customers.customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%")));
         }
 
-        if ($request->customer && $request->customer !== 'all') {
-            $query->where('customer_id', $request->customer);
+        if ($request->filled('customer') && $request->customer !== 'all') {
+            $query->whereHas('customers', fn ($allocation) => $allocation->where('customer_id', $request->customer));
         }
 
-        if ($request->payment_status && $request->payment_status !== 'all') {
-            if ($request->payment_status === 'paid') {
-                $query->where('due_amount', 0);
-            } elseif ($request->payment_status === 'partial') {
-                $query->where('paid_amount', '>', 0)->where('due_amount', '>', 0);
-            } elseif ($request->payment_status === 'due') {
-                $query->where('paid_amount', 0);
-            }
+        if ($request->filled('payment_status') && $request->payment_status !== 'all') {
+            $allocationStatuses = match ($request->payment_status) {
+                'paid' => ['paid'],
+                'partial' => ['partially_paid'],
+                'due' => ['open'],
+                default => [],
+            };
+            $query->whereHas('customers', fn ($allocation) => $allocation->whereIn('status', $allocationStatuses));
         }
 
-        if ($request->start_date) {
-            $query->where('sale_date', '>=', $request->start_date);
-        }
+        $query
+            ->when($request->start_date, fn ($q, $date) => $q->whereDate('sale_date', '>=', $date))
+            ->when($request->end_date, fn ($q, $date) => $q->whereDate('sale_date', '<=', $date));
 
-        if ($request->end_date) {
-            $query->where('sale_date', '<=', $request->end_date);
-        }
+        $sort = in_array($request->sort_by, ['id', 'sale_date', 'invoice_no', 'grand_total', 'created_at'], true)
+            ? $request->sort_by
+            : 'created_at';
 
-        $sortBy = $request->sort_by ?? 'created_at';
-        $sortOrder = $request->sort_order ?? 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
+    }
 
-        $creditSales = $query->get();
-        $companySetting = CompanySetting::first();
+    private function storeRules(): array
+    {
+        return [
+            'sale_date' => ['required', 'date'],
+            'shift_id' => ['required', 'exists:shifts,id'],
+            'memo_no' => ['nullable', 'string', 'max:150'],
+            'products' => ['required', 'array', 'min:1'],
+            'products.*.product_id' => ['required', 'exists:products,id'],
+            'products.*.customer_id' => ['required', 'exists:customers,id'],
+            'products.*.vehicle_id' => ['required', 'exists:vehicles,id'],
+            'products.*.memo_no' => ['nullable', 'string', 'max:150'],
+            'products.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'products.*.amount' => ['required', 'numeric', 'min:0'],
+            'products.*.discount' => ['nullable', 'numeric', 'min:0'],
+            'products.*.due_amount' => ['required', 'numeric', 'min:0'],
+            'products.*.remarks' => ['nullable', 'string'],
+        ];
+    }
 
-        $pdf = Pdf::loadView('pdf.credit-sales', compact('creditSales', 'companySetting'));
-        return $pdf->stream();
+    private function perPage(Request $request): int
+    {
+        return min(100, max(10, (int) $request->integer('per_page', 10)));
     }
 }

@@ -2,23 +2,37 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Employee;
-use App\Models\Account;
-use App\Models\Group;
-use App\Models\EmpType;
+use App\Models\CompanySetting;
 use App\Models\EmpDepartment;
 use App\Models\EmpDesignation;
-use App\Models\CompanySetting;
-use App\Helpers\AccountHelper;
+use App\Models\Employee;
+use App\Models\EmpType;
+use App\Models\Group;
+use App\Services\DocumentNumberService;
+use App\Services\PartyAccountService;
+use App\Services\PartyLedgerService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class EmployeeController extends Controller implements HasMiddleware
 {
+    private const SALARY_CODES = ['1001', '1004', '1005', '1006', '1007', '1014'];
+    private const ADVANCE_CODES = ['1002', '1003'];
+    private const ADVANCE_RETURN_CODES = ['1002', '1003', '1008'];
+
+    public function __construct(
+        private readonly DocumentNumberService $numbers,
+        private readonly PartyAccountService $partyAccounts,
+        private readonly PartyLedgerService $partyLedger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -28,16 +42,22 @@ class EmployeeController extends Controller implements HasMiddleware
             new Middleware('permission:delete-employee', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = Employee::with('account:id,name,ac_number', 'empType:id,name', 'department:id,name', 'designation:id,name');
+        $query = Employee::query()->with([
+            'account:id,name,ac_number',
+            'empType:id,name',
+            'department:id,name',
+            'designation:id,name',
+        ]);
 
         if ($request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('employee_name', 'like', '%' . $request->search . '%')
-                    ->orWhere('employee_code', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%')
-                    ->orWhere('mobile', 'like', '%' . $request->search . '%');
+            $query->where(function ($builder) use ($request) {
+                $builder->where('employee_name', 'like', '%'.$request->search.'%')
+                    ->orWhere('employee_code', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%')
+                    ->orWhere('mobile', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -45,19 +65,18 @@ class EmployeeController extends Controller implements HasMiddleware
             $query->where('status', $request->status === 'active');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        $perPage = $request->get('per_page', 10);
-        $employees = $query->paginate($perPage)->withQueryString()->through(function ($employee) {
-            return [
+        [$sortBy, $sortOrder] = $this->sorting($request);
+        $employees = $query
+            ->orderBy($sortBy, $sortOrder)
+            ->paginate(max(1, min((int) $request->get('per_page', 10), 100)))
+            ->withQueryString()
+            ->through(fn (Employee $employee) => [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->employee_name,
                 'email' => $employee->email,
                 'mobile' => $employee->mobile,
-                'joining_date' => $employee->joining_date,
+                'joining_date' => $employee->joining_date?->format('Y-m-d'),
                 'job_status' => $employee->job_status,
                 'status' => $employee->status,
                 'emp_type' => $employee->empType,
@@ -65,118 +84,52 @@ class EmployeeController extends Controller implements HasMiddleware
                 'designation' => $employee->designation,
                 'account' => $employee->account,
                 'created_at' => $employee->created_at->format('Y-m-d'),
-            ];
-        });
-
-        $empTypes = EmpType::where('status', true)->get(['id', 'name']);
-        $departments = EmpDepartment::where('status', true)->get(['id', 'name']);
-        $designations = EmpDesignation::where('status', true)->get(['id', 'name']);
-        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
+            ]);
 
         return Inertia::render('Employee/Index', [
             'employees' => $employees,
-            'empTypes' => $empTypes,
-            'departments' => $departments,
-            'designations' => $designations,
-            'groups' => $groups,
-            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page'])
+            ...$this->formOptions(),
+            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
     public function create()
     {
-        $empTypes = EmpType::where('status', true)->get(['id', 'name']);
-        $departments = EmpDepartment::where('status', true)->get(['id', 'name']);
-        $designations = EmpDesignation::where('status', true)->get(['id', 'name']);
-        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
-
-
-        $lastEmployeeGroup = null;
-        $lastEmployee = Employee::with('account.group')->latest()->first();
-        if ($lastEmployee && $lastEmployee->account && $lastEmployee->account->group) {
-            $lastEmployeeGroup = [
+        $lastEmployee = Employee::query()
+            ->with('account.group:id,code')
+            ->latest('id')
+            ->first();
+        $lastEmployeeGroup = $lastEmployee?->account?->group
+            ? [
                 'id' => $lastEmployee->account->group->id,
-                'code' => $lastEmployee->account->group->code
-            ];
-        }
+                'code' => $lastEmployee->account->group->code,
+            ]
+            : null;
 
         return Inertia::render('Employee/Create', [
-            'empTypes' => $empTypes,
-            'departments' => $departments,
-            'designations' => $designations,
-            'groups' => $groups,
+            ...$this->formOptions(),
             'lastEmployeeGroup' => $lastEmployeeGroup,
         ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'employee_code' => 'nullable|string|max:50',
-            'employee_name' => 'required|string|max:100',
-            'email' => 'nullable|email|max:100',
-            'emp_type_id' => 'nullable|exists:emp_types,id',
-            'department_id' => 'nullable|exists:emp_departments,id',
-            'designation_id' => 'nullable|exists:emp_designations,id',
+        $validated = $request->validate($this->rules());
 
-            'mobile' => 'nullable|string|max:100',
-            'mobile_two' => 'nullable|string|max:20',
-            'dob' => 'nullable|date',
-            'gender' => 'nullable|string|max:10',
-            'blood_group' => 'nullable|string|max:10',
-            'marital_status' => 'nullable|string|max:20',
-            'religion' => 'nullable|string|max:100',
-            'nid' => 'nullable|string|max:100',
-            'emergency_contact_person' => 'nullable|string|max:100',
-            'emergency_contact_number' => 'nullable|string|max:100',
-            'father_name' => 'nullable|string|max:100',
-            'mother_name' => 'nullable|string|max:100',
-            'present_address' => 'nullable|string|max:250',
-            'permanent_address' => 'nullable|string|max:350',
-            'job_status' => 'nullable|string|max:50',
-            'salary' => 'nullable|numeric|min:0',
-            'joining_date' => 'nullable|date',
-            'order' => 'nullable|integer',
-            'status' => 'boolean'
-        ]);
+        DB::transaction(function () use ($validated, $request) {
+            $status = $request->boolean('status', true);
+            $account = $this->partyAccounts->createEmployeeAccount(
+                $validated['employee_name'],
+                $status
+            );
 
-        // Create account first
-        $account = Account::create([
-            'name' => $request->employee_name,
-            'ac_number' => AccountHelper::generateAccountNumber(),
-            'group_id' => 16,
-            'group_code' => '40002',
-            'status' => $request->status ?? true,
-        ]);
-
-        Employee::create([
-            'account_id' => $account->id,
-            'emp_type_id' => $request->emp_type_id,
-            'department_id' => $request->department_id,
-            'designation_id' => $request->designation_id,
-            'employee_code' => $request->employee_code,
-            'employee_name' => $request->employee_name,
-            'email' => $request->email,
-            'order' => $request->order ?? 1,
-            'dob' => $request->dob,
-            'gender' => $request->gender,
-            'blood_group' => $request->blood_group,
-            'marital_status' => $request->marital_status,
-            'emergency_contact_person' => $request->emergency_contact_person,
-            'religion' => $request->religion,
-            'nid' => $request->nid,
-            'mobile' => $request->mobile,
-            'mobile_two' => $request->mobile_two,
-            'emergency_contact_number' => $request->emergency_contact_number,
-            'father_name' => $request->father_name,
-            'mother_name' => $request->mother_name,
-            'present_address' => $request->present_address,
-            'permanent_address' => $request->permanent_address,
-            'job_status' => $request->job_status,
-            'salary' => $request->salary,
-            'joining_date' => $request->joining_date,
-            'status' => $request->status ?? true,
-        ]);
+            Employee::query()->create([
+                ...$this->employeePayload($validated, $status),
+                'account_id' => $account->id,
+                'employee_code' => $validated['employee_code']
+                    ?? $this->numbers->next('employee', 'EMP', null, 4),
+            ]);
+        });
 
         return redirect()->route('employees.index')->with('success', 'Employee created successfully.');
     }
@@ -185,109 +138,33 @@ class EmployeeController extends Controller implements HasMiddleware
     {
         $employee->load('account', 'empType', 'department', 'designation');
 
-        // Get recent salary payments from vouchers using payment_sub_type_id codes
-        $recentSalaryPayments = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1001', '1004', '1005', '1006', '1007', '1014']) // Monthly Salary, Bonus, Overtime, Medical, Travel, Salary & Allowances
-            ->select(
-                'vouchers.id',
-                'vouchers.voucher_no',
-                'vouchers.date',
-                'transactions.amount',
-                'transactions.payment_type as type',
-                'payment_sub_types.name as sub_type',
-                'vouchers.description',
-                DB::raw("'Paid' as status")
-            )
-            ->orderBy('vouchers.date', 'desc')
-            ->limit(5)
-            ->get();
-        
-        // Get recent advanced payments from vouchers using payment_sub_type_id codes
-        $recentAdvancedPayments = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1002', '1003']) // Salary Advance, Personal Loan
-            ->select(
-                'vouchers.id',
-                'vouchers.voucher_no',
-                'vouchers.date',
-                'transactions.amount',
-                'transactions.payment_type as type',
-                'payment_sub_types.name as sub_type',
-                'vouchers.description',
-                DB::raw("'Given' as status")
-            )
-            ->orderBy('vouchers.date', 'desc')
-            ->limit(5)
-            ->get();
-        
-        // Calculate totals using payment_sub_type_id codes
-        $totalPaidSalary = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1001', '1004', '1005', '1006', '1007', '1014'])
-            ->sum('transactions.amount');
-            
-        $salaryPaymentCount = DB::table('vouchers')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1001', '1004', '1005', '1006', '1007', '1014'])
-            ->count();
-            
-        $totalAdvanced = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1002', '1003'])
-            ->sum('transactions.amount');
-            
-        $advancedCount = DB::table('vouchers')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->whereIn('payment_sub_types.code', ['1002', '1003'])
-            ->count();
-            
-        // Calculate advanced returns (receipts from employee)
-        $totalAdvancedReturns = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.from_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Receipt')
-            ->whereIn('payment_sub_types.code', ['1002', '1003', '1008']) // Salary Advance, Personal Loan, Advance Return
-            ->sum('transactions.amount');
-            
-        $advancedReturnCount = DB::table('vouchers')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.from_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Receipt')
-            ->whereIn('payment_sub_types.code', ['1002', '1003', '1008']) // Salary Advance, Personal Loan, Advance Return
-            ->count();
-            
+        $salaryQuery = $this->employeeVouchers($employee, 'payment', self::SALARY_CODES);
+        $advanceQuery = $this->employeeVouchers($employee, 'payment', self::ADVANCE_CODES);
+        $returnQuery = $this->employeeVouchers($employee, 'receipt', self::ADVANCE_RETURN_CODES);
+
+        $salaryPaymentCount = (clone $salaryQuery)->count();
+        $advancedCount = (clone $advanceQuery)->count();
+        $advancedReturnCount = (clone $returnQuery)->count();
+        $totalPaidSalary = $this->voucherTotal($employee, 'payment', self::SALARY_CODES);
+        $totalAdvanced = $this->voucherTotal($employee, 'payment', self::ADVANCE_CODES);
+        $totalAdvancedReturns = $this->voucherTotal(
+            $employee,
+            'receipt',
+            self::ADVANCE_RETURN_CODES
+        );
+
+        $recentSalaryPayments = $this->partyLedger->voucherRows(
+            $salaryQuery->orderByDesc('voucher_date')->orderByDesc('id')->limit(5)->get(),
+            'Paid'
+        );
+        $recentAdvancedPayments = $this->partyLedger->voucherRows(
+            $advanceQuery->orderByDesc('voucher_date')->orderByDesc('id')->limit(5)->get(),
+            'Given'
+        );
+
+        $monthsWorked = $this->monthsWorked($employee);
         $netAdvanced = $totalAdvanced - $totalAdvancedReturns;
-        
-        // Calculate months since joining
-        $monthsWorked = 0;
-        if ($employee->created_at) {
-            $createdDate = new \DateTime($employee->created_at);
-            $currentDate = new \DateTime();
-            $interval = $createdDate->diff($currentDate);
-            $monthsWorked = ($interval->y * 12) + $interval->m;
-        }
-        
-        $expectedSalary = ($employee->salary ?? 0) * $monthsWorked;
-        $salaryDue = $expectedSalary - $totalPaidSalary;
-        $netBalance = $salaryDue - $netAdvanced;
+        $salaryDue = max(0, (float) ($employee->salary ?? 0) * $monthsWorked - $totalPaidSalary);
 
         return Inertia::render('Employee/Show', [
             'employee' => $employee,
@@ -301,8 +178,8 @@ class EmployeeController extends Controller implements HasMiddleware
             'advancedReturnCount' => $advancedReturnCount,
             'netAdvanced' => $netAdvanced,
             'salaryDue' => $salaryDue,
-            'netBalance' => $netBalance,
-            'monthsWorked' => $monthsWorked
+            'netBalance' => $salaryDue - $netAdvanced,
+            'monthsWorked' => $monthsWorked,
         ]);
     }
 
@@ -310,106 +187,62 @@ class EmployeeController extends Controller implements HasMiddleware
     {
         $employee->load('account', 'empType', 'department', 'designation');
 
-        $empTypes = EmpType::where('status', true)->get(['id', 'name']);
-        $departments = EmpDepartment::where('status', true)->get(['id', 'name']);
-        $designations = EmpDesignation::where('status', true)->get(['id', 'name']);
-        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
-
         return Inertia::render('Employee/Update', [
             'employee' => $employee,
-            'empTypes' => $empTypes,
-            'departments' => $departments,
-            'designations' => $designations,
-            'groups' => $groups,
+            ...$this->formOptions(),
         ]);
     }
 
     public function update(Request $request, Employee $employee)
     {
-        $request->validate([
-            'employee_code' => 'nullable|string|max:50',
-            'employee_name' => 'required|string|max:100',
-            'email' => 'nullable|email|max:100',
-            'emp_type_id' => 'nullable|exists:emp_types,id',
-            'department_id' => 'nullable|exists:emp_departments,id',
-            'designation_id' => 'nullable|exists:emp_designations,id',
+        $validated = $request->validate($this->rules());
 
-            'mobile' => 'nullable|string|max:100',
-            'mobile_two' => 'nullable|string|max:20',
-            'dob' => 'nullable|date',
-            'gender' => 'nullable|string|max:10',
-            'blood_group' => 'nullable|string|max:10',
-            'marital_status' => 'nullable|string|max:20',
-            'religion' => 'nullable|string|max:100',
-            'nid' => 'nullable|string|max:100',
-            'emergency_contact_person' => 'nullable|string|max:100',
-            'emergency_contact_number' => 'nullable|string|max:100',
-            'father_name' => 'nullable|string|max:100',
-            'mother_name' => 'nullable|string|max:100',
-            'present_address' => 'nullable|string|max:250',
-            'permanent_address' => 'nullable|string|max:350',
-            'job_status' => 'nullable|string|max:50',
-            'salary' => 'nullable|numeric|min:0',
-            'joining_date' => 'nullable|date',
-            'order' => 'nullable|integer',
-            'status' => 'boolean'
-        ]);
-
-        // Update account
-        if ($employee->account) {
-            $employee->account->update([
-                'name' => $request->employee_name,
-                'status' => $request->status ?? true,
+        DB::transaction(function () use ($validated, $request, $employee) {
+            $status = $request->boolean('status', true);
+            $employee->loadMissing('account');
+            $employee->account?->update([
+                'name' => $validated['employee_name'],
+                'status' => $status,
             ]);
-        }
-
-        $updateData = [
-            'emp_type_id' => $request->emp_type_id,
-            'department_id' => $request->department_id,
-            'designation_id' => $request->designation_id,
-            'employee_code' => $request->employee_code,
-            'employee_name' => $request->employee_name,
-            'email' => $request->email,
-            'order' => $request->order ?? 1,
-            'dob' => $request->dob,
-            'gender' => $request->gender,
-            'blood_group' => $request->blood_group,
-            'marital_status' => $request->marital_status,
-            'emergency_contact_person' => $request->emergency_contact_person,
-            'religion' => $request->religion,
-            'nid' => $request->nid,
-            'mobile' => $request->mobile,
-            'mobile_two' => $request->mobile_two,
-            'emergency_contact_number' => $request->emergency_contact_number,
-            'father_name' => $request->father_name,
-            'mother_name' => $request->mother_name,
-            'present_address' => $request->present_address,
-            'permanent_address' => $request->permanent_address,
-            'job_status' => $request->job_status,
-            'salary' => $request->salary,
-            'joining_date' => $request->joining_date,
-            'status' => $request->status ?? true,
-        ];
-
-        $employee->update($updateData);
+            $employee->update([
+                ...$this->employeePayload($validated, $status),
+                'employee_code' => $validated['employee_code'] ?? $employee->employee_code,
+            ]);
+        });
 
         return redirect()->route('employees.index')->with('success', 'Employee updated successfully.');
     }
 
     public function destroy(Employee $employee)
     {
-        $employee->delete();
+        $this->deleteEmployee($employee);
+
         return redirect()->back()->with('success', 'Employee deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
         $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:employees,id'
+            'ids' => ['required', 'array'],
+            'ids.*' => ['exists:employees,id'],
         ]);
 
-        Employee::whereIn('id', $request->ids)->delete();
+        $employees = Employee::query()
+            ->whereIn('id', $request->ids)
+            ->with('account')
+            ->get();
+
+        DB::transaction(function () use ($employees) {
+            foreach ($employees as $employee) {
+                $this->assertEmployeeCanBeDeleted($employee);
+            }
+
+            foreach ($employees as $employee) {
+                $account = $employee->account;
+                $employee->delete();
+                $account?->delete();
+            }
+        });
 
         return redirect()->back()->with('success', 'Selected employees deleted successfully.');
     }
@@ -417,86 +250,30 @@ class EmployeeController extends Controller implements HasMiddleware
     public function statement(Request $request, Employee $employee)
     {
         $employee->load('account:id,name,ac_number');
-
-        // Get all payments TO employee (company pays employee)
-        $payments = [];
-        if ($employee->account) {
-            $query = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-                ->where('vouchers.to_account_id', $employee->account->id)
-                ->where('vouchers.voucher_type', 'Payment')
-                ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type', 'payment_sub_types.name as sub_type_name');
-            
-            if ($request->start_date) {
-                $query->whereDate('vouchers.date', '>=', $request->start_date);
-            }
-            if ($request->end_date) {
-                $query->whereDate('vouchers.date', '<=', $request->end_date);
-            }
-            
-            $payments = $query->orderBy('vouchers.date', 'desc')
-                ->paginate(10)
-                ->withQueryString()
-                ->through(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'voucher_no' => $voucher->voucher_no,
-                        'date' => $voucher->date,
-                        'amount' => $voucher->amount,
-                        'payment_type' => $voucher->payment_type,
-                        'sub_type' => $voucher->sub_type_name,
-                        'description' => $voucher->description,
-                    ];
-                });
-        }
-
-        // Get all receipts FROM employee (employee pays company)
-        $receipts = [];
-        if ($employee->account) {
-            $query = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-                ->where('vouchers.from_account_id', $employee->account->id)
-                ->where('vouchers.voucher_type', 'Receipt')
-                ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type', 'payment_sub_types.name as sub_type_name');
-            
-            if ($request->start_date) {
-                $query->whereDate('vouchers.date', '>=', $request->start_date);
-            }
-            if ($request->end_date) {
-                $query->whereDate('vouchers.date', '<=', $request->end_date);
-            }
-            
-            $receipts = $query->orderBy('vouchers.date', 'desc')
-                ->get()
-                ->map(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'voucher_no' => $voucher->voucher_no,
-                        'date' => $voucher->date,
-                        'amount' => $voucher->amount,
-                        'payment_type' => $voucher->payment_type,
-                        'sub_type' => $voucher->sub_type_name,
-                        'description' => $voucher->description,
-                    ];
-                });
-        }
-
-        // Calculate current balance
-        $totalPayments = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.to_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->sum('transactions.amount');
-            
-        $totalReceipts = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.from_account_id', $employee->account_id)
-            ->where('vouchers.voucher_type', 'Receipt')
-            ->sum('transactions.amount');
-            
-        $currentBalance = $totalPayments - $totalReceipts;
+        $payments = $this->partyLedger->paginatedVoucherRows(
+            $this->employeeVouchers(
+                $employee,
+                'payment',
+                null,
+                $request->start_date,
+                $request->end_date
+            ),
+            10,
+            'Paid'
+        );
+        $receipts = $this->partyLedger->voucherRows(
+            $this->employeeVouchers(
+                $employee,
+                'receipt',
+                null,
+                $request->start_date,
+                $request->end_date
+            )
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->get(),
+            'Received'
+        );
 
         return Inertia::render('Employee/EmployeeStatement', [
             'employee' => [
@@ -508,90 +285,213 @@ class EmployeeController extends Controller implements HasMiddleware
             ],
             'payments' => $payments,
             'receipts' => $receipts,
-            'currentBalance' => $currentBalance,
+            'currentBalance' => $this->voucherTotal($employee, 'payment')
+                - $this->voucherTotal($employee, 'receipt'),
         ]);
     }
 
     public function downloadPaymentsPdf(Request $request, Employee $employee)
     {
         $employee->load('account');
-        
-        $query = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.to_account_id', $employee->account->id)
-            ->where('vouchers.voucher_type', 'Payment')
-            ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type', 'payment_sub_types.name as sub_type_name');
-        
-        if ($request->start_date) {
-            $query->whereDate('vouchers.date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $query->whereDate('vouchers.date', '<=', $request->end_date);
-        }
-        
-        $payments = $query->orderBy('vouchers.date', 'desc')
-            ->get()
-            ->map(function ($voucher) {
-                return [
-                    'voucher_no' => $voucher->voucher_no,
-                    'date' => $voucher->date,
-                    'amount' => $voucher->amount,
-                    'payment_type' => $voucher->payment_type,
-                    'sub_type' => $voucher->sub_type_name,
-                    'description' => $voucher->description,
-                ];
-            });
-
+        $payments = $this->partyLedger->voucherRows(
+            $this->employeeVouchers(
+                $employee,
+                'payment',
+                null,
+                $request->start_date,
+                $request->end_date
+            )
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->get(),
+            'Paid'
+        );
         $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView(
+            'pdf.employee-payments',
+            compact('employee', 'payments', 'companySetting')
+        );
 
-        $pdf = Pdf::loadView('pdf.employee-payments', compact('employee', 'payments', 'companySetting'));
         return $pdf->stream('employee-payments.pdf');
     }
 
     public function downloadReceiptsPdf(Request $request, Employee $employee)
     {
         $employee->load('account');
-        
-        $query = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->where('vouchers.from_account_id', $employee->account->id)
-            ->where('vouchers.voucher_type', 'Receipt')
-            ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type', 'payment_sub_types.name as sub_type_name');
-        
-        if ($request->start_date) {
-            $query->whereDate('vouchers.date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $query->whereDate('vouchers.date', '<=', $request->end_date);
-        }
-        
-        $receipts = $query->orderBy('vouchers.date', 'desc')
-            ->get()
-            ->map(function ($voucher) {
-                return [
-                    'voucher_no' => $voucher->voucher_no,
-                    'date' => $voucher->date,
-                    'amount' => $voucher->amount,
-                    'payment_type' => $voucher->payment_type,
-                    'sub_type' => $voucher->sub_type_name,
-                    'description' => $voucher->description,
-                ];
-            });
-
+        $receipts = $this->partyLedger->voucherRows(
+            $this->employeeVouchers(
+                $employee,
+                'receipt',
+                null,
+                $request->start_date,
+                $request->end_date
+            )
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->get(),
+            'Received'
+        );
         $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView(
+            'pdf.employee-receipts',
+            compact('employee', 'receipts', 'companySetting')
+        );
 
-        $pdf = Pdf::loadView('pdf.employee-receipts', compact('employee', 'receipts', 'companySetting'));
         return $pdf->stream('employee-receipts.pdf');
     }
 
     public function downloadPdf()
     {
-        $employees = Employee::with('empType', 'department', 'designation')->get();
+        $employees = Employee::query()
+            ->with('empType', 'department', 'designation')
+            ->orderBy('employee_name')
+            ->get();
         $companySetting = CompanySetting::first();
-
         $pdf = Pdf::loadView('pdf.employees', compact('employees', 'companySetting'));
+
         return $pdf->stream('employees.pdf');
+    }
+
+    private function employeeVouchers(
+        Employee $employee,
+        string $type,
+        ?array $subTypeCodes = null,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): Builder {
+        return $this->partyLedger
+            ->vouchers('employee_id', $employee->id, $type, $startDate, $endDate)
+            ->when($subTypeCodes, fn (Builder $query) => $query
+                ->whereHas('paymentSubType', fn (Builder $subType) => $subType
+                    ->whereIn('code', $subTypeCodes)));
+    }
+
+    private function voucherTotal(
+        Employee $employee,
+        string $type,
+        ?array $subTypeCodes = null
+    ): float {
+        return (float) DB::table('voucher_lines as vl')
+            ->join('vouchers as v', 'v.id', '=', 'vl.voucher_id')
+            ->leftJoin('payment_sub_types as pst', 'pst.id', '=', 'v.payment_sub_type_id')
+            ->where('vl.employee_id', $employee->id)
+            ->where('v.voucher_type', $type)
+            ->where('v.status', 'posted')
+            ->when($subTypeCodes, fn ($query) => $query->whereIn('pst.code', $subTypeCodes))
+            ->sum('vl.amount');
+    }
+
+    private function formOptions(): array
+    {
+        return [
+            'empTypes' => EmpType::query()->where('status', true)->get(['id', 'name']),
+            'departments' => EmpDepartment::query()->where('status', true)->get(['id', 'name']),
+            'designations' => EmpDesignation::query()->where('status', true)->get(['id', 'name']),
+            'groups' => Group::query()->active()->get(['id', 'code', 'name']),
+        ];
+    }
+
+    private function rules(): array
+    {
+        return [
+            'employee_code' => ['nullable', 'string', 'max:50'],
+            'employee_name' => ['required', 'string', 'max:100'],
+            'email' => ['nullable', 'email', 'max:150'],
+            'emp_type_id' => ['nullable', 'exists:emp_types,id'],
+            'department_id' => ['nullable', 'exists:emp_departments,id'],
+            'designation_id' => ['nullable', 'exists:emp_designations,id'],
+            'mobile' => ['nullable', 'string', 'max:100'],
+            'mobile_two' => ['nullable', 'string', 'max:20'],
+            'dob' => ['nullable', 'date'],
+            'gender' => ['nullable', 'string', 'max:10'],
+            'blood_group' => ['nullable', 'string', 'max:10'],
+            'marital_status' => ['nullable', 'string', 'max:20'],
+            'religion' => ['nullable', 'string', 'max:100'],
+            'nid' => ['nullable', 'string', 'max:100'],
+            'emergency_contact_person' => ['nullable', 'string', 'max:100'],
+            'emergency_contact_number' => ['nullable', 'string', 'max:100'],
+            'father_name' => ['nullable', 'string', 'max:100'],
+            'mother_name' => ['nullable', 'string', 'max:100'],
+            'present_address' => ['nullable', 'string', 'max:250'],
+            'permanent_address' => ['nullable', 'string', 'max:350'],
+            'job_status' => ['nullable', 'string', 'max:50'],
+            'salary' => ['nullable', 'numeric', 'min:0'],
+            'joining_date' => ['nullable', 'date'],
+            'order' => ['nullable', 'integer'],
+            'highest_education' => ['nullable', 'string', 'max:100'],
+            'status' => ['boolean'],
+        ];
+    }
+
+    private function employeePayload(array $validated, bool $status): array
+    {
+        return [
+            'emp_type_id' => $validated['emp_type_id'] ?? null,
+            'department_id' => $validated['department_id'] ?? null,
+            'designation_id' => $validated['designation_id'] ?? null,
+            'employee_name' => $validated['employee_name'],
+            'email' => $validated['email'] ?? null,
+            'order' => $validated['order'] ?? 1,
+            'dob' => $validated['dob'] ?? null,
+            'gender' => $validated['gender'] ?? null,
+            'blood_group' => $validated['blood_group'] ?? null,
+            'marital_status' => $validated['marital_status'] ?? null,
+            'emergency_contact_person' => $validated['emergency_contact_person'] ?? null,
+            'religion' => $validated['religion'] ?? null,
+            'nid' => $validated['nid'] ?? null,
+            'mobile' => $validated['mobile'] ?? null,
+            'mobile_two' => $validated['mobile_two'] ?? null,
+            'emergency_contact_number' => $validated['emergency_contact_number'] ?? null,
+            'father_name' => $validated['father_name'] ?? null,
+            'mother_name' => $validated['mother_name'] ?? null,
+            'present_address' => $validated['present_address'] ?? null,
+            'permanent_address' => $validated['permanent_address'] ?? null,
+            'job_status' => $validated['job_status'] ?? null,
+            'salary' => $validated['salary'] ?? null,
+            'joining_date' => $validated['joining_date'] ?? null,
+            'highest_education' => $validated['highest_education'] ?? null,
+            'status' => $status,
+        ];
+    }
+
+    private function sorting(Request $request): array
+    {
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'employee_code', 'employee_name', 'email', 'joining_date', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+
+        return [$sortBy, $request->get('sort_order') === 'asc' ? 'asc' : 'desc'];
+    }
+
+    private function monthsWorked(Employee $employee): int
+    {
+        $startedAt = $employee->joining_date ?? $employee->created_at;
+
+        return max(0, (int) $startedAt->diffInMonths(now()));
+    }
+
+    private function deleteEmployee(Employee $employee): void
+    {
+        DB::transaction(function () use ($employee) {
+            $employee->loadMissing('account');
+            $this->assertEmployeeCanBeDeleted($employee);
+            $account = $employee->account;
+            $employee->delete();
+            $account?->delete();
+        });
+    }
+
+    private function assertEmployeeCanBeDeleted(Employee $employee): void
+    {
+        if (
+            $employee->journalLines()->exists()
+            || $employee->shiftClosingProductItems()->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'employee' => 'This employee has financial or shift records and cannot be deleted.',
+            ]);
+        }
     }
 }

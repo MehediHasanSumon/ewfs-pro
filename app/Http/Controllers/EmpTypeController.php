@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EmpType;
+use App\Http\Requests\EmpTypeRequest;
 use App\Models\CompanySetting;
+use App\Models\EmpType;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class EmpTypeController extends Controller implements HasMiddleware
 {
@@ -21,72 +23,44 @@ class EmpTypeController extends Controller implements HasMiddleware
             new Middleware('permission:delete-employee', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = EmpType::query();
-
-        if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status === 'true');
-        }
-
-        if ($request->start_date) {
-            $query->whereDate('created_at', '>=', $request->start_date);
-        }
-
-        if ($request->end_date) {
-            $query->whereDate('created_at', '<=', $request->end_date);
-        }
-
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        $perPage = $request->get('per_page', 10);
-        $empTypes = $query->paginate($perPage)->withQueryString()->through(function ($empType) {
-            return [
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+        $empTypes = $this->filteredQuery($request)
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (EmpType $empType) => [
                 'id' => $empType->id,
                 'name' => $empType->name,
-                'status' => (bool) $empType->status,
+                'status' => $empType->status,
                 'created_at' => $empType->created_at->format('Y-m-d'),
-            ];
-        });
+            ]);
 
         return Inertia::render('EmpTypes/EmpTypes', [
             'empTypes' => $empTypes,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only([
+                'search',
+                'status',
+                'start_date',
+                'end_date',
+                'sort_by',
+                'sort_order',
+                'per_page',
+            ]),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(EmpTypeRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'status' => 'boolean'
-        ]);
-
-        EmpType::create([
-            'name' => $request->name,
-            'status' => $request->status ?? true,
-        ]);
+        EmpType::create($request->validated());
 
         return redirect()->back()->with('success', 'Employee type created successfully.');
     }
 
-    public function update(Request $request, EmpType $empType)
+    public function update(EmpTypeRequest $request, EmpType $empType)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'status' => 'boolean'
-        ]);
-
-        $empType->update([
-            'name' => $request->name,
-            'status' => $request->status ?? true,
-        ]);
+        $empType->update($request->validated());
 
         return redirect()->back()->with('success', 'Employee type updated successfully.');
     }
@@ -94,48 +68,57 @@ class EmpTypeController extends Controller implements HasMiddleware
     public function destroy(EmpType $empType)
     {
         $empType->delete();
+
         return redirect()->back()->with('success', 'Employee type deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:emp_types,id'
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct', 'exists:emp_types,id'],
         ]);
 
-        EmpType::whereIn('id', $request->ids)->delete();
-        return redirect()->back()->with('success', count($request->ids) . ' employee types deleted successfully.');
+        $deleted = EmpType::query()->whereKey($validated['ids'])->delete();
+
+        return redirect()->back()->with('success', "{$deleted} employee types deleted successfully.");
     }
 
     public function downloadPdf(Request $request)
     {
+        $empTypes = $this->filteredQuery($request)->get();
+        $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView('pdf.emp-types', compact('empTypes', 'companySetting'));
+
+        return $pdf->stream('emp-types.pdf');
+    }
+
+    private function filteredQuery(Request $request): Builder
+    {
         $query = EmpType::query();
 
-        if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%'.trim((string) $request->input('search')).'%');
         }
 
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status === 'true');
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->boolean('status'));
         }
 
-        if ($request->start_date) {
-            $query->whereDate('created_at', '>=', $request->start_date);
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->date('start_date'));
         }
 
-        if ($request->end_date) {
-            $query->whereDate('created_at', '<=', $request->end_date);
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->date('end_date'));
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
+        $allowedSorts = ['id', 'name', 'status', 'created_at'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true)
+            ? $request->input('sort_by')
+            : 'name';
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
 
-        $empTypes = $query->get();
-        $companySetting = CompanySetting::first();
-
-        $pdf = Pdf::loadView('pdf.emp-types', compact('empTypes', 'companySetting'));
-        return $pdf->stream('emp-types.pdf');
+        return $query->orderBy($sortBy, $sortOrder)->orderBy('id');
     }
 }

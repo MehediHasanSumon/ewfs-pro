@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use App\Models\CompanySetting;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller implements HasMiddleware
 {
@@ -23,13 +24,14 @@ class RoleController extends Controller implements HasMiddleware
             new Middleware('permission:delete-role', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
         $query = Role::withCount(['permissions', 'users']);
 
         // Apply filters
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->start_date) {
@@ -41,17 +43,21 @@ class RoleController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'permissions_count', 'users_count', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         // Paginate
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $roles = $query->paginate($perPage)->withQueryString()->through(function ($role) {
             return [
                 'id' => $role->id,
                 'name' => $role->name,
-                'description' => 'Role for ' . $role->name,
+                'description' => 'Role for '.$role->name,
                 'permissions_count' => $role->permissions_count,
                 'users_count' => $role->users_count,
                 'created_at' => $role->created_at->format('Y-m-d'),
@@ -63,43 +69,45 @@ class RoleController extends Controller implements HasMiddleware
         return Inertia::render('Roles/Roles', [
             'roles' => $roles,
             'permissions' => $permissions,
-            'filters' => $request->only(['search', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255|unique:roles,name',
             'permissions' => 'array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => 'exists:permissions,id',
         ]);
 
-        $role = Role::create([
-            'name' => $request->name,
-            'guard_name' => 'web'
-        ]);
+        DB::transaction(function () use ($validated): void {
+            $role = Role::create([
+                'name' => $validated['name'],
+                'guard_name' => 'web',
+            ]);
 
-        if ($request->permissions) {
-            $role->syncPermissions($request->permissions);
-        }
+            $role->syncPermissions($validated['permissions'] ?? []);
+        });
 
         return redirect()->back()->with('success', 'Role created successfully.');
     }
 
     public function update(Request $request, Role $role)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:roles,name,'.$role->id,
             'permissions' => 'array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => 'exists:permissions,id',
         ]);
 
-        $role->update([
-            'name' => $request->name
-        ]);
+        DB::transaction(function () use ($role, $validated): void {
+            $role->update([
+                'name' => $validated['name'],
+            ]);
 
-        $role->syncPermissions($request->permissions ?? []);
+            $role->syncPermissions($validated['permissions'] ?? []);
+        });
 
         return redirect()->back()->with('success', 'Role updated successfully.');
     }
@@ -107,7 +115,7 @@ class RoleController extends Controller implements HasMiddleware
     public function edit(Role $role)
     {
         return response()->json([
-            'rolePermissions' => $role->permissions->pluck('id')->toArray()
+            'rolePermissions' => $role->permissions->pluck('id')->toArray(),
         ]);
     }
 
@@ -126,7 +134,7 @@ class RoleController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:roles,id'
+            'ids.*' => 'exists:roles,id',
         ]);
 
         $rolesWithUsers = Role::whereIn('id', $request->ids)
@@ -139,7 +147,7 @@ class RoleController extends Controller implements HasMiddleware
 
         Role::whereIn('id', $request->ids)->delete();
 
-        return redirect()->back()->with('success', count($request->ids) . ' roles deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' roles deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -148,7 +156,7 @@ class RoleController extends Controller implements HasMiddleware
 
         // Apply same filters as index method
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->start_date) {
@@ -159,14 +167,19 @@ class RoleController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'permissions_count', 'users_count', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         $roles = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.roles', compact('roles', 'companySetting'));
+
         return $pdf->stream('roles.pdf');
     }
 }

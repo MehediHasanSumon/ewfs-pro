@@ -2,16 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Sale;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Services\OperationalReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class CustomerSalesReportController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly OperationalReportService $reports
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -19,82 +24,48 @@ class CustomerSalesReportController extends Controller implements HasMiddleware
             new Middleware('permission:view-sale|can-sale-download', only: ['downloadPdf']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = Sale::with(['shift'])
-            ->select('sale_date', 'customer', 'shift_id', 'invoice_no', 'quantity', 'total_amount')
-            ->orderBy('sale_date', 'desc');
-
-        // Apply filters
-        if ($request->filled('start_date')) {
-            $query->whereDate('sale_date', '>=', $request->start_date);
-        }
-
-        if ($request->filled('end_date')) {
-            $query->whereDate('sale_date', '<=', $request->end_date);
-        }
-
-        if ($request->filled('customer')) {
-            $query->where('customer', 'like', '%' . $request->customer . '%');
-        }
-
-        $sales = $query->get();
-        
-        // Format sales data
-        $customerSales = $sales->map(function ($sale) {
-            return [
-                'sale_date' => $sale->sale_date,
-                'customer' => $sale->customer,
-                'shift_name' => $sale->shift->name ?? 'N/A',
-                'invoice_no' => $sale->invoice_no,
-                'quantity' => (float) $sale->quantity,
-                'total_amount' => (float) $sale->total_amount,
-            ];
-        });
-        
-        $customers = Sale::select('customer')->distinct()->whereNotNull('customer')->pluck('customer');
+        $filters = $this->filters($request);
 
         return Inertia::render('Reports/CustomerSalesReports', [
-            'customerSales' => $customerSales,
-            'customers' => $customers,
-            'filters' => $request->only(['start_date', 'end_date', 'customer']),
+            'customerSales' => $this->reports->customerSales(
+                $filters['start_date'] ?? null,
+                $filters['end_date'] ?? null,
+                $filters['customer'] ?? null
+            ),
+            'customers' => $this->reports->saleCustomerNames(),
+            'filters' => $request->only([
+                'start_date',
+                'end_date',
+                'customer',
+            ]),
         ]);
     }
 
     public function downloadPdf(Request $request)
     {
-        $query = Sale::with(['shift'])
-            ->select('sale_date', 'customer', 'shift_id', 'invoice_no', 'quantity', 'total_amount')
-            ->orderBy('sale_date', 'desc');
+        $filters = $this->filters($request);
+        $customerSales = $this->reports->customerSales(
+            $filters['start_date'] ?? null,
+            $filters['end_date'] ?? null,
+            $filters['customer'] ?? null
+        );
+        $companySetting = CompanySetting::query()->first();
 
-        if ($request->filled('start_date')) {
-            $query->whereDate('sale_date', '>=', $request->start_date);
-        }
+        return Pdf::loadView(
+            'pdf.customer-sales-reports',
+            compact('customerSales', 'companySetting')
+        )->stream('customer-sales-reports.pdf');
+    }
 
-        if ($request->filled('end_date')) {
-            $query->whereDate('sale_date', '<=', $request->end_date);
-        }
-
-        if ($request->filled('customer')) {
-            $query->where('customer', 'like', '%' . $request->customer . '%');
-        }
-
-        $sales = $query->get();
-        
-        $customerSales = $sales->map(function ($sale) {
-            return [
-                'sale_date' => $sale->sale_date,
-                'customer' => $sale->customer,
-                'shift_name' => $sale->shift->name ?? 'N/A',
-                'invoice_no' => $sale->invoice_no,
-                'quantity' => (float) $sale->quantity,
-                'total_amount' => (float) $sale->total_amount,
-            ];
-        });
-
-        $companySetting = CompanySetting::first();
-        
-        $pdf = Pdf::loadView('pdf.customer-sales-reports', compact('customerSales', 'companySetting'));
-        return $pdf->stream('customer-sales-reports.pdf');
+    private function filters(Request $request): array
+    {
+        return $request->validate([
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'customer' => ['nullable', 'string', 'max:150'],
+        ]);
     }
 }

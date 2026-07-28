@@ -2,79 +2,152 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 
 class Voucher extends Model
 {
-    protected $fillable = [
+    protected $appends = [
         'date',
-        'voucher_no',
-        'shift_id',
-        'voucher_type',
-        'voucher_category_id',
-        'payment_sub_type_id',
         'from_account_id',
         'to_account_id',
-        'transaction_id',
+        'payment_method',
+        'amount',
+    ];
+
+    protected $fillable = [
+        'voucher_no',
+        'voucher_type',
+        'voucher_date',
+        'voucher_time',
+        'shift_id',
+        'voucher_category_id',
+        'payment_sub_type_id',
+        'journal_entry_id',
+        'status',
+        'external_reference',
         'description',
-        'remarks'
+        'remarks',
+        'created_by',
+        'posted_by',
+        'posted_at',
+        'reversal_of_id',
     ];
 
-    protected $casts = [
-        'date' => 'date'
-    ];
+    protected function casts(): array
+    {
+        return [
+            'voucher_date' => 'date',
+            'posted_at' => 'datetime',
+        ];
+    }
 
-    // Relationships
-    public function voucherCategory()
+    public function scopePosted(Builder $query): Builder
+    {
+        return $query->where('status', 'posted');
+    }
+
+    public function scopeOfType(Builder $query, string $type): Builder
+    {
+        return $query->where('voucher_type', $type);
+    }
+
+    public function voucherCategory(): BelongsTo
     {
         return $this->belongsTo(VoucherCategory::class);
     }
 
-    public function paymentSubType()
+    public function paymentSubType(): BelongsTo
     {
         return $this->belongsTo(PaymentSubType::class);
     }
 
-    public function shift()
+    public function shift(): BelongsTo
     {
         return $this->belongsTo(Shift::class);
     }
 
-    public function fromAccount()
+    public function journalEntry(): BelongsTo
     {
-        return $this->belongsTo(Account::class, 'from_account_id');
+        return $this->belongsTo(JournalEntry::class);
     }
 
-    public function toAccount()
+    public function lines(): HasMany
     {
-        return $this->belongsTo(Account::class, 'to_account_id');
+        return $this->hasMany(VoucherLine::class)->orderBy('line_no');
     }
 
-    // REMOVED - handled by payment_sub_type
-    // public function purchase()
-    // {
-    //     return $this->belongsTo(Purchase::class);
-    // }
-
-    // public function sale()
-    // {
-    //     return $this->belongsTo(Sale::class);
-    // }
-
-    // public function reference()
-    // {
-    //     return $this->morphTo('reference', 'reference_type', 'reference_id');
-    // }
-
-    // Get transactions by transaction_id
-    public function transactions()
+    public function reversalOf(): BelongsTo
     {
-        return Transaction::where('transaction_id', $this->transaction_id)->get();
+        return $this->belongsTo(self::class, 'reversal_of_id');
     }
 
-    // Get single transaction relationship
-    public function transaction()
+    public function fromAccount(): HasOneThrough
     {
-        return $this->belongsTo(Transaction::class, 'transaction_id', 'id');
+        return $this->hasOneThrough(
+            Account::class,
+            VoucherLine::class,
+            'voucher_id',
+            'id',
+            'id',
+            'account_id'
+        )->where('voucher_lines.entry_side', $this->voucher_type === 'receipt' ? 'credit' : 'credit');
+    }
+
+    public function toAccount(): HasOneThrough
+    {
+        return $this->hasOneThrough(
+            Account::class,
+            VoucherLine::class,
+            'voucher_id',
+            'id',
+            'id',
+            'account_id'
+        )->where('voucher_lines.entry_side', 'debit');
+    }
+
+    public function transaction(): HasOne
+    {
+        return $this->hasOne(VoucherLine::class)
+            ->where('entry_side', 'debit')
+            ->with(['account', 'paymentDetail']);
+    }
+
+    public function getDateAttribute(): ?string
+    {
+        return $this->voucher_date?->format('Y-m-d');
+    }
+
+    public function getFromAccountIdAttribute(): ?int
+    {
+        return $this->linesForSide('credit')->first()?->account_id;
+    }
+
+    public function getToAccountIdAttribute(): ?int
+    {
+        return $this->linesForSide('debit')->first()?->account_id;
+    }
+
+    public function getPaymentMethodAttribute(): ?string
+    {
+        $line = $this->linesForSide('debit')->first();
+
+        return $line?->paymentDetail?->payment_method;
+    }
+
+    public function getAmountAttribute(): float
+    {
+        return (float) ($this->linesForSide('debit')->sum('amount') ?? 0);
+    }
+
+    private function linesForSide(string $side)
+    {
+        return $this->relationLoaded('lines')
+            ? $this->lines->where('entry_side', $side)
+            : $this->lines()->where('entry_side', $side)->with('paymentDetail')->get();
     }
 }

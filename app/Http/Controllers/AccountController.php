@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Helpers\AccountHelper;
 use App\Models\Account;
 use App\Models\Group;
 use App\Models\CompanySetting;
+use App\Services\DocumentNumberService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Routing\Controllers\Middleware;
@@ -14,6 +16,11 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 
 class AccountController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly DocumentNumberService $numbers
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -25,7 +32,8 @@ class AccountController extends Controller implements HasMiddleware
     }
     public function index(Request $request)
     {
-        $query = Account::select('id', 'name', 'ac_number', 'group_id', 'group_code', 'status', 'created_at')
+        $query = Account::query()
+            ->select('id', 'name', 'ac_number', 'group_id', 'is_system', 'status', 'created_at')
             ->with('group:id,code,name');
 
         // Apply filters
@@ -40,7 +48,8 @@ class AccountController extends Controller implements HasMiddleware
         }
 
         if ($request->group && $request->group !== 'all') {
-            $query->where('group_code', $request->group);
+            $query->whereHas('group', fn ($group) => $group
+                ->where('code', $request->group));
         }
 
         if ($request->status && $request->status !== 'all') {
@@ -48,19 +57,24 @@ class AccountController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'ac_number', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        // Paginate
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $accounts = $query->paginate($perPage)->withQueryString()->through(function ($account) {
             return [
                 'id' => $account->id,
                 'name' => $account->name,
                 'ac_number' => $account->ac_number,
                 'group_id' => $account->group_id,
-                'group_code' => $account->group_code,
+                'group_code' => $account->group?->code,
+                'due_amount' => 0,
+                'paid_amount' => 0,
                 'status' => $account->status,
                 'group' => $account->group,
                 'created_at' => $account->created_at->format('Y-m-d'),
@@ -81,21 +95,21 @@ class AccountController extends Controller implements HasMiddleware
         $request->validate([
             'name' => 'required|string|max:150',
             'group_id' => 'required|exists:groups,id',
-            'group_code' => 'required|exists:groups,code',
             'status' => 'boolean'
         ]);
 
-        $ac_number = AccountHelper::generateAccountNumber();
-
-        Account::create([
-            'name' => $request->name,
-            'ac_number' => $ac_number,
-            'group_id' => $request->group_id,
-            'group_code' => $request->group_code,
-            'due_amount' => 0,
-            'paid_amount' => 0,
-            'status' => $request->status ?? true,
-        ]);
+        DB::transaction(function () use ($request) {
+            Account::query()->create([
+                'name' => $request->name,
+                'ac_number' => $this->numbers->next('account', 'AC'),
+                'group_id' => $request->integer('group_id'),
+                'currency' => 'BDT',
+                'is_control_account' => false,
+                'allow_manual_posting' => true,
+                'is_system' => false,
+                'status' => $request->boolean('status', true),
+            ]);
+        });
 
         return redirect()->back()->with('success', 'Account created successfully.');
     }
@@ -106,16 +120,20 @@ class AccountController extends Controller implements HasMiddleware
             'name' => 'required|string|max:150',
             'ac_number' => 'required|string|max:150|unique:accounts,ac_number,' . $account->id,
             'group_id' => 'required|exists:groups,id',
-            'group_code' => 'required|exists:groups,code',
             'status' => 'boolean'
         ]);
+
+        if ($account->is_system && $account->group_id !== $request->integer('group_id')) {
+            throw ValidationException::withMessages([
+                'group_id' => 'System accounts cannot be moved to another group.',
+            ]);
+        }
 
         $account->update([
             'name' => $request->name,
             'ac_number' => $request->ac_number,
-            'group_id' => $request->group_id,
-            'group_code' => $request->group_code,
-            'status' => $request->status ?? true,
+            'group_id' => $request->integer('group_id'),
+            'status' => $request->boolean('status', true),
         ]);
 
         return redirect()->back()->with('success', 'Account updated successfully.');
@@ -123,7 +141,26 @@ class AccountController extends Controller implements HasMiddleware
 
     public function destroy(Account $account)
     {
+        if ($account->is_system) {
+            throw ValidationException::withMessages([
+                'account' => 'System accounts cannot be deleted.',
+            ]);
+        }
+
+        if (
+            $account->journalLines()->exists()
+            || $account->customer()->exists()
+            || $account->supplier()->exists()
+            || $account->employee()->exists()
+            || $account->dailyBalances()->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'account' => 'This account has ledger or party records and cannot be deleted.',
+            ]);
+        }
+
         $account->delete();
+
         return redirect()->back()->with('success', 'Account deleted successfully.');
     }
 
@@ -142,15 +179,20 @@ class AccountController extends Controller implements HasMiddleware
         }
 
         if ($request->group && $request->group !== 'all') {
-            $query->where('group_code', $request->group);
+            $query->whereHas('group', fn ($group) => $group
+                ->where('code', $request->group));
         }
 
         if ($request->status && $request->status !== 'all') {
             $query->where('status', $request->status === 'active');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'ac_number', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $accounts = $query->get();

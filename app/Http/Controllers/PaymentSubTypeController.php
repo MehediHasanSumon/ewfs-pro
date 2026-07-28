@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CompanySetting;
 use App\Models\PaymentSubType;
 use App\Models\VoucherCategory;
-use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class PaymentSubTypeController extends Controller implements HasMiddleware
 {
@@ -23,13 +23,14 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
             new Middleware('permission:delete-payment-sub-type', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
         $query = PaymentSubType::select('id', 'code', 'name', 'voucher_category_id', 'type', 'status', 'created_at')
             ->with('voucherCategory:id,name');
 
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->category && $request->category !== 'all') {
@@ -44,11 +45,15 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
             $query->where('status', $request->status === '1');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'code', 'name', 'voucher_category_id', 'type', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $paymentSubTypes = $query->paginate($perPage)->withQueryString()->through(function ($paymentSubType) {
             return [
                 'id' => $paymentSubType->id,
@@ -67,7 +72,7 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
         return Inertia::render('PaymentSubTypes/PaymentSubType', [
             'paymentSubTypes' => $paymentSubTypes,
             'voucherCategories' => $voucherCategories,
-            'filters' => $request->only(['search', 'category', 'type', 'status', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'category', 'type', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -78,7 +83,7 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
             'name' => 'required|string|max:255',
             'voucher_category_id' => 'required|exists:voucher_categories,id',
             'type' => 'required|in:payment,receipt,both',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         PaymentSubType::create([
@@ -95,18 +100,18 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
     public function edit(PaymentSubType $paymentSubType)
     {
         return response()->json([
-            'paymentSubType' => $paymentSubType
+            'paymentSubType' => $paymentSubType,
         ]);
     }
 
     public function update(Request $request, PaymentSubType $paymentSubType)
     {
         $request->validate([
-            'code' => 'required|string|max:10|unique:payment_sub_types,code,' . $paymentSubType->id,
+            'code' => 'required|string|max:10|unique:payment_sub_types,code,'.$paymentSubType->id,
             'name' => 'required|string|max:255',
             'voucher_category_id' => 'required|exists:voucher_categories,id',
             'type' => 'required|in:payment,receipt,both',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         $paymentSubType->update([
@@ -123,6 +128,7 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
     public function destroy(PaymentSubType $paymentSubType)
     {
         $paymentSubType->delete();
+
         return redirect()->back()->with('success', 'Payment sub type deleted successfully.');
     }
 
@@ -130,12 +136,12 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:payment_sub_types,id'
+            'ids.*' => 'exists:payment_sub_types,id',
         ]);
 
         PaymentSubType::whereIn('id', $request->ids)->delete();
 
-        return redirect()->back()->with('success', count($request->ids) . ' payment sub types deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' payment sub types deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -144,7 +150,7 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
             ->with('voucherCategory:id,name');
 
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->category && $request->category !== 'all') {
@@ -159,14 +165,19 @@ class PaymentSubTypeController extends Controller implements HasMiddleware
             $query->where('status', $request->status === '1');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'code', 'name', 'voucher_category_id', 'type', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $paymentSubTypes = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.payment-sub-types', compact('paymentSubTypes', 'companySetting'));
+
         return $pdf->stream('payment-sub-types.pdf');
     }
 }

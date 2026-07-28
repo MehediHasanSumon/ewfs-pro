@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\SMSLog;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class SMSLogController extends Controller implements HasMiddleware
 {
@@ -25,8 +25,8 @@ class SMSLogController extends Controller implements HasMiddleware
 
         if ($request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('phone_number', 'like', '%' . $request->search . '%')
-                    ->orWhere('message', 'like', '%' . $request->search . '%');
+                $q->where('phone_number', 'like', '%'.$request->search.'%')
+                    ->orWhere('message', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -42,11 +42,15 @@ class SMSLogController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'phone_number', 'status', 'sent_at', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $logs = $query->paginate($perPage)->withQueryString()->through(function ($log) {
             return [
                 'id' => $log->id,
@@ -63,13 +67,14 @@ class SMSLogController extends Controller implements HasMiddleware
 
         return Inertia::render('SMS/SMSLogs', [
             'logs' => $logs,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
     public function destroy(SMSLog $smsLog)
     {
         $smsLog->delete();
+
         return redirect()->back()->with('success', 'SMS Log deleted successfully.');
     }
 
@@ -77,11 +82,11 @@ class SMSLogController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:sms_logs,id'
+            'ids.*' => 'exists:sms_logs,id',
         ]);
 
         SMSLog::whereIn('id', $request->ids)->delete();
 
-        return redirect()->back()->with('success', count($request->ids) . ' SMS logs deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' SMS logs deleted successfully.');
     }
 }

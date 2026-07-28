@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Shift;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Models\Shift;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class ShiftController extends Controller implements HasMiddleware
 {
@@ -22,12 +22,13 @@ class ShiftController extends Controller implements HasMiddleware
             new Middleware('permission:delete-shift', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
         $query = Shift::query();
 
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -42,11 +43,15 @@ class ShiftController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'start_time', 'end_time', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $shifts = $query->paginate($perPage)->withQueryString()->through(function ($shift) {
             return [
                 'id' => $shift->id,
@@ -60,7 +65,7 @@ class ShiftController extends Controller implements HasMiddleware
 
         return Inertia::render('Shifts/Shifts', [
             'shifts' => $shifts,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -70,7 +75,7 @@ class ShiftController extends Controller implements HasMiddleware
             'name' => 'required|string|max:255',
             'start_time' => 'required|string|max:255',
             'end_time' => 'required|string|max:255',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         Shift::create([
@@ -89,7 +94,7 @@ class ShiftController extends Controller implements HasMiddleware
             'name' => 'required|string|max:255',
             'start_time' => 'required|string|max:255',
             'end_time' => 'required|string|max:255',
-            'status' => 'boolean'
+            'status' => 'boolean',
         ]);
 
         $shift->update([
@@ -105,6 +110,7 @@ class ShiftController extends Controller implements HasMiddleware
     public function destroy(Shift $shift)
     {
         $shift->delete();
+
         return redirect()->back()->with('success', 'Shift deleted successfully.');
     }
 
@@ -112,11 +118,12 @@ class ShiftController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:shifts,id'
+            'ids.*' => 'exists:shifts,id',
         ]);
 
         Shift::whereIn('id', $request->ids)->delete();
-        return redirect()->back()->with('success', count($request->ids) . ' shifts deleted successfully.');
+
+        return redirect()->back()->with('success', count($request->ids).' shifts deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -124,7 +131,7 @@ class ShiftController extends Controller implements HasMiddleware
         $query = Shift::query();
 
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -139,14 +146,19 @@ class ShiftController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'start_time', 'end_time', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         $shifts = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.shifts', compact('shifts', 'companySetting'));
+
         return $pdf->stream('shifts.pdf');
     }
 }

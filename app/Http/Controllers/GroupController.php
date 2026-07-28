@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Group;
 use App\Models\CompanySetting;
+use App\Models\Group;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class GroupController extends Controller implements HasMiddleware
 {
@@ -21,11 +21,13 @@ class GroupController extends Controller implements HasMiddleware
             new Middleware('permission:delete-account', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function getParentChild($code)
     {
-        $parentChild = Group::where('code', 'like', $code . '%')
+        $parentChild = Group::where('code', 'like', $code.'%')
             ->pluck('name', 'code')
             ->toArray();
+
         return response()->json($parentChild);
     }
 
@@ -38,14 +40,14 @@ class GroupController extends Controller implements HasMiddleware
         // Apply filters
         if ($request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('groups.name', 'like', '%' . $request->search . '%')
-                    ->orWhere('groups.code', 'like', '%' . $request->search . '%')
-                    ->orWhere('f2.name', 'like', '%' . $request->search . '%');
+                $q->where('groups.name', 'like', '%'.$request->search.'%')
+                    ->orWhere('groups.code', 'like', '%'.$request->search.'%')
+                    ->orWhere('f2.name', 'like', '%'.$request->search.'%');
             });
         }
 
         if ($request->master_group && $request->master_group !== 'all') {
-            $query->where('groups.code', 'like', $request->master_group . '%');
+            $query->where('groups.code', 'like', $request->master_group.'%');
         }
 
         if ($request->status && $request->status !== 'all') {
@@ -53,12 +55,21 @@ class GroupController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'groups.created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortColumns = [
+            'id' => 'groups.id',
+            'name' => 'groups.name',
+            'code' => 'groups.code',
+            'parent_name' => 'f2.name',
+            'status' => 'groups.status',
+            'created_at' => 'groups.created_at',
+            'groups.created_at' => 'groups.created_at',
+        ];
+        $sortBy = $sortColumns[$request->get('sort_by')] ?? 'groups.created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         // Paginate
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $finances = $query->paginate($perPage)->withQueryString();
 
         $financeMasterGroup = Group::where('parents', 'ROOT')
@@ -68,7 +79,7 @@ class GroupController extends Controller implements HasMiddleware
         return Inertia::render('Groups/Groups', [
             'groups' => $finances,
             'masterGroups' => $financeMasterGroup,
-            'filters' => $request->only(['search', 'master_group', 'status', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'master_group', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -90,7 +101,7 @@ class GroupController extends Controller implements HasMiddleware
         // Find the next available code
         $count = 1;
         do {
-            $new_code = $groupParents . str_pad($count, 4, '0', STR_PAD_LEFT);
+            $new_code = $groupParents.str_pad($count, 4, '0', STR_PAD_LEFT);
             $exists = Group::where('code', $new_code)->exists();
             $count++;
         } while ($exists);
@@ -108,7 +119,7 @@ class GroupController extends Controller implements HasMiddleware
     public function update(Request $request, Group $Group)
     {
         $request->validate([
-            'name' => 'required|string|max:255'
+            'name' => 'required|string|max:255',
         ]);
 
         $Group->update([
@@ -121,6 +132,7 @@ class GroupController extends Controller implements HasMiddleware
     public function destroy(Group $Group)
     {
         $Group->delete();
+
         return redirect()->back()->with('success', 'Group deleted successfully.');
     }
 
@@ -128,7 +140,8 @@ class GroupController extends Controller implements HasMiddleware
     {
         $ids = $request->input('ids', []);
         Group::whereIn('id', $ids)->delete();
-        return redirect()->back()->with('success', count($ids) . ' groups deleted successfully.');
+
+        return redirect()->back()->with('success', count($ids).' groups deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -140,14 +153,14 @@ class GroupController extends Controller implements HasMiddleware
         // Apply same filters as index method
         if ($request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('groups.name', 'like', '%' . $request->search . '%')
-                    ->orWhere('groups.code', 'like', '%' . $request->search . '%')
-                    ->orWhere('f2.name', 'like', '%' . $request->search . '%');
+                $q->where('groups.name', 'like', '%'.$request->search.'%')
+                    ->orWhere('groups.code', 'like', '%'.$request->search.'%')
+                    ->orWhere('f2.name', 'like', '%'.$request->search.'%');
             });
         }
 
         if ($request->master_group && $request->master_group !== 'all') {
-            $query->where('groups.code', 'like', $request->master_group . '%');
+            $query->where('groups.code', 'like', $request->master_group.'%');
         }
 
         if ($request->status && $request->status !== 'all') {
@@ -155,14 +168,24 @@ class GroupController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'groups.created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        $sortColumns = [
+            'id' => 'groups.id',
+            'name' => 'groups.name',
+            'code' => 'groups.code',
+            'parent_name' => 'f2.name',
+            'status' => 'groups.status',
+            'created_at' => 'groups.created_at',
+            'groups.created_at' => 'groups.created_at',
+        ];
+        $sortBy = $sortColumns[$request->get('sort_by')] ?? 'groups.created_at';
+        $sortOrder = $request->get('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $groups = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.groups', compact('groups', 'companySetting'));
+
         return $pdf->stream('groups.pdf');
     }
 }

@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompanySetting;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Routing\Controllers\HasMiddleware;
 
 class PermissionController extends Controller implements HasMiddleware
 {
@@ -22,17 +22,18 @@ class PermissionController extends Controller implements HasMiddleware
             new Middleware('permission:delete-permission', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
         $query = Permission::withCount('roles');
 
         // Apply filters
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
-        
+
         if ($request->module && $request->module !== 'all') {
-            $query->where('name', 'like', '%' . $request->module . '%');
+            $query->where('name', 'like', '%'.$request->module.'%');
         }
 
         if ($request->start_date) {
@@ -44,20 +45,24 @@ class PermissionController extends Controller implements HasMiddleware
         }
 
         // Apply sorting
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'roles_count', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         // Paginate
-        $perPage = $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 100));
         $permissions = $query->paginate($perPage)->withQueryString()->through(function ($permission) {
             $parts = explode(' ', $permission->name);
             $module = count($parts) > 1 ? ucfirst($parts[1]) : 'General';
-            
+
             return [
                 'id' => $permission->id,
                 'name' => $permission->name,
-                'description' => 'Permission to ' . $permission->name,
+                'description' => 'Permission to '.$permission->name,
                 'module' => $module,
                 'roles_count' => $permission->roles_count,
                 'created_at' => $permission->created_at->format('Y-m-d'),
@@ -66,7 +71,7 @@ class PermissionController extends Controller implements HasMiddleware
 
         return Inertia::render('Permissions/Permissions', [
             'permissions' => $permissions,
-            'filters' => $request->only(['search', 'module', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'module', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
@@ -74,12 +79,12 @@ class PermissionController extends Controller implements HasMiddleware
     {
         $request->validate([
             'name' => 'required|string|unique:permissions,name',
-            'guard_name' => 'string'
+            'guard_name' => 'string',
         ]);
 
         Permission::create([
             'name' => $request->name,
-            'guard_name' => $request->guard_name ?? 'web'
+            'guard_name' => $request->guard_name ?? 'web',
         ]);
 
         return redirect()->back()->with('success', 'Permission created successfully.');
@@ -88,13 +93,13 @@ class PermissionController extends Controller implements HasMiddleware
     public function update(Request $request, Permission $permission)
     {
         $request->validate([
-            'name' => 'required|string|unique:permissions,name,' . $permission->id,
-            'guard_name' => 'string'
+            'name' => 'required|string|unique:permissions,name,'.$permission->id,
+            'guard_name' => 'string',
         ]);
 
         $permission->update([
             'name' => $request->name,
-            'guard_name' => $request->guard_name ?? 'web'
+            'guard_name' => $request->guard_name ?? 'web',
         ]);
 
         return redirect()->back()->with('success', 'Permission updated successfully.');
@@ -103,6 +108,7 @@ class PermissionController extends Controller implements HasMiddleware
     public function destroy(Permission $permission)
     {
         $permission->delete();
+
         return redirect()->back()->with('success', 'Permission deleted successfully.');
     }
 
@@ -110,12 +116,12 @@ class PermissionController extends Controller implements HasMiddleware
     {
         $request->validate([
             'ids' => 'required|array',
-            'ids.*' => 'exists:permissions,id'
+            'ids.*' => 'exists:permissions,id',
         ]);
 
         Permission::whereIn('id', $request->ids)->delete();
 
-        return redirect()->back()->with('success', count($request->ids) . ' permissions deleted successfully.');
+        return redirect()->back()->with('success', count($request->ids).' permissions deleted successfully.');
     }
 
     public function downloadPdf(Request $request)
@@ -124,11 +130,11 @@ class PermissionController extends Controller implements HasMiddleware
 
         // Apply same filters as index method
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
-        
+
         if ($request->module && $request->module !== 'all') {
-            $query->where('name', 'like', '%' . $request->module . '%');
+            $query->where('name', 'like', '%'.$request->module.'%');
         }
 
         if ($request->start_date) {
@@ -139,14 +145,19 @@ class PermissionController extends Controller implements HasMiddleware
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'roles_count', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'name';
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         $permissions = $query->get();
         $companySetting = CompanySetting::first();
 
         $pdf = Pdf::loadView('pdf.permissions', compact('permissions', 'companySetting'));
+
         return $pdf->stream('permissions.pdf');
     }
 }

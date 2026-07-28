@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\IsShiftClose;
 use App\Models\Shift;
+use App\Models\ShiftClosing;
+use App\Services\LedgerQueryService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Routing\Controllers\Middleware;
@@ -15,6 +14,11 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 
 class CashBookLedgerController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly LedgerQueryService $ledger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -24,43 +28,30 @@ class CashBookLedgerController extends Controller implements HasMiddleware
     }
     public function index(Request $request)
     {
-        $query = IsShiftClose::with('shift');
+        $query = ShiftClosing::query()
+            ->posted()
+            ->with(['shift:id,name', 'summary']);
 
         if ($request->shift_id) {
             $query->where('shift_id', $request->shift_id);
         }
 
         if ($request->start_date) {
-            $query->whereDate('close_date', '>=', $request->start_date);
+            $query->whereDate('business_date', '>=', $request->start_date);
         }
 
         if ($request->end_date) {
-            $query->whereDate('close_date', '<=', $request->end_date);
+            $query->whereDate('business_date', '<=', $request->end_date);
         }
 
-        $query->orderBy('close_date', 'desc');
+        $query->orderByDesc('business_date')->orderByDesc('id');
 
         $closedShifts = $query->get();
 
-        $closedShifts->transform(function ($item) {
-            $cashPayment = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('accounts as from_account', 'vouchers.from_account_id', '=', 'from_account.id')
-                ->where('vouchers.shift_id', $item->shift_id)
-                ->whereDate('vouchers.date', $item->close_date)
-                ->where('from_account.name', 'like', '%cash%')
-                ->sum('transactions.amount');
-
-            $cashReceive = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('accounts as to_account', 'vouchers.to_account_id', '=', 'to_account.id')
-                ->where('vouchers.shift_id', $item->shift_id)
-                ->whereDate('vouchers.date', $item->close_date)
-                ->where('to_account.name', 'like', '%cash%')
-                ->sum('transactions.amount');
-
-            $item->cash_payment = $cashPayment;
-            $item->cash_receive = $cashReceive;
+        $closedShifts->transform(function (ShiftClosing $item) {
+            $item->setAttribute('close_date', $item->business_date->format('Y-m-d'));
+            $item->setAttribute('cash_payment', (float) ($item->summary?->cash_payments ?? 0));
+            $item->setAttribute('cash_receive', (float) ($item->summary?->cash_receipts ?? 0));
             
             return $item;
         });
@@ -76,33 +67,8 @@ class CashBookLedgerController extends Controller implements HasMiddleware
 
     public function show($id)
     {
-        $shiftClosed = IsShiftClose::with('shift')->findOrFail($id);
-
-        $cashTransactions = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('accounts as from_account', 'vouchers.from_account_id', '=', 'from_account.id')
-            ->join('accounts as to_account', 'vouchers.to_account_id', '=', 'to_account.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->join('voucher_categories', 'vouchers.voucher_category_id', '=', 'voucher_categories.id')
-            ->where('vouchers.shift_id', $shiftClosed->shift_id)
-            ->whereDate('vouchers.date', $shiftClosed->close_date)
-            ->where(function($query) {
-                $query->where('from_account.name', 'like', '%cash%')
-                      ->orWhere('to_account.name', 'like', '%cash%');
-            })
-            ->select(
-                'vouchers.*',
-                'transactions.transaction_id',
-                'transactions.transaction_time',
-                'transactions.transaction_type',
-                'transactions.amount',
-                'from_account.name as from_account_name',
-                'to_account.name as to_account_name',
-                'payment_sub_types.name as payment_type',
-                'voucher_categories.name as category_name'
-            )
-            ->orderBy('transactions.transaction_time', 'asc')
-            ->get();
+        $shiftClosed = $this->findClosing($id);
+        $cashTransactions = $this->ledger->cashTransactionsForClosing($shiftClosed);
 
         return Inertia::render('CashBookLedger/Show', [
             'shiftClosed' => $shiftClosed,
@@ -112,33 +78,8 @@ class CashBookLedgerController extends Controller implements HasMiddleware
 
     public function downloadShiftPdf($id)
     {
-        $shiftClosed = IsShiftClose::with('shift')->findOrFail($id);
-
-        $cashTransactions = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('accounts as from_account', 'vouchers.from_account_id', '=', 'from_account.id')
-            ->join('accounts as to_account', 'vouchers.to_account_id', '=', 'to_account.id')
-            ->join('payment_sub_types', 'vouchers.payment_sub_type_id', '=', 'payment_sub_types.id')
-            ->join('voucher_categories', 'vouchers.voucher_category_id', '=', 'voucher_categories.id')
-            ->where('vouchers.shift_id', $shiftClosed->shift_id)
-            ->whereDate('vouchers.date', $shiftClosed->close_date)
-            ->where(function($query) {
-                $query->where('from_account.name', 'like', '%cash%')
-                      ->orWhere('to_account.name', 'like', '%cash%');
-            })
-            ->select(
-                'vouchers.*',
-                'transactions.transaction_id',
-                'transactions.transaction_time',
-                'transactions.transaction_type',
-                'transactions.amount',
-                'from_account.name as from_account_name',
-                'to_account.name as to_account_name',
-                'payment_sub_types.name as payment_type',
-                'voucher_categories.name as category_name'
-            )
-            ->orderBy('transactions.transaction_time', 'asc')
-            ->get();
+        $shiftClosed = $this->findClosing($id);
+        $cashTransactions = $this->ledger->cashTransactionsForClosing($shiftClosed);
 
         $companySetting = CompanySetting::first();
 
@@ -148,43 +89,30 @@ class CashBookLedgerController extends Controller implements HasMiddleware
 
     public function downloadPdf(Request $request)
     {
-        $query = IsShiftClose::with('shift');
+        $query = ShiftClosing::query()
+            ->posted()
+            ->with(['shift:id,name', 'summary']);
 
         if ($request->shift_id) {
             $query->where('shift_id', $request->shift_id);
         }
 
         if ($request->start_date) {
-            $query->whereDate('close_date', '>=', $request->start_date);
+            $query->whereDate('business_date', '>=', $request->start_date);
         }
 
         if ($request->end_date) {
-            $query->whereDate('close_date', '<=', $request->end_date);
+            $query->whereDate('business_date', '<=', $request->end_date);
         }
 
-        $query->orderBy('close_date', 'desc');
+        $query->orderByDesc('business_date')->orderByDesc('id');
 
         $closedShifts = $query->get();
 
-        $closedShifts->transform(function ($item) {
-            $cashPayment = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('accounts as from_account', 'vouchers.from_account_id', '=', 'from_account.id')
-                ->where('vouchers.shift_id', $item->shift_id)
-                ->whereDate('vouchers.date', $item->close_date)
-                ->where('from_account.name', 'like', '%cash%')
-                ->sum('transactions.amount');
-
-            $cashReceive = DB::table('vouchers')
-                ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->join('accounts as to_account', 'vouchers.to_account_id', '=', 'to_account.id')
-                ->where('vouchers.shift_id', $item->shift_id)
-                ->whereDate('vouchers.date', $item->close_date)
-                ->where('to_account.name', 'like', '%cash%')
-                ->sum('transactions.amount');
-
-            $item->cash_payment = $cashPayment;
-            $item->cash_receive = $cashReceive;
+        $closedShifts->transform(function (ShiftClosing $item) {
+            $item->setAttribute('close_date', $item->business_date->format('Y-m-d'));
+            $item->setAttribute('cash_payment', (float) ($item->summary?->cash_payments ?? 0));
+            $item->setAttribute('cash_receive', (float) ($item->summary?->cash_receipts ?? 0));
             
             return $item;
         });
@@ -193,5 +121,17 @@ class CashBookLedgerController extends Controller implements HasMiddleware
 
         $pdf = Pdf::loadView('pdf.cash-book-ledger', compact('closedShifts', 'companySetting'));
         return $pdf->stream('cash-book-ledger.pdf');
+    }
+
+    private function findClosing(int $id): ShiftClosing
+    {
+        $closing = ShiftClosing::query()
+            ->posted()
+            ->with('shift:id,name')
+            ->findOrFail($id);
+
+        $closing->setAttribute('close_date', $closing->business_date->format('Y-m-d'));
+
+        return $closing;
     }
 }

@@ -2,16 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Unit;
+use App\Http\Requests\UnitRequest;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Models\Unit;
+use App\Services\CatalogReferenceService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class UnitController extends Controller implements HasMiddleware
 {
+    public function __construct(private readonly CatalogReferenceService $catalogReferenceService) {}
+
     public static function middleware(): array
     {
         return [
@@ -22,128 +27,107 @@ class UnitController extends Controller implements HasMiddleware
             new Middleware('permission:can-unit-download', only: ['downloadPdf']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = Unit::query();
-
-        if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('value', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->start_date) {
-            $query->whereDate('created_at', '>=', $request->start_date);
-        }
-
-        if ($request->end_date) {
-            $query->whereDate('created_at', '<=', $request->end_date);
-        }
-
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        $perPage = $request->get('per_page', 10);
-        $units = $query->paginate($perPage)->withQueryString()->through(function ($unit) {
-            return [
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+        $units = $this->filteredQuery($request)
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (Unit $unit) => [
                 'id' => $unit->id,
                 'name' => $unit->name,
                 'value' => $unit->value,
-                'status' => (bool) $unit->status,
+                'status' => $unit->status,
                 'created_at' => $unit->created_at->format('Y-m-d'),
-            ];
-        });
+            ]);
 
         return Inertia::render('Units/Units', [
             'units' => $units,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only([
+                'search',
+                'status',
+                'start_date',
+                'end_date',
+                'sort_by',
+                'sort_order',
+                'per_page',
+            ]),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(UnitRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'value' => 'required|string|max:255',
-            'status' => 'boolean'
-        ]);
-
-        Unit::create([
-            'name' => $request->name,
-            'value' => $request->value,
-            'status' => $request->status ?? true,
-        ]);
+        Unit::create($request->validated());
 
         return redirect()->back()->with('success', 'Unit created successfully.');
     }
 
-    public function update(Request $request, Unit $unit)
+    public function update(UnitRequest $request, Unit $unit)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'value' => 'required|string|max:255',
-            'status' => 'boolean'
-        ]);
-
-        $unit->update([
-            'name' => $request->name,
-            'value' => $request->value,
-            'status' => $request->status ?? true,
-        ]);
+        $unit->update($request->validated());
 
         return redirect()->back()->with('success', 'Unit updated successfully.');
     }
 
     public function destroy(Unit $unit)
     {
-        $unit->delete();
+        $this->catalogReferenceService->deleteUnit($unit);
+
         return redirect()->back()->with('success', 'Unit deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:units,id'
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct', 'exists:units,id'],
         ]);
 
-        Unit::whereIn('id', $request->ids)->delete();
-        return redirect()->back()->with('success', count($request->ids) . ' units deleted successfully.');
+        $deleted = $this->catalogReferenceService->deleteManyUnits($validated['ids']);
+
+        return redirect()->back()->with('success', "{$deleted} units deleted successfully.");
     }
 
     public function downloadPdf(Request $request)
     {
+        $units = $this->filteredQuery($request)->get();
+        $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView('pdf.units', compact('units', 'companySetting'));
+
+        return $pdf->stream('units.pdf');
+    }
+
+    private function filteredQuery(Request $request): Builder
+    {
         $query = Unit::query();
 
-        if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('value', 'like', '%' . $request->search . '%');
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->where(function (Builder $builder) use ($search): void {
+                $builder->where('name', 'like', "%{$search}%")
+                    ->orWhere('value', 'like', "%{$search}%");
+            });
         }
 
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status === 'true');
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->boolean('status'));
         }
 
-        if ($request->start_date) {
-            $query->whereDate('created_at', '>=', $request->start_date);
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->date('start_date'));
         }
 
-        if ($request->end_date) {
-            $query->whereDate('created_at', '<=', $request->end_date);
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->date('end_date'));
         }
 
-        $sortBy = $request->get('sort_by', 'name');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
+        $allowedSorts = ['id', 'name', 'value', 'status', 'created_at'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true)
+            ? $request->input('sort_by')
+            : 'name';
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
 
-        $units = $query->get();
-        $companySetting = CompanySetting::first();
-
-        $pdf = Pdf::loadView('pdf.units', compact('units', 'companySetting'));
-        return $pdf->stream('units.pdf');
+        return $query->orderBy($sortBy, $sortOrder)->orderBy('id');
     }
 }

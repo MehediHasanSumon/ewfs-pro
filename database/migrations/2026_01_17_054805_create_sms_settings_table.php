@@ -13,11 +13,15 @@ return new class extends Migration
     {
         Schema::create('sms_settings', function (Blueprint $table) {
             $table->id();
-            $table->string('url');
-            $table->string('api_key');
-            $table->string('sender_id');
+            $table->string('provider_code', 64)->nullable()->unique();
+            $table->string('url', 500);
+            $table->text('api_key');
+            $table->string('sender_id', 100);
+            $table->unsignedSmallInteger('priority')->default(1);
             $table->boolean('status')->default(true);
             $table->timestamps();
+
+            $table->index(['status', 'priority']);
         });
     }
 

@@ -2,25 +2,36 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EmpType extends Model
 {
     protected $fillable = [
+        'code',
         'name',
-        'status'
+        'status',
     ];
 
-    protected $casts = [
-        'status' => 'boolean'
-    ];
+    protected function casts(): array
+    {
+        return [
+            'status' => 'boolean',
+        ];
+    }
 
-    public function departments()
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', true);
+    }
+
+    public function departments(): HasMany
     {
         return $this->hasMany(EmpDepartment::class, 'emp_type_id');
     }
 
-    public function employees()
+    public function employees(): HasMany
     {
         return $this->hasMany(Employee::class, 'emp_type_id');
     }

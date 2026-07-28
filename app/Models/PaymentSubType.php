@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 class PaymentSubType extends Model
 {
     protected $fillable = [
+        'code',
         'name',
         'voucher_category_id',
         'type',
+        'report_bucket_code',
         'status'
     ];
 

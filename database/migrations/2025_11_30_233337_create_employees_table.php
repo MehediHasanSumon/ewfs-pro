@@ -10,14 +10,15 @@ return new class extends Migration
     {
         Schema::create('employees', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->nullable()->constrained()->onDelete('cascade');
+            $table->foreignId('account_id')->nullable()->unique()->constrained('accounts')->restrictOnDelete();
+            $table->foreignId('user_id')->nullable()->unique()->constrained('users')->nullOnDelete();
             $table->foreignId('emp_type_id')->nullable()->constrained('emp_types')->onDelete('set null');
             $table->foreignId('department_id')->nullable()->constrained('emp_departments')->onDelete('set null');
             $table->foreignId('designation_id')->nullable()->constrained('emp_designations')->onDelete('set null');
-            $table->string('employee_code', 50)->nullable();
+            $table->string('employee_code', 50)->nullable()->unique();
             $table->string('employee_name', 100)->nullable();
-            $table->string('email', 100)->nullable();
-            $table->integer('order')->default(1);
+            $table->string('email', 150)->nullable()->index();
+            $table->unsignedInteger('order')->default(1);
             $table->date('dob')->nullable();
             $table->string('gender', 10)->nullable();
             $table->string('blood_group', 10)->nullable();
@@ -33,7 +34,7 @@ return new class extends Migration
             $table->string('present_address', 250)->nullable();
             $table->string('permanent_address', 350)->nullable();
             $table->string('job_status', 50)->nullable();
-            $table->decimal('salary', 10, 2)->nullable();
+            $table->decimal('salary', 24, 4)->nullable();
             $table->date('joining_date')->nullable();
             $table->boolean('status')->default(true);
             $table->date('status_date')->nullable();
@@ -47,6 +48,10 @@ return new class extends Migration
             $table->string('reference_two_phone', 150)->nullable();
             $table->string('reference_two_address', 300)->nullable();
             $table->timestamps();
+
+            $table->index(['status', 'employee_name', 'id']);
+            $table->index(['department_id', 'designation_id', 'status']);
+            $table->index(['emp_type_id', 'status']);
         });
     }
 

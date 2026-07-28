@@ -2,18 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\IsShiftClose;
-use App\Models\Shift;
 use App\Models\CompanySetting;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use App\Models\Shift;
+use App\Models\ShiftClosing;
+use App\Services\ShiftClosingService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Inertia\Inertia;
 
 class ShiftClosedListController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly ShiftClosingService $closings
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -22,47 +27,17 @@ class ShiftClosedListController extends Controller implements HasMiddleware
             new Middleware('permission:delete-is-shift-close', only: ['destroy', 'bulkDelete']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = IsShiftClose::with('shift');
-
-        if ($request->search) {
-            $query->whereHas('shift', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%');
-            });
-        }
-
-        if ($request->shift_id) {
-            $query->where('shift_id', $request->shift_id);
-        }
-
-        if ($request->start_date) {
-            $query->whereDate('close_date', '>=', $request->start_date);
-        }
-
-        if ($request->end_date) {
-            $query->whereDate('close_date', '<=', $request->end_date);
-        }
-
-        $sortField = $request->sort ?? 'close_date';
-        $sortDirection = $request->direction ?? 'desc';
-        $query->orderBy($sortField, $sortDirection);
-
-        $shiftClosedList = $query->paginate(10);
-
-        $shiftClosedList->getCollection()->transform(function ($item) {
-            $item->daily_reading = DB::table('daily_readings')
-                ->where('shift_id', $item->shift_id)
-                ->whereDate('date', $item->close_date)
-                ->first();
-            return $item;
-        });
-
-        $shifts = Shift::all();
+        $shiftClosedList = $this->filteredQuery($request)
+            ->paginate(10)
+            ->withQueryString()
+            ->through(fn (ShiftClosing $closing) => $this->legacyShape($closing));
 
         return Inertia::render('ShiftClosedList/Index', [
             'shiftClosedList' => $shiftClosedList,
-            'shifts' => $shifts,
+            'shifts' => Shift::query()->get(),
             'filters' => [
                 'search' => $request->search,
                 'shift_id' => $request->shift_id,
@@ -70,302 +45,165 @@ class ShiftClosedListController extends Controller implements HasMiddleware
                 'end_date' => $request->end_date,
                 'sortBy' => $request->sort,
                 'direction' => $request->direction,
-            ]
+            ],
         ]);
     }
 
-    public function show($id)
+    public function show(int $id)
     {
-        $shiftClosed = IsShiftClose::with('shift')->findOrFail($id);
-
-        $shiftClosed->daily_reading = DB::table('daily_readings')
-            ->where('shift_id', $shiftClosed->shift_id)
-            ->whereDate('date', $shiftClosed->close_date)
-            ->select(
-                'credit_sales',
-                'bank_sales',
-                'cash_sales',
-                'credit_sales_other',
-                'bank_sales_other',
-                'cash_sales_other',
-                'cash_receive',
-                'bank_receive',
-                'total_cash',
-                'cash_payment',
-                'bank_payment',
-                'office_payment',
-                'final_due_amount'
-            )
-            ->first();
-
-        if ($shiftClosed->daily_reading) {
-            $shiftClosed->daily_reading->credit_sales_other = $shiftClosed->daily_reading->credit_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->bank_sales_other = $shiftClosed->daily_reading->bank_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->cash_sales_other = $shiftClosed->daily_reading->cash_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->cash_receive = $shiftClosed->daily_reading->cash_receive ?? '0.00';
-            $shiftClosed->daily_reading->bank_receive = $shiftClosed->daily_reading->bank_receive ?? '0.00';
-        }
-
-        $shiftClosed->dispenser_readings = DB::table('dispenser_readings')
-            ->join('dispensers', 'dispenser_readings.dispenser_id', '=', 'dispensers.id')
-            ->join('products', 'dispenser_readings.product_id', '=', 'products.id')
-            ->leftJoin('employees', 'dispenser_readings.employee_id', '=', 'employees.id')
-            ->where('dispenser_readings.shift_id', $shiftClosed->shift_id)
-            ->whereDate('dispenser_readings.transaction_date', $shiftClosed->close_date)
-            ->select(
-                'dispenser_readings.*',
-                'dispensers.dispenser_name',
-                'products.product_name',
-                'employees.employee_name'
-            )
-            ->get()
-            ->map(function ($reading) {
-                return [
-                    'id' => $reading->id,
-                    'dispenser' => ['dispenser_name' => $reading->dispenser_name],
-                    'product' => ['product_name' => $reading->product_name],
-                    'item_rate' => $reading->item_rate,
-                    'start_reading' => $reading->start_reading,
-                    'end_reading' => $reading->end_reading,
-                    'meter_test' => $reading->meter_test,
-                    'net_reading' => $reading->net_reading,
-                    'total_sale' => $reading->total_sale,
-                    'employee' => ['employee_name' => $reading->employee_name],
-                ];
-            });
-
-        $shiftClosed->other_product_sales = DB::table('daily_other_product_sales')
-            ->join('products', 'daily_other_product_sales.product_id', '=', 'products.id')
-            ->join('units', 'daily_other_product_sales.unit_id', '=', 'units.id')
-            ->leftJoin('employees', 'daily_other_product_sales.employee_id', '=', 'employees.id')
-            ->where('daily_other_product_sales.shift_id', $shiftClosed->shift_id)
-            ->whereDate('daily_other_product_sales.date', $shiftClosed->close_date)
-            ->select(
-                'daily_other_product_sales.*',
-                'products.product_name',
-                'products.product_code',
-                'units.name as unit_name',
-                'employees.employee_name'
-            )
-            ->get()
-            ->map(function ($sale) {
-                return [
-                    'id' => $sale->id,
-                    'product' => ['product_name' => $sale->product_name, 'product_code' => $sale->product_code],
-                    'unit' => ['name' => $sale->unit_name],
-                    'item_rate' => $sale->item_rate,
-                    'sell_quantity' => $sale->sell_quantity,
-                    'total_sales' => $sale->total_sales,
-                    'employee' => ['employee_name' => $sale->employee_name],
-                ];
-            });
-
         return Inertia::render('ShiftClosedList/Show', [
-            'shiftClosed' => $shiftClosed
+            'shiftClosed' => $this->detailedShape(
+                ShiftClosing::query()
+                    ->with($this->detailRelations())
+                    ->findOrFail($id)
+            ),
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(int $id)
     {
-        $shiftClosed = IsShiftClose::findOrFail($id);
+        $this->closings->reverse(ShiftClosing::query()->findOrFail($id));
 
-        DB::table('daily_readings')
-            ->where('shift_id', $shiftClosed->shift_id)
-            ->whereDate('date', $shiftClosed->close_date)
-            ->delete();
-
-        DB::table('dispenser_readings')
-            ->where('shift_id', $shiftClosed->shift_id)
-            ->whereDate('transaction_date', $shiftClosed->close_date)
-            ->delete();
-
-        DB::table('daily_other_product_sales')
-            ->where('shift_id', $shiftClosed->shift_id)
-            ->whereDate('date', $shiftClosed->close_date)
-            ->delete();
-
-        $shiftClosed->delete();
-        return redirect()->back()->with('success', 'Shift and related data deleted successfully.');
+        return back()->with('success', 'Shift closing reversed successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:is_shift_closes,id'
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:shift_closings,id'],
         ]);
 
-        $shiftClosedRecords = IsShiftClose::whereIn('id', $request->ids)->get();
+        ShiftClosing::query()
+            ->whereIn('id', $validated['ids'])
+            ->get()
+            ->each(fn (ShiftClosing $closing) => $this->closings->reverse($closing));
 
-        foreach ($shiftClosedRecords as $record) {
-            DB::table('daily_readings')
-                ->where('shift_id', $record->shift_id)
-                ->whereDate('date', $record->close_date)
-                ->delete();
-
-            DB::table('dispenser_readings')
-                ->where('shift_id', $record->shift_id)
-                ->whereDate('transaction_date', $record->close_date)
-                ->delete();
-
-            DB::table('daily_other_product_sales')
-                ->where('shift_id', $record->shift_id)
-                ->whereDate('date', $record->close_date)
-                ->delete();
-        }
-
-        IsShiftClose::whereIn('id', $request->ids)->delete();
-        return redirect()->back()->with('success', 'Selected records and related data deleted successfully.');
+        return back()->with('success', 'Shift closings reversed successfully.');
     }
 
     public function downloadPdf(Request $request)
     {
-        $query = IsShiftClose::with('shift');
+        $shiftClosedList = $this->filteredQuery($request)
+            ->get()
+            ->map(fn (ShiftClosing $closing) => $this->legacyShape($closing));
 
-        if ($request->search) {
-            $query->whereHas('shift', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%');
-            });
-        }
-
-        if ($request->shift_id) {
-            $query->where('shift_id', $request->shift_id);
-        }
-
-        if ($request->start_date) {
-            $query->whereDate('close_date', '>=', $request->start_date);
-        }
-
-        if ($request->end_date) {
-            $query->whereDate('close_date', '<=', $request->end_date);
-        }
-
-        $allowedSortFields = ['close_date', 'shift_id', 'created_at'];
-        $sortField = in_array($request->sort, $allowedSortFields) ? $request->sort : 'close_date';
-        $sortDirection = in_array($request->direction, ['asc', 'desc']) ? $request->direction : 'desc';
-        $query->orderBy($sortField, $sortDirection);
-
-        $shiftClosedList = $query->get();
-
-        $shiftClosedList->transform(function ($item) {
-            $item->daily_reading = DB::table('daily_readings')
-                ->where('shift_id', $item->shift_id)
-                ->whereDate('date', $item->close_date)
-                ->select(
-                    'credit_sales',
-                    'bank_sales',
-                    'cash_sales',
-                    'credit_sales_other',
-                    'bank_sales_other',
-                    'cash_sales_other',
-                    'cash_receive',
-                    'bank_receive',
-                    'total_cash',
-                    'cash_payment',
-                    'bank_payment',
-                    'office_payment',
-                    'final_due_amount'
-                )
-                ->first();
-            return $item;
-        });
-
-        $companySetting = CompanySetting::first();
-
-        $pdf = Pdf::loadView('pdf.shift-closed-list', compact('shiftClosedList', 'companySetting'));
-        return $pdf->stream('shift-closed-list.pdf');
+        return Pdf::loadView('pdf.shift-closed-list', [
+            'shiftClosedList' => $shiftClosedList,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->stream('shift-closed-list.pdf');
     }
 
-    public function downloadShowPdf($id)
+    public function downloadShowPdf(int $id)
     {
-        $shiftClosed = IsShiftClose::with('shift')->findOrFail($id);
+        $shiftClosed = $this->detailedShape(
+            ShiftClosing::query()
+                ->with($this->detailRelations())
+                ->findOrFail($id)
+        );
 
-        $shiftClosed->daily_reading = DB::table('daily_readings')
-            ->where('shift_id', $shiftClosed->shift_id)
-            ->whereDate('date', $shiftClosed->close_date)
-            ->select(
-                'credit_sales',
-                'bank_sales',
-                'cash_sales',
-                'credit_sales_other',
-                'bank_sales_other',
-                'cash_sales_other',
-                'cash_receive',
-                'bank_receive',
-                'total_cash',
-                'cash_payment',
-                'bank_payment',
-                'office_payment',
-                'final_due_amount'
-            )
-            ->first();
+        return Pdf::loadView('pdf.shift-closed-show', [
+            'shiftClosed' => $shiftClosed,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->stream('shift-details.pdf');
+    }
 
-        // Ensure all fields have default values if null
-        if ($shiftClosed->daily_reading) {
-            $shiftClosed->daily_reading->credit_sales_other = $shiftClosed->daily_reading->credit_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->bank_sales_other = $shiftClosed->daily_reading->bank_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->cash_sales_other = $shiftClosed->daily_reading->cash_sales_other ?? '0.00';
-            $shiftClosed->daily_reading->cash_receive = $shiftClosed->daily_reading->cash_receive ?? '0.00';
-            $shiftClosed->daily_reading->bank_receive = $shiftClosed->daily_reading->bank_receive ?? '0.00';
+    private function filteredQuery(Request $request)
+    {
+        $query = ShiftClosing::query()
+            ->with(['shift', 'summary'])
+            ->where('status', 'posted');
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->whereHas('shift', fn ($shift) => $shift->where('name', 'like', "%{$search}%"));
         }
 
-        $shiftClosed->dispenser_readings = DB::table('dispenser_readings')
-            ->join('dispensers', 'dispenser_readings.dispenser_id', '=', 'dispensers.id')
-            ->join('products', 'dispenser_readings.product_id', '=', 'products.id')
-            ->leftJoin('employees', 'dispenser_readings.employee_id', '=', 'employees.id')
-            ->where('dispenser_readings.shift_id', $shiftClosed->shift_id)
-            ->whereDate('dispenser_readings.transaction_date', $shiftClosed->close_date)
-            ->select(
-                'dispenser_readings.*',
-                'dispensers.dispenser_name',
-                'products.product_name',
-                'employees.employee_name'
-            )
-            ->get()
-            ->map(function ($reading) {
-                return [
-                    'id' => $reading->id,
-                    'dispenser' => ['dispenser_name' => $reading->dispenser_name],
-                    'product' => ['product_name' => $reading->product_name],
-                    'item_rate' => $reading->item_rate,
-                    'start_reading' => $reading->start_reading,
-                    'end_reading' => $reading->end_reading,
-                    'meter_test' => $reading->meter_test,
-                    'net_reading' => $reading->net_reading,
-                    'total_sale' => $reading->total_sale,
-                    'employee' => ['employee_name' => $reading->employee_name],
-                ];
-            });
+        $query
+            ->when($request->shift_id, fn ($q, $shiftId) => $q->where('shift_id', $shiftId))
+            ->when($request->start_date, fn ($q, $date) => $q->whereDate('business_date', '>=', $date))
+            ->when($request->end_date, fn ($q, $date) => $q->whereDate('business_date', '<=', $date));
 
-        $shiftClosed->other_product_sales = DB::table('daily_other_product_sales')
-            ->join('products', 'daily_other_product_sales.product_id', '=', 'products.id')
-            ->join('units', 'daily_other_product_sales.unit_id', '=', 'units.id')
-            ->leftJoin('employees', 'daily_other_product_sales.employee_id', '=', 'employees.id')
-            ->where('daily_other_product_sales.shift_id', $shiftClosed->shift_id)
-            ->whereDate('daily_other_product_sales.date', $shiftClosed->close_date)
-            ->select(
-                'daily_other_product_sales.*',
-                'products.product_name',
-                'products.product_code',
-                'units.name as unit_name',
-                'employees.employee_name'
-            )
-            ->get()
-            ->map(function ($sale) {
-                return [
-                    'id' => $sale->id,
-                    'product' => ['product_name' => $sale->product_name, 'product_code' => $sale->product_code],
-                    'unit' => ['name' => $sale->unit_name],
-                    'item_rate' => $sale->item_rate,
-                    'sell_quantity' => $sale->sell_quantity,
-                    'total_sales' => $sale->total_sales,
-                    'employee' => ['employee_name' => $sale->employee_name],
-                ];
-            });
+        $sort = in_array($request->sort, ['business_date', 'shift_id', 'created_at'], true)
+            ? $request->sort
+            : 'business_date';
 
-        $companySetting = CompanySetting::first();
+        return $query->orderBy($sort, $request->direction === 'asc' ? 'asc' : 'desc');
+    }
 
-        $pdf = Pdf::loadView('pdf.shift-closed-show', compact('shiftClosed', 'companySetting'));
-        return $pdf->stream('shift-details.pdf');
+    private function legacyShape(ShiftClosing $closing): ShiftClosing
+    {
+        $closing->setAttribute('close_date', $closing->business_date);
+        $closing->setAttribute('daily_reading', $this->dailyReading($closing));
+
+        return $closing;
+    }
+
+    private function detailedShape(ShiftClosing $closing): ShiftClosing
+    {
+        $this->legacyShape($closing);
+        $closing->setRelation('dispenser_readings', $closing->dispenserReadings);
+        $closing->setAttribute(
+            'other_product_sales',
+            $closing->productItems->map(fn ($item) => [
+                'id' => $item->id,
+                'product' => [
+                    'product_name' => $item->product_name_snapshot,
+                    'product_code' => $item->product?->product_code,
+                ],
+                'unit' => ['name' => $item->unit_name_snapshot],
+                'item_rate' => (float) $item->unit_price,
+                'sell_quantity' => (float) $item->quantity,
+                'total_sales' => (float) $item->line_total,
+                'employee' => ['employee_name' => $item->employee?->employee_name],
+            ])
+        );
+
+        return $closing;
+    }
+
+    private function dailyReading(ShiftClosing $closing): object
+    {
+        $operational = $this->closings->operationalSummary(
+            $closing->business_date->format('Y-m-d'),
+            $closing->shift_id
+        )['getTotalSummeryReport'][0];
+        $summary = $closing->summary;
+        $fuelSales = (float) ($summary?->fuel_sales ?? 0);
+        $otherSales = (float) ($summary?->other_product_sales ?? 0);
+        $creditFuel = (float) $operational['total_credit_sales_amount'];
+        $creditOther = (float) $operational['total_credit_sales_other_amount'];
+        $bankFuel = (float) $operational['total_bank_sale_amount'];
+        $bankOther = (float) $operational['total_bank_sales_other_amount'];
+
+        return (object) [
+            'credit_sales' => $creditFuel,
+            'bank_sales' => $bankFuel,
+            'cash_sales' => max(0, $fuelSales - $creditFuel - $bankFuel),
+            'credit_sales_other' => $creditOther,
+            'bank_sales_other' => $bankOther,
+            'cash_sales_other' => max(0, $otherSales - $creditOther - $bankOther),
+            'cash_receive' => (float) ($summary?->cash_receipts ?? 0),
+            'bank_receive' => (float) ($summary?->bank_receipts ?? 0),
+            'total_cash' => (float) ($summary?->expected_cash ?? 0),
+            'cash_payment' => (float) ($summary?->cash_payments ?? 0),
+            'bank_payment' => (float) ($summary?->bank_payments ?? 0),
+            'office_payment' => (float) ($summary?->office_payments ?? 0),
+            'final_due_amount' => (float) ($summary?->actual_cash ?? 0),
+        ];
+    }
+
+    private function detailRelations(): array
+    {
+        return [
+            'shift',
+            'summary',
+            'dispenserReadings.dispenser',
+            'dispenserReadings.product',
+            'dispenserReadings.employee',
+            'productItems.product',
+            'productItems.unit',
+            'productItems.employee',
+        ];
     }
 }

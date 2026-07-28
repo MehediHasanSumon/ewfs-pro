@@ -2,20 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Supplier;
-use App\Models\Account;
-use App\Models\Group;
-use App\Helpers\AccountHelper;
 use App\Models\CompanySetting;
-use App\Models\Voucher;
+use App\Models\Group;
+use App\Models\Purchase;
+use App\Models\Supplier;
+use App\Services\DocumentNumberService;
+use App\Services\PartyAccountService;
+use App\Services\PartyLedgerService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class SupplierController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly DocumentNumberService $numbers,
+        private readonly PartyAccountService $partyAccounts,
+        private readonly PartyLedgerService $partyLedger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -26,15 +36,16 @@ class SupplierController extends Controller implements HasMiddleware
             new Middleware('permission:can-supplier-download', only: ['downloadPdf', 'downloadPurchasesPdf', 'downloadPaymentsPdf']),
         ];
     }
+
     public function index(Request $request)
     {
-        $query = Supplier::with('account.group');
+        $query = Supplier::query()->with('account.group:id,code,name');
 
         if ($request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('mobile', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+            $query->where(function ($builder) use ($request) {
+                $builder->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('mobile', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -42,166 +53,131 @@ class SupplierController extends Controller implements HasMiddleware
             $query->where('status', $request->status === 'active');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        [$sortBy, $sortOrder] = $this->sorting($request);
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = $request->get('per_page', 10);
-        $suppliers = $query->paginate($perPage)->withQueryString()->through(function ($supplier) {
-            $totalPurchases = $supplier->purchases()->sum('net_total_amount');
-            $purchasePaid = $supplier->purchases()->sum('paid_amount');
-            $voucherPayments = \App\Models\Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Payment')
-                ->where('vouchers.to_account_id', $supplier->account_id)
-                ->sum('transactions.amount');
-            $totalPaid = $purchasePaid + $voucherPayments;
-            $totalDue = $totalPurchases - $totalPaid;
-            
-            return [
-                'id' => $supplier->id,
-                'name' => $supplier->name,
-                'mobile' => $supplier->mobile,
-                'email' => $supplier->email,
-                'address' => $supplier->address,
-                'proprietor_name' => $supplier->proprietor_name,
-                'group_id' => $supplier->account->group_id ?? null,
-                'group_code' => $supplier->account->group->code ?? null,
-                'account_number' => $supplier->account->ac_number ?? null,
-                'total_purchases' => $totalPurchases,
-                'total_payment' => $totalPaid,
-                'total_due' => $totalDue,
-                'status' => $supplier->status,
-                'created_at' => $supplier->created_at->format('Y-m-d'),
-            ];
-        });
+        $suppliers = $query
+            ->paginate(max(1, min((int) $request->get('per_page', 10), 100)))
+            ->withQueryString();
+        $metrics = $this->partyLedger->supplierMetrics($suppliers->getCollection());
+        $suppliers->setCollection(
+            $suppliers->getCollection()->map(function (Supplier $supplier) use ($metrics) {
+                $metric = $metrics->get($supplier->id);
 
-        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
+                return [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                    'mobile' => $supplier->mobile,
+                    'email' => $supplier->email,
+                    'address' => $supplier->address,
+                    'proprietor_name' => $supplier->proprietor_name,
+                    'group_id' => $supplier->account?->group_id,
+                    'group_code' => $supplier->account?->group?->code,
+                    'account_number' => $supplier->account?->ac_number,
+                    'total_purchases' => $metric['total_purchases'],
+                    'total_payment' => $metric['total_paid'],
+                    'total_due' => $metric['current_due'],
+                    'status' => $supplier->status,
+                    'created_at' => $supplier->created_at->format('Y-m-d'),
+                ];
+            })
+        );
 
-        // Get last supplier's group for auto selection
-        $lastSupplierGroup = null;
-        $lastSupplier = Supplier::with('account.group')->latest()->first();
-        if ($lastSupplier && $lastSupplier->account && $lastSupplier->account->group) {
-            $lastSupplierGroup = [
+        $lastSupplier = Supplier::query()
+            ->with('account.group:id,code')
+            ->latest('id')
+            ->first();
+        $lastSupplierGroup = $lastSupplier?->account?->group
+            ? [
                 'id' => $lastSupplier->account->group->id,
-                'code' => $lastSupplier->account->group->code
-            ];
-        }
+                'code' => $lastSupplier->account->group->code,
+            ]
+            : null;
 
         return Inertia::render('Suppliers/Suppliers', [
             'suppliers' => $suppliers,
-            'groups' => $groups,
+            'groups' => Group::query()->active()->get(['id', 'code', 'name']),
             'lastSupplierGroup' => $lastSupplierGroup,
-            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_order', 'per_page']),
         ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'mobile' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string|max:255',
-            'proprietor_name' => 'nullable|string|max:255',
-            'status' => 'boolean'
-        ]);
+        $validated = $request->validate($this->rules());
 
-        // Create account first
-        $account = Account::create([
-            'name' => $request->name,
-            'ac_number' => AccountHelper::generateAccountNumber(),
-            'group_id' => 11,
-            'group_code' => '400010001',
-            'due_amount' => 0,
-            'paid_amount' => 0,
-            'total_amount' => 0,
-            'status' => $request->status ?? true,
-        ]);
+        DB::transaction(function () use ($validated, $request) {
+            $status = $request->boolean('status', true);
+            $account = $this->partyAccounts->createSupplierAccount($validated['name'], $status);
 
-        // Create supplier with account_id
-        Supplier::create([
-            'account_id' => $account->id,
-            'name' => $request->name,
-            'mobile' => $request->mobile,
-            'email' => $request->email,
-            'address' => $request->address,
-            'proprietor_name' => $request->proprietor_name,
-            'status' => $request->status ?? true,
-        ]);
+            Supplier::query()->create([
+                'account_id' => $account->id,
+                'code' => $this->numbers->next('supplier', 'SUP', null, 4),
+                'name' => $validated['name'],
+                'mobile' => $validated['mobile'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'proprietor_name' => $validated['proprietor_name'] ?? null,
+                'status' => $status,
+            ]);
+        });
 
         return redirect()->back()->with('success', 'Supplier created successfully.');
     }
 
     public function update(Request $request, Supplier $supplier)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'mobile' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string|max:255',
-            'proprietor_name' => 'nullable|string|max:255',
-            'status' => 'boolean'
-        ]);
+        $validated = $request->validate($this->rules());
 
-        $supplier->account->update([
-            'name' => $request->name,
-            'status' => $request->status ?? true,
-        ]);
-
-        $supplier->update([
-            'name' => $request->name,
-            'mobile' => $request->mobile,
-            'email' => $request->email,
-            'address' => $request->address,
-            'proprietor_name' => $request->proprietor_name,
-            'status' => $request->status ?? true,
-        ]);
+        DB::transaction(function () use ($validated, $request, $supplier) {
+            $status = $request->boolean('status', true);
+            $supplier->loadMissing('account');
+            $supplier->account?->update([
+                'name' => $validated['name'],
+                'status' => $status,
+            ]);
+            $supplier->update([
+                'name' => $validated['name'],
+                'mobile' => $validated['mobile'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'proprietor_name' => $validated['proprietor_name'] ?? null,
+                'status' => $status,
+            ]);
+        });
 
         return redirect()->back()->with('success', 'Supplier updated successfully.');
     }
 
     public function show(Supplier $supplier)
     {
-        $supplier->load('account');
-
-        // Get recent purchases
+        $supplier->load('account:id,name,ac_number');
         $recentPurchases = $supplier->purchases()
+            ->posted()
+            ->with(['paymentAllocations', 'journalEntry.lines'])
             ->latest('purchase_date')
-            ->take(5)
-            ->get(['id', 'purchase_date as date', 'net_total_amount as total_amount', 'paid_amount', 'due_amount', 'invoice_no', 'status']);
-
-        // Get recent payments (from vouchers)
-        $recentPayments = \App\Models\Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.voucher_type', 'Payment')
-            ->where('vouchers.to_account_id', $supplier->account_id)
-            ->latest('vouchers.date')
-            ->take(5)
-            ->select('vouchers.*', 'transactions.amount')
+            ->latest('id')
+            ->limit(5)
             ->get()
-            ->map(function($voucher) {
-                return [
-                    'id' => $voucher->id,
-                    'date' => $voucher->date,
-                    'amount' => $voucher->amount,
-                    'remarks' => $voucher->remarks,
-                ];
-            });
+            ->map(fn (Purchase $purchase) => $this->purchaseRow($purchase));
 
-        // Calculate totals
-        $totalPurchases = $supplier->purchases()->sum('net_total_amount');
-        $purchaseCount = $supplier->purchases()->count();
-        
-        // Total paid = purchase paid_amount + voucher payments
-        $purchasePaid = $supplier->purchases()->sum('paid_amount');
-        $voucherPayments = \App\Models\Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.voucher_type', 'Payment')
-            ->where('vouchers.to_account_id', $supplier->account_id)
-            ->sum('transactions.amount');
-        $totalPaid = $purchasePaid + $voucherPayments;
-        $paymentCount = \App\Models\Voucher::where('voucher_type', 'Payment')
-            ->where('to_account_id', $supplier->account_id)
-            ->count();
-        $currentDue = $totalPurchases - $totalPaid;
+        $paymentQuery = $this->partyLedger->vouchers(
+            'supplier_id',
+            $supplier->id,
+            'payment'
+        );
+        $paymentCount = (clone $paymentQuery)->count();
+        $recentPayments = $this->partyLedger->voucherRows(
+            $paymentQuery
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get(),
+            'Paid'
+        );
+        $metric = $this->partyLedger
+            ->supplierMetrics(collect([$supplier]))
+            ->get($supplier->id);
 
         return Inertia::render('Suppliers/SupplierDetails', [
             'supplier' => [
@@ -213,153 +189,89 @@ class SupplierController extends Controller implements HasMiddleware
                 'proprietor_name' => $supplier->proprietor_name,
                 'status' => $supplier->status,
                 'created_at' => $supplier->created_at->format('Y-m-d'),
-                'account' => $supplier->account ? [
-                    'id' => $supplier->account->id,
-                    'name' => $supplier->account->name,
-                    'ac_number' => $supplier->account->ac_number,
-                ] : null,
+                'account' => $supplier->account,
             ],
             'recentPurchases' => $recentPurchases,
             'recentPayments' => $recentPayments,
-            'totalPurchases' => $totalPurchases,
-            'purchaseCount' => $purchaseCount,
-            'totalPaid' => $totalPaid,
+            'totalPurchases' => $metric['total_purchases'],
+            'purchaseCount' => $metric['purchase_count'],
+            'totalPaid' => $metric['total_paid'],
             'paymentCount' => $paymentCount,
-            'currentDue' => $currentDue,
+            'currentDue' => $metric['current_due'],
         ]);
     }
 
     public function destroy(Supplier $supplier)
     {
-        $supplier->delete();
+        $this->deleteSupplier($supplier);
+
         return redirect()->back()->with('success', 'Supplier deleted successfully.');
     }
 
     public function bulkDelete(Request $request)
     {
         $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:suppliers,id'
+            'ids' => ['required', 'array'],
+            'ids.*' => ['exists:suppliers,id'],
         ]);
 
-        Supplier::whereIn('id', $request->ids)->delete();
+        $suppliers = Supplier::query()
+            ->whereIn('id', $request->ids)
+            ->with('account')
+            ->get();
 
-        return redirect()->back()->with('success', count($request->ids) . ' suppliers deleted successfully.');
+        DB::transaction(function () use ($suppliers) {
+            foreach ($suppliers as $supplier) {
+                $this->assertSupplierCanBeDeleted($supplier);
+            }
+
+            foreach ($suppliers as $supplier) {
+                $account = $supplier->account;
+                $supplier->delete();
+                $account?->delete();
+            }
+        });
+
+        return redirect()->back()->with(
+            'success',
+            count($request->ids).' suppliers deleted successfully.'
+        );
     }
 
     public function statement(Request $request, Supplier $supplier)
     {
         $supplier->load('account:id,name,ac_number');
+        $metric = $this->partyLedger
+            ->supplierMetrics(collect([$supplier]))
+            ->get($supplier->id);
 
-        // Get all purchases for this supplier
-        $purchases = $supplier->purchases()
-            ->orderBy('purchase_date', 'desc')
+        $purchaseQuery = $supplier->purchases()
+            ->posted()
+            ->with(['paymentAllocations', 'journalEntry.lines']);
+        $this->applyDateFilter(
+            $purchaseQuery,
+            'purchase_date',
+            $request->start_date,
+            $request->end_date
+        );
+
+        $allPurchases = $purchaseQuery
+            ->orderByDesc('purchase_date')
+            ->orderByDesc('id')
             ->get()
-            ->map(function ($purchase) {
-                return [
-                    'id' => $purchase->id,
-                    'date' => $purchase->purchase_date,
-                    'type' => 'Purchase',
-                    'description' => 'Purchase - ' . ($purchase->invoice_no ?? 'N/A'),
-                    'debit' => $purchase->net_total_amount,
-                    'credit' => 0,
-                    'invoice_no' => $purchase->invoice_no,
-                ];
-            });
+            ->map(fn (Purchase $purchase) => $this->purchaseRow($purchase));
 
-        // Get all payments for this supplier
-        $payments = [];
-        if ($supplier->account) {
-            $payments = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Payment')
-                ->where('vouchers.to_account_id', $supplier->account->id)
-                ->orderBy('vouchers.date', 'desc')
-                ->select('vouchers.*', 'transactions.amount')
-                ->get()
-                ->map(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'date' => $voucher->date,
-                        'type' => 'Payment',
-                        'description' => 'Payment Made - ' . ($voucher->remarks ?? 'N/A'),
-                        'debit' => 0,
-                        'credit' => $voucher->amount,
-                        'voucher_no' => $voucher->voucher_no ?? 'N/A',
-                    ];
-                });
-        }
-
-        // Merge and sort transactions by date
-        $transactions = collect($purchases)->merge($payments)->sortByDesc('date')->values();
-
-        // Calculate running balance
-        $balance = 0;
-        $transactions = $transactions->map(function ($transaction) use (&$balance) {
-            $balance += $transaction['debit'] - $transaction['credit'];
-            $transaction['balance'] = $balance;
-            return $transaction;
-        });
-
-        // Calculate current balance same as details page
-        $totalPurchases = $supplier->purchases()->sum('net_total_amount');
-        $purchasePaid = $supplier->purchases()->sum('paid_amount');
-        $voucherPayments = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.voucher_type', 'Payment')
-            ->where('vouchers.to_account_id', $supplier->account_id)
-            ->sum('transactions.amount');
-        $totalPaid = $purchasePaid + $voucherPayments;
-        $currentBalance = $totalPurchases - $totalPaid;
-
-        // Get all purchases with date filter
-        $purchaseQuery = $supplier->purchases();
-        
-        if ($request->start_date) {
-            $purchaseQuery->whereDate('purchase_date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $purchaseQuery->whereDate('purchase_date', '<=', $request->end_date);
-        }
-        
-        $allPurchases = $purchaseQuery->orderBy('purchase_date', 'desc')
-            ->get(['id', 'purchase_date as date', 'invoice_no', 'net_total_amount as total', 'paid_amount', 'due_amount'])
-            ->map(function ($purchase) {
-                return [
-                    'date' => $purchase->date,
-                    'invoice_no' => $purchase->invoice_no,
-                    'total' => $purchase->total,
-                    'paid' => $purchase->paid_amount,
-                    'due' => $purchase->due_amount
-                ];
-            });
-
-        // Get recent payments with pagination and date filter
-        $recentPayments = collect([]);
-        if ($supplier->account) {
-            $query = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-                ->where('vouchers.voucher_type', 'Payment')
-                ->where('vouchers.to_account_id', $supplier->account->id)
-                ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type');
-            
-            if ($request->start_date) {
-                $query->whereDate('vouchers.date', '>=', $request->start_date);
-            }
-            if ($request->end_date) {
-                $query->whereDate('vouchers.date', '<=', $request->end_date);
-            }
-            
-            $recentPayments = $query->orderBy('vouchers.date', 'desc')
-                ->paginate(10)
-                ->withQueryString()
-                ->through(function ($voucher) {
-                    return [
-                        'id' => $voucher->id,
-                        'date' => $voucher->date,
-                        'amount' => $voucher->amount,
-                        'payment_type' => $voucher->payment_type,
-                        'remarks' => $voucher->remarks,
-                    ];
-                });
-        }
+        $recentPayments = $this->partyLedger->paginatedVoucherRows(
+            $this->partyLedger->vouchers(
+                'supplier_id',
+                $supplier->id,
+                'payment',
+                $request->start_date,
+                $request->end_date
+            ),
+            10,
+            'Paid'
+        );
 
         return Inertia::render('Suppliers/SupplierStatement', [
             'supplier' => [
@@ -369,22 +281,22 @@ class SupplierController extends Controller implements HasMiddleware
                 'address' => $supplier->address,
                 'account' => $supplier->account,
             ],
-            'transactions' => $transactions,
-            'currentBalance' => $currentBalance,
+            'transactions' => $this->partyLedger->statement($supplier->account, 'supplier'),
+            'currentBalance' => $metric['current_due'],
             'allPurchases' => $allPurchases,
-            'recentPayments' => $recentPayments
+            'recentPayments' => $recentPayments,
         ]);
     }
 
     public function downloadPdf(Request $request)
     {
-        $query = Supplier::query();
+        $query = Supplier::query()->with('account');
 
         if ($request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('mobile', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+            $query->where(function ($builder) use ($request) {
+                $builder->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('mobile', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -392,79 +304,146 @@ class SupplierController extends Controller implements HasMiddleware
             $query->where('status', $request->status === 'active');
         }
 
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
-        $query->orderBy($sortBy, $sortOrder);
+        [$sortBy, $sortOrder] = $this->sorting($request);
+        $suppliers = $query->orderBy($sortBy, $sortOrder)->get();
+        $metrics = $this->partyLedger->supplierMetrics($suppliers);
+        $suppliers->each(function (Supplier $supplier) use ($metrics) {
+            $metric = $metrics->get($supplier->id);
+            $supplier->setAttribute('total_purchases', $metric['total_purchases']);
+            $supplier->setAttribute('total_payment', $metric['total_paid']);
+            $supplier->setAttribute('total_due', $metric['current_due']);
+        });
 
-        $suppliers = $query->get();
         $companySetting = CompanySetting::first();
-
         $pdf = Pdf::loadView('pdf.suppliers', compact('suppliers', 'companySetting'));
+
         return $pdf->stream('suppliers.pdf');
     }
 
     public function downloadPurchasesPdf(Request $request, Supplier $supplier)
     {
         $supplier->load('account');
-        
-        $purchaseQuery = $supplier->purchases();
-        
-        if ($request->start_date) {
-            $purchaseQuery->whereDate('purchase_date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $purchaseQuery->whereDate('purchase_date', '<=', $request->end_date);
-        }
-        
-        $purchases = $purchaseQuery->orderBy('purchase_date', 'desc')
-            ->get(['id', 'purchase_date as date', 'invoice_no', 'net_total_amount as total', 'paid_amount', 'due_amount'])
-            ->map(function ($purchase) {
-                return [
-                    'date' => $purchase->date,
-                    'invoice_no' => $purchase->invoice_no,
-                    'total' => $purchase->total,
-                    'paid' => $purchase->paid_amount,
-                    'due' => $purchase->due_amount
-                ];
-            });
+        $query = $supplier->purchases()
+            ->posted()
+            ->with(['paymentAllocations', 'journalEntry.lines']);
+        $this->applyDateFilter(
+            $query,
+            'purchase_date',
+            $request->start_date,
+            $request->end_date
+        );
+        $purchases = $query
+            ->orderByDesc('purchase_date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Purchase $purchase) => $this->purchaseRow($purchase));
 
         $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView(
+            'pdf.supplier-purchases',
+            compact('supplier', 'purchases', 'companySetting')
+        );
 
-        $pdf = Pdf::loadView('pdf.supplier-purchases', compact('supplier', 'purchases', 'companySetting'));
         return $pdf->stream('supplier-purchases.pdf');
     }
 
     public function downloadPaymentsPdf(Request $request, Supplier $supplier)
     {
         $supplier->load('account');
-        
-        $query = Voucher::join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('vouchers.voucher_type', 'Payment')
-            ->where('vouchers.to_account_id', $supplier->account->id)
-            ->select('vouchers.*', 'transactions.amount', 'transactions.payment_type');
-        
-        if ($request->start_date) {
-            $query->whereDate('vouchers.date', '>=', $request->start_date);
-        }
-        if ($request->end_date) {
-            $query->whereDate('vouchers.date', '<=', $request->end_date);
-        }
-        
-        $payments = $query->orderBy('vouchers.date', 'desc')
-            ->get()
-            ->map(function ($voucher) {
-                return [
-                    'id' => $voucher->id,
-                    'date' => $voucher->date,
-                    'amount' => $voucher->amount,
-                    'payment_type' => $voucher->payment_type,
-                    'remarks' => $voucher->remarks,
-                ];
-            });
+        $payments = $this->partyLedger->voucherRows(
+            $this->partyLedger->vouchers(
+                'supplier_id',
+                $supplier->id,
+                'payment',
+                $request->start_date,
+                $request->end_date
+            )
+                ->orderByDesc('voucher_date')
+                ->orderByDesc('id')
+                ->get(),
+            'Paid'
+        );
 
         $companySetting = CompanySetting::first();
+        $pdf = Pdf::loadView(
+            'pdf.supplier-payments',
+            compact('supplier', 'payments', 'companySetting')
+        );
 
-        $pdf = Pdf::loadView('pdf.supplier-payments', compact('supplier', 'payments', 'companySetting'));
         return $pdf->stream('supplier-payments.pdf');
+    }
+
+    private function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:150'],
+            'address' => ['nullable', 'string'],
+            'proprietor_name' => ['nullable', 'string', 'max:255'],
+            'status' => ['boolean'],
+        ];
+    }
+
+    private function sorting(Request $request): array
+    {
+        $sortBy = in_array(
+            $request->get('sort_by'),
+            ['id', 'name', 'mobile', 'email', 'status', 'created_at'],
+            true
+        ) ? $request->get('sort_by') : 'created_at';
+
+        return [$sortBy, $request->get('sort_order') === 'asc' ? 'asc' : 'desc'];
+    }
+
+    private function purchaseRow(Purchase $purchase): array
+    {
+        return [
+            'id' => $purchase->id,
+            'date' => $purchase->purchase_date->format('Y-m-d'),
+            'invoice_no' => $purchase->invoice_no,
+            'total' => (float) $purchase->grand_total,
+            'total_amount' => (float) $purchase->grand_total,
+            'paid' => (float) $purchase->paid_amount,
+            'paid_amount' => (float) $purchase->paid_amount,
+            'due' => (float) $purchase->due_amount,
+            'due_amount' => (float) $purchase->due_amount,
+            'status' => $purchase->status,
+        ];
+    }
+
+    private function applyDateFilter(
+        $query,
+        string $column,
+        ?string $startDate,
+        ?string $endDate
+    ): void {
+        if ($startDate) {
+            $query->whereDate($column, '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate($column, '<=', $endDate);
+        }
+    }
+
+    private function deleteSupplier(Supplier $supplier): void
+    {
+        DB::transaction(function () use ($supplier) {
+            $supplier->loadMissing('account');
+            $this->assertSupplierCanBeDeleted($supplier);
+            $account = $supplier->account;
+            $supplier->delete();
+            $account?->delete();
+        });
+    }
+
+    private function assertSupplierCanBeDeleted(Supplier $supplier): void
+    {
+        if ($supplier->journalLines()->exists() || $supplier->purchases()->exists()) {
+            throw ValidationException::withMessages([
+                'supplier' => 'This supplier has financial records and cannot be deleted.',
+            ]);
+        }
     }
 }

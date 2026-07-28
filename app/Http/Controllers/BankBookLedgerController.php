@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\CompanySetting;
+use App\Services\LedgerQueryService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Routing\Controllers\Middleware;
@@ -13,6 +13,11 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 
 class BankBookLedgerController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly LedgerQueryService $ledger
+    ) {
+    }
+
     public static function middleware(): array
     {
         return [
@@ -25,41 +30,19 @@ class BankBookLedgerController extends Controller implements HasMiddleware
         $startDate = $request->start_date ?? date('Y-m-d');
         $endDate = $request->end_date ?? date('Y-m-d');
 
-        // Get bank accounts (including mobile bank accounts)
-        $bankAccounts = Account::with('group')
-            ->where('status', true)
-            ->whereIn('group_code', ['100020003', '100020004'])
-            ->get();
+        $bankAccounts = $this->ledger->bankAccounts();
 
         $ledgers = [];
 
         foreach ($bankAccounts as $account) {
-            // Get all transactions for this bank account
-            $transactions = DB::table('transactions')
-                ->where('ac_number', $account->ac_number)
-                ->whereBetween('transaction_date', [$startDate, $endDate])
-                ->orderBy('transaction_date', 'asc')
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            // Calculate running balance
-            $runningBalance = 0;
-            $processedTransactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-                if ($transaction->transaction_type === 'Dr') {
-                    $runningBalance -= $transaction->amount;
-                } else {
-                    $runningBalance += $transaction->amount;
-                }
-                $transaction->balance = $runningBalance;
-                return $transaction;
-            });
+            $result = $this->ledger->accountLedger($account, $startDate, $endDate);
 
             $ledgers[] = [
                 'account' => $account,
-                'transactions' => $processedTransactions,
-                'total_debit' => $processedTransactions->where('transaction_type', 'Dr')->sum('amount'),
-                'total_credit' => $processedTransactions->where('transaction_type', 'Cr')->sum('amount'),
-                'closing_balance' => $runningBalance
+                'transactions' => $result['transactions'],
+                'total_debit' => $result['total_debit'],
+                'total_credit' => $result['total_credit'],
+                'closing_balance' => $result['closing_balance'],
             ];
         }
 
@@ -88,38 +71,19 @@ class BankBookLedgerController extends Controller implements HasMiddleware
         $startDate = $request->start_date ?? date('Y-m-d');
         $endDate = $request->end_date ?? date('Y-m-d');
 
-        $bankAccounts = Account::with('group')
-            ->where('status', true)
-            ->whereIn('group_code', ['100020003', '100020004'])
-            ->get();
+        $bankAccounts = $this->ledger->bankAccounts();
 
         $ledgers = [];
 
         foreach ($bankAccounts as $account) {
-            $transactions = DB::table('transactions')
-                ->where('ac_number', $account->ac_number)
-                ->whereBetween('transaction_date', [$startDate, $endDate])
-                ->orderBy('transaction_date', 'asc')
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            $runningBalance = 0;
-            $processedTransactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-                if ($transaction->transaction_type === 'Dr') {
-                    $runningBalance -= $transaction->amount;
-                } else {
-                    $runningBalance += $transaction->amount;
-                }
-                $transaction->balance = $runningBalance;
-                return $transaction;
-            });
+            $result = $this->ledger->accountLedger($account, $startDate, $endDate);
 
             $ledgers[] = [
                 'account' => $account,
-                'transactions' => $processedTransactions,
-                'total_debit' => $processedTransactions->where('transaction_type', 'Dr')->sum('amount'),
-                'total_credit' => $processedTransactions->where('transaction_type', 'Cr')->sum('amount'),
-                'closing_balance' => $runningBalance
+                'transactions' => $result['transactions'],
+                'total_debit' => $result['total_debit'],
+                'total_credit' => $result['total_credit'],
+                'closing_balance' => $result['closing_balance'],
             ];
         }
 
@@ -137,58 +101,22 @@ class BankBookLedgerController extends Controller implements HasMiddleware
 
         $account = Account::with('group')
             ->where('ac_number', $ac_number)
-            ->where('status', true)
-            ->whereIn('group_code', ['100020003', '100020004'])
+            ->whereKey($this->ledger->bankAccounts()->pluck('id'))
             ->firstOrFail();
 
-        $query = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('shifts', 'vouchers.shift_id', '=', 'shifts.id')
-            ->where('transactions.ac_number', $account->ac_number)
-            ->whereBetween('vouchers.date', [$startDate, $endDate])
-            ->select(
-                'transactions.*',
-                'vouchers.voucher_no',
-                'vouchers.voucher_type',
-                'vouchers.date as voucher_date',
-                'shifts.name as shift_name'
-            )
-            ->orderBy('vouchers.date', 'asc')
-            ->orderBy('vouchers.created_at', 'asc');
-
-        $transactions = $query->paginate($perPage)->withQueryString();
-
-        // Calculate totals from all records (not just current page)
-        $allTransactions = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->where('transactions.ac_number', $account->ac_number)
-            ->whereBetween('vouchers.date', [$startDate, $endDate])
-            ->select('transactions.transaction_type', 'transactions.amount')
-            ->get();
-
-        $totalDebit = $allTransactions->where('transaction_type', 'Dr')->sum('amount');
-        $totalCredit = $allTransactions->where('transaction_type', 'Cr')->sum('amount');
-
-        // Calculate running balance for current page
-        $runningBalance = 0;
-        $processedTransactions = $transactions->getCollection()->map(function ($transaction) use (&$runningBalance) {
-            if ($transaction->transaction_type === 'Dr') {
-                $runningBalance -= $transaction->amount;
-            } else {
-                $runningBalance += $transaction->amount;
-            }
-            $transaction->balance = $runningBalance;
-            return $transaction;
-        });
-
-        $transactions->setCollection($processedTransactions);
+        $result = $this->ledger->paginatedAccountLedger(
+            $account,
+            $startDate,
+            $endDate,
+            max(1, min((int) $perPage, 100))
+        );
 
         return Inertia::render('BankBookLedger/Show', [
             'account' => $account,
-            'transactions' => $transactions,
-            'total_debit' => $totalDebit,
-            'total_credit' => $totalCredit,
-            'closing_balance' => $totalCredit - $totalDebit,
+            'transactions' => $result['transactions'],
+            'total_debit' => $result['total_debit'],
+            'total_credit' => $result['total_credit'],
+            'closing_balance' => $result['closing_balance'],
             'filters' => $request->only(['start_date', 'end_date', 'per_page']),
         ]);
     }
@@ -200,29 +128,14 @@ class BankBookLedgerController extends Controller implements HasMiddleware
 
         $account = Account::with('group')
             ->where('ac_number', $ac_number)
-            ->where('status', true)
-            ->whereIn('group_code', ['100020003', '100020004'])
+            ->whereKey($this->ledger->bankAccounts()->pluck('id'))
             ->firstOrFail();
 
-        $transactions = DB::table('vouchers')
-            ->join('transactions', 'vouchers.transaction_id', '=', 'transactions.id')
-            ->join('shifts', 'vouchers.shift_id', '=', 'shifts.id')
-            ->where('transactions.ac_number', $account->ac_number)
-            ->whereBetween('vouchers.date', [$startDate, $endDate])
-            ->select(
-                'transactions.*',
-                'vouchers.voucher_no',
-                'vouchers.voucher_type',
-                'vouchers.date as voucher_date',
-                'shifts.name as shift_name'
-            )
-            ->orderBy('vouchers.date', 'asc')
-            ->orderBy('vouchers.created_at', 'asc')
-            ->get();
-
-        $totalDebit = $transactions->where('transaction_type', 'Dr')->sum('amount');
-        $totalCredit = $transactions->where('transaction_type', 'Cr')->sum('amount');
-        $closingBalance = $totalCredit - $totalDebit;
+        $result = $this->ledger->accountLedger($account, $startDate, $endDate);
+        $transactions = $result['transactions'];
+        $totalDebit = $result['total_debit'];
+        $totalCredit = $result['total_credit'];
+        $closingBalance = $result['closing_balance'];
 
         $companySetting = CompanySetting::first();
 

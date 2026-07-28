@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('emp_designations', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 32)->unique();
+            $table->string('code', 32)->nullable()->unique();
             $table->string('name', 100)->unique();
             $table->boolean('status')->default(true);
             $table->timestamps();

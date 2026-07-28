@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class VoucherCategory extends Model
 {
     protected $fillable = [
+        'code',
         'name',
+        'report_bucket_code',
         'description',
         'status'
     ];

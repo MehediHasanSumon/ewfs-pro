@@ -10,7 +10,6 @@ return new class extends Migration
     {
         Schema::create('company_settings', function (Blueprint $table) {
             $table->id();
-            $table->uuid('public_id')->unique();
             $table->string('company_name');
             $table->text('company_details')->nullable();
             $table->string('proprietor_name')->nullable();

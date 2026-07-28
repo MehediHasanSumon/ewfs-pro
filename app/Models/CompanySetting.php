@@ -25,4 +25,13 @@ class CompanySetting extends Model
         'is_registration',
         'status',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'vat_rate' => 'decimal:2',
+            'is_registration' => 'boolean',
+            'status' => 'boolean',
+        ];
+    }
 }

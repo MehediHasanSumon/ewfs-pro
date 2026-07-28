@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('shifts', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 32)->unique();
+            $table->string('code', 32)->nullable()->unique();
             $table->string('name', 100)->unique();
             $table->time('start_time');
             $table->time('end_time');
