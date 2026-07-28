@@ -38,7 +38,7 @@ class DailyStatementController extends Controller implements HasMiddleware
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'shifts' => Shift::query()
-                ->active()
+                ->where('status', true)
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'filters' => $request->only([

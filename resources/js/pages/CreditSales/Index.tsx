@@ -46,7 +46,7 @@ interface Product {
 interface Vehicle {
     id: number;
     vehicle_number: string;
-    customer_id: number;
+    customer_id: number | null;
     products?: {
         id: number;
         product_name: string;
@@ -123,6 +123,24 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
     const [sortOrder, setSortOrder] = useState(filters.sort_order || 'desc');
     const [perPage, setPerPage] = useState(filters.per_page || 10);
+
+    const customerName = (sale: CreditSale) =>
+        sale.customer?.name ||
+        sale.customers?.[0]?.customer?.name ||
+        sale.customers?.[0]?.customer_name_snapshot ||
+        'N/A';
+
+    const vehicleNumber = (sale: CreditSale) =>
+        sale.vehicle?.vehicle_number ||
+        sale.customers?.[0]?.items?.[0]?.vehicle?.vehicle_number ||
+        sale.customers?.[0]?.items?.[0]?.vehicle_number_snapshot ||
+        'N/A';
+
+    const productName = (sale: CreditSale) =>
+        products.find((product) => product.id === sale.product_id)
+            ?.product_name ||
+        sale.customers?.[0]?.items?.[0]?.product_name_snapshot ||
+        'N/A';
 
     const handleEdit = (sale: CreditSale) => {
         setEditingSale(sale);
@@ -447,13 +465,13 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
                                                     />
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-white">{new Date(sale.sale_date).toLocaleDateString('en-GB')}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.shift.name}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.shift?.name || 'N/A'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.customer.name}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{customerName(sale)}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {products.find(p => p.id === sale.product_id)?.product_name || 'N/A'}
+                                                    {productName(sale)}
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.vehicle.vehicle_number}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{vehicleNumber(sale)}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.quantity}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.due_amount.toLocaleString()}</td>

@@ -66,8 +66,12 @@ class Product extends Model
                     'id' => 'max',
                 ],
                 fn (Builder $query) => $query
-                    ->where('status', true)
-                    ->whereDate('effective_date', '<=', now()->toDateString())
+                    ->where('product_rates.status', true)
+                    ->whereDate(
+                        'product_rates.effective_date',
+                        '<=',
+                        now()->toDateString()
+                    )
             );
     }
 

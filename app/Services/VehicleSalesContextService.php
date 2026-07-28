@@ -11,23 +11,28 @@ class VehicleSalesContextService
     public function forSalesSelection(): Collection
     {
         return Vehicle::query()
-            ->where('status', true)
-            ->whereHas('customer', fn ($query) => $query->active())
+            ->where('vehicles.status', true)
             ->with([
-                'customer:id,name',
+                'customer:id,name,status',
                 'products' => fn ($query) => $query
                     ->where('products.status', true)
                     ->select('products.id', 'products.product_name'),
             ])
-            ->get(['id', 'vehicle_number', 'customer_id'])
+            ->get([
+                'vehicles.id',
+                'vehicles.vehicle_number',
+                'vehicles.customer_id',
+            ])
             ->map(fn (Vehicle $vehicle) => [
                 'id' => $vehicle->id,
                 'vehicle_number' => $vehicle->vehicle_number,
                 'customer_id' => $vehicle->customer_id,
-                'customer' => [
-                    'id' => $vehicle->customer->id,
-                    'name' => $vehicle->customer->name,
-                ],
+                'customer' => $vehicle->customer?->status
+                    ? [
+                        'id' => $vehicle->customer->id,
+                        'name' => $vehicle->customer->name,
+                    ]
+                    : null,
                 'products' => $vehicle->products
                     ->values()
                     ->map(fn ($product) => [

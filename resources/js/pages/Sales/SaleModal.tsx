@@ -116,7 +116,6 @@ export function SaleModal({
     shifts,
     closedShifts,
     uniqueCustomers = [],
-    uniqueVehicles = [],
     initialSaleDate,
     initialShiftId,
 }: SaleModalProps) {
@@ -487,26 +486,13 @@ export function SaleModal({
         [filteredProducts, selectedProductId],
     );
 
-    const getFilteredVehicleNumbers = (customerName: string) => {
-        const managedVehicleNumbers = new Set(
-            vehicles.map((vehicle) => vehicle.vehicle_number),
-        );
-        const managedVehicles = vehicles
-            .filter(
-                (vehicle) =>
-                    !customerName || vehicle.customer?.name === customerName,
-            )
-            .map((vehicle) => vehicle.vehicle_number);
-        const legacyVehicles = uniqueVehicles.filter(
-            (vehicleNumber) => !managedVehicleNumbers.has(vehicleNumber),
-        );
-
-        return customerName
-            ? Array.from(new Set(managedVehicles)).sort()
-            : Array.from(
-                  new Set([...managedVehicles, ...legacyVehicles]),
-              ).sort();
-    };
+    const vehicleNumbers = useMemo(
+        () =>
+            Array.from(
+                new Set(vehicles.map((vehicle) => vehicle.vehicle_number)),
+            ).sort(),
+        [vehicles],
+    );
 
     const clearProductSelection = useCallback(
         (
@@ -764,9 +750,7 @@ export function SaleModal({
                             Vehicle <span className="text-red-500">*</span>
                         </Label>
                         <Combobox
-                            options={getFilteredVehicleNumbers(
-                                data.products[0]?.customer || '',
-                            )}
+                            options={vehicleNumbers}
                             value={data.products[0]?.vehicle_no || ''}
                             onValueChange={(value) => {
                                 handleVehicleChange(0, value);

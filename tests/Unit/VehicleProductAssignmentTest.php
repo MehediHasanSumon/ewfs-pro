@@ -225,6 +225,27 @@ it('serializes sales selection products with top-level pivot order', function ()
         ->toBe([1, 2, 3]);
 });
 
+it('includes every active vehicle without assuming an active customer', function () {
+    $orphanVehicle = Vehicle::query()->create([
+        'customer_id' => null,
+        'vehicle_number' => 'DHAKA-ORPHAN',
+        'status' => true,
+    ]);
+    $inactiveVehicle = Vehicle::query()->create([
+        'customer_id' => null,
+        'vehicle_number' => 'DHAKA-INACTIVE',
+        'status' => false,
+    ]);
+
+    $vehicles = app(VehicleSalesContextService::class)
+        ->forSalesSelection()
+        ->keyBy('id');
+
+    expect($vehicles->has($orphanVehicle->id))->toBeTrue()
+        ->and($vehicles[$orphanVehicle->id]['customer'])->toBeNull()
+        ->and($vehicles->has($inactiveVehicle->id))->toBeFalse();
+});
+
 it('rejects a vehicle without an active customer sales context', function () {
     $vehicle = Vehicle::query()->create([
         'customer_id' => null,

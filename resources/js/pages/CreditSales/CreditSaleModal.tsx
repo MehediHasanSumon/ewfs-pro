@@ -58,10 +58,19 @@ export interface CreditSale {
     id: number;
     sale_date: string;
     invoice_no: string;
-    customer: { id: number; name: string };
-    vehicle: { id: number; vehicle_number: string };
+    customer?: { id: number; name: string } | null;
+    vehicle?: { id: number; vehicle_number: string } | null;
     product_id: number;
-    shift: { name: string };
+    shift?: { name: string } | null;
+    customers?: {
+        customer?: { id: number; name: string } | null;
+        customer_name_snapshot?: string | null;
+        items?: {
+            vehicle?: { id: number; vehicle_number: string } | null;
+            vehicle_number_snapshot?: string | null;
+            product_name_snapshot?: string | null;
+        }[];
+    }[];
     quantity: number;
     total_amount: number;
     paid_amount: number;
@@ -403,13 +412,6 @@ export function CreditSaleModal({
         setDataState((prev) => ({ ...prev, products: newProducts }));
     };
 
-    const getFilteredVehicles = (customerId: string) => {
-        if (!customerId) return vehicles;
-        return vehicles.filter(
-            (vehicle) => vehicle.customer_id?.toString() === customerId,
-        );
-    };
-
     const selectedVehicleId = data.products[0]?.vehicle_id || '';
     const selectedProductId = data.products[0]?.product_id || '';
     const selectedVehicle = useMemo(
@@ -584,9 +586,7 @@ export function CreditSaleModal({
                             Vehicle <span className="text-red-500">*</span>
                         </Label>
                         <SearchableSelect
-                            options={getFilteredVehicles(
-                                data.products[0]?.customer_id,
-                            ).map((vehicle) => ({
+                            options={vehicles.map((vehicle) => ({
                                 value: vehicle.id.toString(),
                                 label: vehicle.vehicle_number,
                                 subtitle: vehicle.customer?.name,
