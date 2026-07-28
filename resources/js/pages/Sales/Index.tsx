@@ -52,11 +52,7 @@ interface Product {
 interface Vehicle {
     id: number;
     vehicle_number: string;
-    customer_id: number;
-    products?: {
-        id: number;
-        product_name: string;
-    }[];
+    customer_id: number | null;
     customer: {
         id: number;
         name: string;
@@ -84,12 +80,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface SalesHistory {
-    vehicle_no: string;
-    customer: string;
-    product_id: number;
-}
-
 interface SalesProps {
     sales: {
         data: Sale[];
@@ -104,11 +94,9 @@ interface SalesProps {
     groupedAccounts: Record<string, Account[]>;
     products: Product[];
     vehicles: Vehicle[];
-    salesHistory: SalesHistory[];
     shifts: Shift[];
     closedShifts: ClosedShift[];
     uniqueCustomers: string[];
-    uniqueVehicles: string[];
     filters: {
         search?: string;
         customer?: string;
@@ -121,7 +109,7 @@ interface SalesProps {
     };
 }
 
-export default function Sales({ sales, accounts = [], groupedAccounts = {}, products = [], vehicles = [], salesHistory = [], shifts = [], closedShifts = [], uniqueCustomers = [], uniqueVehicles = [], filters = {} }: SalesProps) {
+export default function Sales({ sales, accounts = [], groupedAccounts = {}, products = [], vehicles = [], shifts = [], closedShifts = [], uniqueCustomers = [], filters = {} }: SalesProps) {
     const { can } = usePermission();
     const hasActionPermission = can('update-sale') || can('delete-sale');
     const canFilter = can('can-sale-filter');
@@ -259,6 +247,7 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
         }
     };
 
+    /* eslint-disable react-hooks/exhaustive-deps -- Existing debounced filter behavior intentionally reacts only to the search value. */
     useEffect(() => {
         const timer = setTimeout(() => {
             if (search !== (filters.search || '')) {
@@ -267,6 +256,7 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
         }, 500);
         return () => clearTimeout(timer);
     }, [search]);
+    /* eslint-enable react-hooks/exhaustive-deps */
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -465,29 +455,33 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                                                     />
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-white">{new Date(sale.sale_date).toLocaleDateString('en-GB')}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.shift.name}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.shift?.name || 'N/A'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.customer}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.customer || 'Walk-in Customer'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {products.find(p => p.id === sale.product_id)?.product_name || 'N/A'}
+                                                    {sale.items?.map(item => item.product_name_snapshot).join(', ') ||
+                                                        products.find(p => p.id === sale.product_id)?.product_name ||
+                                                        'N/A'}
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.vehicle_no}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.quantity}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.vehicle_no || 'N/A'}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.items?.reduce((sum, item) => sum + Number(item.quantity), 0) || sale.quantity}
+                                                </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.paid_amount.toLocaleString()}</td>
                                                 <td className="p-4">
                                                     <span className={`rounded px-2 py-1 text-xs font-medium ${
-                                                        (sale.transaction?.payment_type || 'cash') === 'cash' 
+                                                        (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'cash'
                                                             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                            : (sale.transaction?.payment_type || 'cash') === 'bank'
+                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'bank'
                                                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                            : (sale.transaction?.payment_type || 'cash') === 'mobile bank'
+                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'mobile_bank'
                                                             ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                                                             : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                                                     }`}>
-                                                        {(sale.transaction?.payment_type || 'cash') === 'cash' ? 'Cash' 
-                                                            : (sale.transaction?.payment_type || 'cash') === 'bank' ? 'Bank'
-                                                            : (sale.transaction?.payment_type || 'cash') === 'mobile bank' ? 'Mobile Bank'
+                                                        {(sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'cash' ? 'Cash'
+                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'bank' ? 'Bank'
+                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'mobile_bank' ? 'Mobile Bank'
                                                             : 'Cash'}
                                                     </span>
                                                 </td>
@@ -505,17 +499,15 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                                                 {hasActionPermission && (
                                                 <td className="p-4">
                                                     <div className="flex gap-2">
-                                                        {sale.batch_code && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => window.open(`/sales/batch/${sale.batch_code}/pdf`, '_blank')}
-                                                                className="text-blue-600 hover:text-blue-800"
-                                                                title="Download Batch PDF"
-                                                            >
-                                                                <FileText className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => window.open(`/sales/${sale.id}/pdf`, '_blank')}
+                                                            className="text-blue-600 hover:text-blue-800"
+                                                            title="Download Invoice"
+                                                        >
+                                                            <FileText className="h-4 w-4" />
+                                                        </Button>
 
                                                         {can('update-sale') && (
                                                             <Button
@@ -581,11 +573,8 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                     groupedAccounts={groupedAccounts}
                     products={products}
                     vehicles={vehicles}
-                    salesHistory={salesHistory}
                     shifts={shifts}
                     closedShifts={closedShifts}
-                    uniqueCustomers={uniqueCustomers}
-                    uniqueVehicles={uniqueVehicles}
                 />
 
                 <DeleteModal

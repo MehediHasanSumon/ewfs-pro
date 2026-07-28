@@ -190,8 +190,8 @@
                 <td>{{ \Carbon\Carbon::parse($sale->sale_date)->format('Y-m-d') }}</td>
                 <td>{{ $sale->invoice_no }}</td>
                 <td>{{ $sale->customer }}</td>
-                <td>{{ $sale->product->product_name ?? 'N/A' }}</td>
-                <td class="text-center">{{ $sale->quantity }}</td>
+                <td>{{ $sale->items->pluck('product_name_snapshot')->implode(', ') ?: 'N/A' }}</td>
+                <td class="text-center">{{ number_format((float) $sale->items->sum('quantity'), 2) }}</td>
                 <td class="text-center">{{ number_format($sale->total_amount, 2) }}</td>
             </tr>
             @empty

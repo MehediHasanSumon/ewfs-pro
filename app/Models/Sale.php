@@ -39,6 +39,7 @@ class Sale extends Model
         'memo_no',
         'customer_name_snapshot',
         'customer_mobile_snapshot',
+        'customer_address_snapshot',
         'company_name_snapshot',
         'proprietor_name_snapshot',
         'vehicle_number_snapshot',
@@ -102,14 +103,14 @@ class Sale extends Model
         return $this->items();
     }
 
-    public function batch(): HasOne
-    {
-        return $this->hasOne(SaleBatch::class);
-    }
-
     public function paymentAllocations(): HasMany
     {
         return $this->hasMany(SalePaymentAllocation::class);
+    }
+
+    public function paymentDetail(): HasOne
+    {
+        return $this->hasOne(SalePaymentDetail::class);
     }
 
     public function product(): HasOneThrough

@@ -294,14 +294,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Sale routes
     Route::get('sales', [SaleController::class, 'index'])->name('sales.index');
+    Route::get('sales/customer-lookup', [SaleController::class, 'customerLookup'])->name('sales.customer-lookup');
+    Route::get('sales/download-pdf', [SaleController::class, 'downloadPdf'])->name('sales.download.pdf');
     Route::post('sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('sales/{sale}/edit', [SaleController::class, 'edit'])->name('sales.edit');
+    Route::get('sales/{sale}/pdf', [SaleController::class, 'downloadInvoice'])->name('sales.invoice.pdf');
     Route::put('sales/{sale}', [SaleController::class, 'update'])->name('sales.update');
-    Route::delete('sales/{sale}', [SaleController::class, 'destroy'])->name('sales.destroy');
     Route::delete('sales/bulk/delete', [SaleController::class, 'bulkDelete'])->name('sales.bulk.delete');
-    Route::get('sales/download-pdf', [SaleController::class, 'downloadPdf'])->name('sales.download.pdf');
-
-    Route::get('sales/batch/{batchCode}/pdf', [SaleController::class, 'downloadBatchPdf'])->name('sales.batch.pdf');
+    Route::delete('sales/{sale}', [SaleController::class, 'destroy'])->name('sales.destroy');
 
     // Credit Sale routes
     Route::get('credit-sales', [CreditSaleController::class, 'index'])->name('credit-sales.index');

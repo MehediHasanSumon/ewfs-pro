@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
-use App\Models\SaleBatch;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -18,34 +18,54 @@ class SalePostingService
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
-        private readonly VehicleProductAssignmentService $vehicleProducts,
-        private readonly VehicleSalesContextService $vehicleSalesContext
+        private readonly SalesCustomerService $customers
     ) {}
 
-    public function createMany(array $data, string $saleType = 'regular'): array
+    public function create(array $data, string $saleType = 'regular'): Sale
     {
-        return DB::transaction(function () use ($data, $saleType) {
-            $batchCode = 'BATCH'.Str::upper(Str::random(10));
-            $sales = [];
-
-            foreach ($data['products'] as $productData) {
-                $sales[] = $this->createOne($data, $productData, $saleType, $batchCode);
-            }
-
-            return $sales;
-        });
+        return DB::transaction(
+            fn () => $this->postRegularSale(null, $data, $saleType)
+        );
     }
 
-    public function replace(Sale $sale, array $data, array $productData): Sale
+    public function replace(Sale $sale, array $data): Sale
     {
-        return DB::transaction(function () use ($sale, $data, $productData) {
-            $this->reverse($sale, 'Sale replaced from the edit workflow.');
+        return DB::transaction(function () use ($sale, $data) {
+            $lockedSale = Sale::query()
+                ->whereKey($sale->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedSale->loadMissing('journalEntry');
 
-            return $this->createOne(
+            if ($lockedSale->journalEntry?->status !== 'posted') {
+                throw ValidationException::withMessages([
+                    'sale' => 'Only an active posted sale can be edited.',
+                ]);
+            }
+
+            $this->accounting->reverse(
+                $lockedSale->journalEntry,
+                'Sale reposted from the edit workflow.'
+            );
+
+            $this->inventory->reverseSource(
+                Sale::class,
+                $lockedSale->id,
+                'Sale reposted from the edit workflow.'
+            );
+
+            $lockedSale->update([
+                'journal_entry_id' => null,
+                'status' => 'draft',
+                'posted_by' => null,
+                'posted_at' => null,
+            ]);
+            $lockedSale->items()->delete();
+
+            return $this->postRegularSale(
+                $lockedSale,
                 $data,
-                $productData,
-                $sale->sale_type,
-                $sale->batch?->batch_code ?? 'BATCH'.Str::upper(Str::random(10))
+                $lockedSale->sale_type
             );
         });
     }
@@ -224,132 +244,157 @@ class SalePostingService
         });
     }
 
-    private function createOne(
-        array $headerData,
-        array $productData,
-        string $saleType,
-        string $batchCode
+    private function postRegularSale(
+        ?Sale $sale,
+        array $data,
+        string $saleType
     ): Sale {
-        $product = Product::query()
-            ->with(['category', 'unit', 'activeRate'])
-            ->findOrFail($productData['product_id']);
+        $customer = $this->customers->resolve($data);
+        $vehicle = $this->resolveVehicle($data, $customer);
+        $resolvedItems = $this->resolveItems($data['items']);
+        $currencyScale = $this->currencyScale();
+        $subtotal = round(
+            (float) collect($resolvedItems)->sum('gross_amount'),
+            $currencyScale
+        );
+        $discountTotal = round(
+            (float) collect($resolvedItems)->sum('discount'),
+            $currencyScale
+        );
+        $grandTotal = round(
+            (float) collect($resolvedItems)->sum('line_total'),
+            $currencyScale
+        );
+        $paidAmount = round((float) $data['paid_amount'], $currencyScale);
 
-        $quantity = (float) $productData['quantity'];
-        $grossAmount = (float) $productData['amount'];
-        $discount = (float) ($productData['discount'] ?? 0);
-        $grandTotal = max(0, $grossAmount - $discount);
-        $unitPrice = $quantity > 0 ? $grossAmount / $quantity : 0;
-        $unitCost = (float) ($product->activeRate?->purchase_price ?? 0);
-        $totalCost = round($quantity * $unitCost, 4);
-        $businessDate = $headerData['sale_date'] ?? now()->toDateString();
-        $paymentAccountId = (int) $productData['to_account_id'];
-        $paymentMethod = $this->normalizePaymentMethod($productData);
-        $customer = $this->resolveCustomer($productData);
-        $vehicle = $this->resolveVehicle($productData, $customer?->id);
-
-        if (! $vehicle) {
+        if ($grandTotal <= 0) {
             throw ValidationException::withMessages([
-                'vehicle_no' => 'The selected vehicle is unavailable.',
+                'items' => 'The sale total must be greater than zero.',
             ]);
         }
 
-        $this->vehicleSalesContext->resolve($vehicle);
-        $customer ??= $vehicle->customer;
-        $this->vehicleProducts->assertBelongsToCustomer(
-            $vehicle,
-            $customer,
-            'vehicle_no'
-        );
-        $this->vehicleProducts->assertAssigned($vehicle, $product->id);
+        if (
+            abs($paidAmount - $grandTotal)
+            >= (0.5 / (10 ** $currencyScale))
+        ) {
+            throw ValidationException::withMessages([
+                'paid_amount' => 'Paid amount must equal the sale total for a POS sale.',
+            ]);
+        }
 
-        $sale = Sale::query()->create([
-            'shift_id' => $headerData['shift_id'],
+        $paymentAccount = Account::query()
+            ->with('group:id,code,name,account_class,status')
+            ->where('status', true)
+            ->findOrFail($data['to_account_id']);
+        $this->assertPaymentAccount($paymentAccount, $data['payment_type']);
+        $businessDate = $data['sale_date'] ?? now()->toDateString();
+        $mobile = $this->customers->normalizeMobile($data['customer_mobile']);
+        $vehicleNumber = $vehicle?->vehicle_number
+            ?? ($data['vehicle_no'] ?: null);
+        $attributes = [
+            'shift_id' => $data['shift_id'],
             'customer_id' => $customer?->id,
             'vehicle_id' => $vehicle?->id,
             'sale_type' => $saleType,
             'sale_date' => $businessDate,
             'sale_time' => now()->format('H:i:s'),
-            'invoice_no' => $this->numbers->next('invoice', 'IN', $businessDate, 4),
-            'memo_no' => $productData['memo_no'] ?? $headerData['memo_no'] ?? null,
+            'memo_no' => $data['memo_no'] ?? null,
             'customer_name_snapshot' => $customer?->name
-                ?? $productData['customer']
-                ?? $headerData['company_name']
-                ?? null,
-            'customer_mobile_snapshot' => $productData['mobile_number']
-                ?? $headerData['mobile_no']
-                ?? null,
-            'company_name_snapshot' => $headerData['company_name'] ?? null,
-            'proprietor_name_snapshot' => $headerData['proprietor_name'] ?? null,
-            'vehicle_number_snapshot' => $productData['vehicle_no'] ?? null,
-            'subtotal' => $grossAmount,
-            'discount_total' => $discount,
+                ?? $data['customer_name'],
+            'customer_mobile_snapshot' => $customer?->mobile ?? $mobile,
+            'customer_address_snapshot' => $customer?->address
+                ?? ($data['customer_address'] ?? null),
+            'vehicle_number_snapshot' => $vehicleNumber,
+            'subtotal' => $subtotal,
+            'discount_total' => $discountTotal,
             'tax_total' => 0,
             'grand_total' => $grandTotal,
             'status' => 'draft',
-            'is_send_sms' => $headerData['is_send_sms'] ?? false,
-            'remarks' => $productData['remarks'] ?? $headerData['remarks'] ?? null,
-            'created_by' => auth()->id(),
-        ]);
+            'remarks' => $data['remarks'] ?? null,
+        ];
 
-        $item = $sale->items()->create([
-            'line_no' => 1,
-            'product_id' => $product->id,
-            'category_id' => $product->category_id,
-            'unit_id' => $product->unit_id,
-            'product_code_snapshot' => $product->product_code,
-            'product_name_snapshot' => $product->product_name,
-            'category_name_snapshot' => $product->category->name,
-            'unit_name_snapshot' => $product->unit->name,
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'unit_cost' => $unitCost,
-            'discount_amount' => $discount,
-            'tax_amount' => 0,
-            'line_total' => $grandTotal,
-            'remarks' => $productData['remarks'] ?? null,
-        ]);
+        if ($sale) {
+            $sale->update($attributes);
+        } else {
+            $sale = Sale::query()->create($attributes + [
+                'invoice_no' => $this->numbers->next(
+                    'invoice',
+                    'IN',
+                    $businessDate,
+                    4
+                ),
+                'created_by' => auth()->id(),
+            ]);
+        }
 
+        $items = $sale->items()->createMany(
+            collect($resolvedItems)
+                ->values()
+                ->map(fn (array $resolved, int $index) => [
+                    'line_no' => $index + 1,
+                    'product_id' => $resolved['product']->id,
+                    'category_id' => $resolved['product']->category_id,
+                    'unit_id' => $resolved['product']->unit_id,
+                    'product_code_snapshot' => $resolved['product']->product_code,
+                    'product_name_snapshot' => $resolved['product']->product_name,
+                    'category_name_snapshot' => $resolved['product']->category->name,
+                    'unit_name_snapshot' => $resolved['product']->unit->name,
+                    'quantity' => $resolved['quantity'],
+                    'unit_price' => $resolved['unit_price'],
+                    'unit_cost' => $resolved['unit_cost'],
+                    'discount_amount' => $resolved['discount'],
+                    'tax_amount' => 0,
+                    'line_total' => $resolved['line_total'],
+                    'remarks' => $resolved['remarks'],
+                ])
+                ->all()
+        );
+
+        $description = ucfirst($saleType).' sale '.$sale->invoice_no;
         $revenueAccount = $this->systemAccounts->salesRevenue();
         $inventoryAccount = $this->systemAccounts->inventoryAsset();
         $cogsAccount = $this->systemAccounts->costOfGoodsSold();
-        $description = ucfirst($saleType).' sale '.$sale->invoice_no;
-        $journalLines = [
-            [
-                'account_id' => $paymentAccountId,
-                'debit_amount' => $grandTotal,
-                'credit_amount' => 0,
-                'customer_id' => $customer?->id,
-                'product_id' => $product->id,
-                'payment_method' => $paymentMethod,
-                'description' => $description,
-            ],
-            [
+        $paymentMethod = $this->normalizePaymentMethod($data);
+        $journalLines = [[
+            'account_id' => $paymentAccount->id,
+            'debit_amount' => $grandTotal,
+            'credit_amount' => 0,
+            'customer_id' => $customer?->id,
+            'payment_method' => $paymentMethod,
+            'description' => $description,
+        ]];
+
+        foreach ($resolvedItems as $resolved) {
+            $product = $resolved['product'];
+            $journalLines[] = [
                 'account_id' => $revenueAccount->id,
                 'debit_amount' => 0,
-                'credit_amount' => $grandTotal,
+                'credit_amount' => $resolved['line_total'],
                 'customer_id' => $customer?->id,
                 'product_id' => $product->id,
                 'description' => $description,
-            ],
-        ];
-
-        $movementAtShiftClose = $product->category->inventory_class === 'fuel';
-
-        if ($product->is_inventory_item && ! $movementAtShiftClose && $totalCost > 0) {
-            $journalLines[] = [
-                'account_id' => $cogsAccount->id,
-                'debit_amount' => $totalCost,
-                'credit_amount' => 0,
-                'product_id' => $product->id,
-                'description' => 'Cost of '.$description,
             ];
-            $journalLines[] = [
-                'account_id' => $inventoryAccount->id,
-                'debit_amount' => 0,
-                'credit_amount' => $totalCost,
-                'product_id' => $product->id,
-                'description' => 'Inventory issued for '.$description,
-            ];
+
+            if (
+                $product->is_inventory_item
+                && ! $resolved['movement_at_shift_close']
+                && $resolved['total_cost'] > 0
+            ) {
+                $journalLines[] = [
+                    'account_id' => $cogsAccount->id,
+                    'debit_amount' => $resolved['total_cost'],
+                    'credit_amount' => 0,
+                    'product_id' => $product->id,
+                    'description' => 'Cost of '.$description,
+                ];
+                $journalLines[] = [
+                    'account_id' => $inventoryAccount->id,
+                    'debit_amount' => 0,
+                    'credit_amount' => $resolved['total_cost'],
+                    'product_id' => $product->id,
+                    'description' => 'Inventory issued for '.$description,
+                ];
+            }
         }
 
         $journal = $this->accounting->post([
@@ -360,25 +405,45 @@ class SalePostingService
             'source_id' => $sale->id,
             'reference_no' => $sale->invoice_no,
             'description' => $description,
-            'idempotency_key' => 'sale:'.$sale->id,
+            'idempotency_key' => 'sale:'.$sale->id.':revision:'.Str::uuid(),
         ], $journalLines);
 
-        if ($product->is_inventory_item && ! $movementAtShiftClose) {
+        foreach ($resolvedItems as $index => $resolved) {
+            $product = $resolved['product'];
+
+            if (! $product->is_inventory_item || $resolved['movement_at_shift_close']) {
+                continue;
+            }
+
+            $item = $items[$index];
             $this->inventory->record([
                 'product_id' => $product->id,
                 'shift_id' => $sale->shift_id,
                 'journal_entry_id' => $journal->id,
                 'business_date' => $sale->sale_date,
                 'movement_type' => $saleType.'_sale',
-                'quantity_out' => $quantity,
-                'unit_cost' => $unitCost,
-                'total_cost' => $totalCost,
+                'quantity_out' => $resolved['quantity'],
+                'unit_cost' => $resolved['unit_cost'],
+                'total_cost' => $resolved['total_cost'],
                 'source_type' => Sale::class,
                 'source_id' => $sale->id,
                 'source_line_id' => $item->id,
-                'idempotency_key' => 'sale-item:'.$item->id,
+                'idempotency_key' => 'sale-item:'.$item->id.':revision:'.Str::uuid(),
             ]);
         }
+
+        $sale->paymentDetail()->updateOrCreate([], [
+            'account_id' => $paymentAccount->id,
+            'payment_method' => $paymentMethod,
+            'bank_type' => $data['bank_type'] ?? null,
+            'bank_name' => $data['bank_name'] ?? null,
+            'branch_name' => $data['branch_name'] ?? null,
+            'account_number' => $data['account_no'] ?? null,
+            'cheque_number' => $data['cheque_no'] ?? null,
+            'cheque_date' => $data['cheque_date'] ?? null,
+            'mobile_bank_name' => $data['mobile_bank'] ?? null,
+            'mobile_number' => $data['payment_mobile_number'] ?? null,
+        ]);
 
         $sale->update([
             'journal_entry_id' => $journal->id,
@@ -387,43 +452,128 @@ class SalePostingService
             'posted_at' => now(),
         ]);
 
-        SaleBatch::query()->create([
-            'batch_code' => $batchCode,
-            'sale_id' => $sale->id,
+        return $sale->fresh([
+            'items.product',
+            'items.category',
+            'items.unit',
+            'journalEntry.lines.account',
+            'paymentDetail.account',
         ]);
-
-        return $sale->fresh(['items.category', 'items.unit', 'journalEntry.lines.account']);
     }
 
-    private function resolveCustomer(array $data): ?Customer
+    private function resolveItems(array $items): array
     {
-        if (! empty($data['customer_id'])) {
-            return Customer::query()->find($data['customer_id']);
+        $currencyScale = $this->currencyScale();
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+        $products = Product::query()
+            ->with(['category', 'unit', 'activeRate'])
+            ->where('status', true)
+            ->whereIn('id', $productIds)
+            ->get()
+            ->keyBy('id');
+
+        if ($products->count() !== $productIds->unique()->count()) {
+            throw ValidationException::withMessages([
+                'items' => 'One or more selected products are unavailable.',
+            ]);
         }
 
-        return Customer::query()
-            ->when(
-                ! empty($data['mobile_number']),
-                fn ($query) => $query->where('mobile', $data['mobile_number']),
-                fn ($query) => $query->where('name', $data['customer'] ?? '')
-            )
-            ->first();
+        return collect($items)
+            ->values()
+            ->map(function (array $line, int $index) use (
+                $currencyScale,
+                $products
+            ) {
+                $product = $products->get((int) $line['product_id']);
+                $salesPrice = $product?->activeRate?->sales_price;
+
+                if ($salesPrice === null) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.product_id" => 'The selected product has no active sales price.',
+                    ]);
+                }
+
+                $quantity = round((float) $line['quantity'], 6);
+                $unitPrice = round((float) $salesPrice, 6);
+                $grossAmount = round(
+                    $quantity * $unitPrice,
+                    $currencyScale
+                );
+                $discount = round(
+                    (float) ($line['discount'] ?? 0),
+                    $currencyScale
+                );
+
+                if ($discount > $grossAmount) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.discount" => 'Discount cannot exceed the product amount.',
+                    ]);
+                }
+
+                $unitCost = round(
+                    (float) ($product->activeRate?->purchase_price ?? 0),
+                    6
+                );
+                $lineTotal = round(
+                    $grossAmount - $discount,
+                    $currencyScale
+                );
+
+                if ($lineTotal <= 0) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.discount" => 'The product total must be greater than zero.',
+                    ]);
+                }
+
+                return [
+                    'product' => $product,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'unit_cost' => $unitCost,
+                    'gross_amount' => $grossAmount,
+                    'discount' => $discount,
+                    'line_total' => $lineTotal,
+                    'total_cost' => round($quantity * $unitCost, 4),
+                    'movement_at_shift_close' => $product->category->inventory_class === 'fuel',
+                    'remarks' => $line['remarks'] ?? null,
+                ];
+            })
+            ->all();
     }
 
-    private function resolveVehicle(array $data, ?int $customerId): ?Vehicle
-    {
+    private function resolveVehicle(
+        array $data,
+        ?Customer $customer
+    ): ?Vehicle {
         if (! empty($data['vehicle_id'])) {
-            return Vehicle::query()->find($data['vehicle_id']);
+            return Vehicle::query()
+                ->where('status', true)
+                ->findOrFail($data['vehicle_id']);
         }
 
         if (empty($data['vehicle_no'])) {
             return null;
         }
 
-        return Vehicle::query()
+        $vehicle = Vehicle::query()
+            ->where('status', true)
             ->where('vehicle_number', $data['vehicle_no'])
-            ->when($customerId, fn ($query) => $query->where('customer_id', $customerId))
+            ->orderBy('id')
             ->first();
+
+        if ($vehicle || ! $customer || ! ($data['save_customer'] ?? false)) {
+            return $vehicle;
+        }
+
+        return Vehicle::query()->create([
+            'customer_id' => $customer->id,
+            'vehicle_name' => $data['vehicle_no'],
+            'vehicle_number' => $data['vehicle_no'],
+            'status' => true,
+        ]);
     }
 
     private function normalizePaymentMethod(array $data): string
@@ -437,5 +587,31 @@ class SalePostingService
             'Mobile Bank' => 'mobile_bank',
             default => 'cash',
         };
+    }
+
+    private function assertPaymentAccount(
+        Account $account,
+        string $paymentType
+    ): void {
+        $allowedGroupCodes = config(
+            "erp.sales.payment_groups.{$paymentType}",
+            []
+        );
+
+        if (
+            ! $account->group
+            || ! $account->group->status
+            || $account->group->account_class !== 'asset'
+            || ! in_array($account->group->code, $allowedGroupCodes, true)
+        ) {
+            throw ValidationException::withMessages([
+                'to_account_id' => 'The selected account is not valid for this payment method.',
+            ]);
+        }
+    }
+
+    private function currencyScale(): int
+    {
+        return min(4, max(0, (int) config('erp.sales.currency_scale', 2)));
     }
 }

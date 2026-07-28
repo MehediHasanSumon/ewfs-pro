@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Helpers\NumberToWordsHelper;
+use App\Http\Requests\CustomerMobileLookupRequest;
+use App\Http\Requests\SaleRequest;
+use App\Http\Resources\SaleEditResource;
+use App\Http\Resources\SalesCustomerLookupResource;
 use App\Models\Account;
 use App\Models\CompanySetting;
 use App\Models\Product;
@@ -10,25 +13,29 @@ use App\Models\Sale;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Services\SalePostingService;
+use App\Services\SalesCustomerService;
 use App\Services\VehicleSalesContextService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class SaleController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly SalePostingService $sales,
-        private readonly VehicleSalesContextService $vehicleSalesContext
+        private readonly VehicleSalesContextService $vehicleSalesContext,
+        private readonly SalesCustomerService $customers
     ) {}
 
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:view-sale', only: ['index', 'downloadBatchPdf']),
-            new Middleware('permission:view-sale|can-sale-download', only: ['downloadPdf']),
+            new Middleware('permission:view-sale', only: ['index']),
+            new Middleware('permission:view-sale|create-sale', only: ['customerLookup']),
+            new Middleware('permission:view-sale|can-sale-download', only: ['downloadPdf', 'downloadInvoice']),
             new Middleware('permission:create-sale', only: ['store']),
             new Middleware('permission:update-sale', only: ['edit', 'update']),
             new Middleware('permission:delete-sale', only: ['destroy', 'bulkDelete']),
@@ -48,24 +55,11 @@ class SaleController extends Controller implements HasMiddleware
             'sales' => $sales,
             'accounts' => $accounts,
             'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
-            'vehicles' => $this->vehicleSalesContext->forSalesSelection(),
-            'salesHistory' => Sale::query()
-                ->with('items:id,sale_id,product_id')
-                ->where('sale_type', 'regular')
-                ->whereHas('journalEntry', fn ($query) => $query->posted())
-                ->whereNotNull('vehicle_number_snapshot')
-                ->latest('id')
-                ->get(['id', 'vehicle_number_snapshot', 'customer_name_snapshot'])
-                ->unique('vehicle_number_snapshot')
-                ->map(fn (Sale $sale) => [
-                    'vehicle_no' => $sale->vehicle_number_snapshot,
-                    'customer' => $sale->customer_name_snapshot,
-                    'product_id' => $sale->product_id,
-                ])
-                ->values(),
+            'vehicles' => $this->vehicleSalesContext->forPosSelection(),
             'products' => Product::query()
                 ->with(['unit', 'stock', 'activeRate'])
                 ->active()
+                ->orderBy('product_name')
                 ->get(['id', 'product_name', 'product_code', 'unit_id'])
                 ->each(fn (Product $product) => $product->setAttribute(
                     'sales_price',
@@ -78,11 +72,6 @@ class SaleController extends Controller implements HasMiddleware
                 ->whereNotNull('customer_name_snapshot')
                 ->distinct()
                 ->pluck('customer_name_snapshot'),
-            'uniqueVehicles' => Sale::query()
-                ->where('sale_type', 'regular')
-                ->whereNotNull('vehicle_number_snapshot')
-                ->distinct()
-                ->pluck('vehicle_number_snapshot'),
             'filters' => $request->only([
                 'search', 'customer', 'payment_status', 'start_date', 'end_date',
                 'sort_by', 'sort_order', 'per_page',
@@ -90,10 +79,18 @@ class SaleController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function customerLookup(CustomerMobileLookupRequest $request)
     {
-        $validated = $request->validate($this->storeRules());
-        $this->sales->createMany($validated);
+        $customer = $this->customers->lookup($request->validated('mobile'));
+
+        return $customer
+            ? new SalesCustomerLookupResource($customer)
+            : response()->json(['data' => null]);
+    }
+
+    public function store(SaleRequest $request)
+    {
+        $this->sales->create($request->validated());
 
         return back()->with('success', 'Sale created successfully.');
     }
@@ -101,47 +98,27 @@ class SaleController extends Controller implements HasMiddleware
     public function edit(Sale $sale)
     {
         abort_unless($sale->sale_type === 'regular', 404);
+        abort_unless($sale->journalEntry?->status === 'posted', 404);
+
+        $sale->load([
+            'items.product',
+            'items.category',
+            'items.unit',
+            'paymentDetail',
+            'transaction.account',
+        ]);
 
         return response()->json([
-            'sale' => $sale->load([
-                'items.category',
-                'items.unit',
-                'shift',
-                'transaction',
-            ]),
+            'sale' => (new SaleEditResource($sale))->resolve(),
         ]);
     }
 
-    public function update(Request $request, Sale $sale)
+    public function update(SaleRequest $request, Sale $sale)
     {
         abort_unless($sale->sale_type === 'regular', 404);
+        abort_unless($sale->journalEntry?->status === 'posted', 404);
 
-        $validated = $request->validate([
-            'sale_date' => ['required', 'date'],
-            'customer' => ['required', 'string', 'max:150'],
-            'mobile_number' => ['nullable', 'string', 'max:50'],
-            'vehicle_no' => ['required', 'string', 'max:50'],
-            'product_id' => ['required', 'exists:products,id'],
-            'shift_id' => ['required', 'exists:shifts,id'],
-            'invoice_no' => ['required', 'string', 'max:100'],
-            'memo_no' => ['nullable', 'string', 'max:150'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
-            'amount' => ['required', 'numeric', 'min:0'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'payment_type' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'to_account_id' => ['required', 'exists:accounts,id'],
-            'paid_amount' => ['required', 'numeric', 'min:0'],
-            'remarks' => ['nullable', 'string'],
-            'bank_name' => ['nullable', 'string'],
-            'branch_name' => ['nullable', 'string'],
-            'account_no' => ['nullable', 'string'],
-            'bank_type' => ['nullable', 'string'],
-            'cheque_no' => ['nullable', 'string'],
-            'cheque_date' => ['nullable', 'date'],
-            'mobile_bank' => ['nullable', 'string'],
-        ]);
-
-        $this->sales->replace($sale, $validated, $validated);
+        $this->sales->replace($sale, $request->validated());
 
         return back()->with('success', 'Sale updated successfully.');
     }
@@ -161,38 +138,34 @@ class SaleController extends Controller implements HasMiddleware
             'ids.*' => ['integer', 'exists:sales,id'],
         ]);
 
-        Sale::query()
-            ->where('sale_type', 'regular')
-            ->whereIn('id', $validated['ids'])
-            ->with('journalEntry')
-            ->get()
-            ->each(fn (Sale $sale) => $this->sales->reverse($sale));
+        DB::transaction(function () use ($validated) {
+            Sale::query()
+                ->where('sale_type', 'regular')
+                ->whereIn('id', $validated['ids'])
+                ->with('journalEntry')
+                ->lockForUpdate()
+                ->get()
+                ->each(fn (Sale $sale) => $this->sales->reverse($sale));
+        });
 
         return back()->with('success', 'Sales deleted successfully.');
     }
 
-    public function downloadBatchPdf(string $batchCode)
+    public function downloadInvoice(Sale $sale)
     {
-        $sales = Sale::query()
-            ->with(['items.product.unit', 'shift'])
-            ->whereHas('batch', fn ($query) => $query->where('batch_code', $batchCode))
-            ->whereHas('journalEntry', fn ($query) => $query->posted())
-            ->get();
+        abort_unless($sale->sale_type === 'regular', 404);
+        abort_unless($sale->journalEntry?->status === 'posted', 404);
 
-        abort_if($sales->isEmpty(), 404, 'Batch not found');
-
-        $customerGroups = $sales->groupBy('customer');
-        foreach ($customerGroups as $customer => $customerSales) {
-            $customerGroups[$customer]->totalInWords = NumberToWordsHelper::convert(
-                floor($customerSales->sum('total_amount'))
-            );
-        }
-
-        return Pdf::loadView('pdf.batch-invoice', [
-            'customerGroups' => $customerGroups,
-            'batchCode' => $batchCode,
+        return Pdf::loadView('pdf.sale-invoice', [
+            'sale' => $sale->load([
+                'items.product',
+                'items.unit',
+                'shift',
+                'paymentDetail.account',
+                'transaction.account',
+            ]),
             'companySetting' => CompanySetting::query()->first(),
-        ])->setPaper('A4', 'portrait')->stream("batch-invoice-{$batchCode}.pdf");
+        ])->setPaper('A4', 'portrait')->stream("sale-invoice-{$sale->invoice_no}.pdf");
     }
 
     public function downloadPdf(Request $request)
@@ -206,7 +179,14 @@ class SaleController extends Controller implements HasMiddleware
     private function filteredQuery(Request $request)
     {
         $query = Sale::query()
-            ->with(['items.category', 'items.unit', 'shift', 'transaction', 'batch'])
+            ->with([
+                'items.product',
+                'items.category',
+                'items.unit',
+                'shift',
+                'transaction',
+                'paymentDetail',
+            ])
             ->where('sale_type', 'regular')
             ->whereHas('journalEntry', fn ($entry) => $entry->posted());
 
@@ -214,7 +194,8 @@ class SaleController extends Controller implements HasMiddleware
             $search = trim((string) $request->search);
             $query->where(fn ($nested) => $nested
                 ->where('invoice_no', 'like', "%{$search}%")
-                ->orWhere('customer_name_snapshot', 'like', "%{$search}%"));
+                ->orWhere('customer_name_snapshot', 'like', "%{$search}%")
+                ->orWhere('customer_mobile_snapshot', 'like', "%{$search}%"));
         }
 
         if ($request->filled('customer') && $request->customer !== 'all') {
@@ -240,34 +221,6 @@ class SaleController extends Controller implements HasMiddleware
             : 'created_at';
 
         return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
-    }
-
-    private function storeRules(): array
-    {
-        return [
-            'sale_date' => ['required', 'date'],
-            'shift_id' => ['required', 'exists:shifts,id'],
-            'products' => ['required', 'array', 'min:1'],
-            'products.*.product_id' => ['required', 'exists:products,id'],
-            'products.*.customer' => ['required', 'string', 'max:150'],
-            'products.*.mobile_number' => ['nullable', 'string', 'max:50'],
-            'products.*.vehicle_no' => ['required', 'string', 'max:50'],
-            'products.*.memo_no' => ['nullable', 'string', 'max:150'],
-            'products.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'products.*.amount' => ['required', 'numeric', 'min:0'],
-            'products.*.discount' => ['nullable', 'numeric', 'min:0'],
-            'products.*.payment_type' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'products.*.to_account_id' => ['required', 'exists:accounts,id'],
-            'products.*.paid_amount' => ['required', 'numeric', 'min:0'],
-            'products.*.remarks' => ['nullable', 'string'],
-            'products.*.bank_name' => ['nullable', 'string'],
-            'products.*.branch_name' => ['nullable', 'string'],
-            'products.*.account_no' => ['nullable', 'string'],
-            'products.*.bank_type' => ['nullable', 'string'],
-            'products.*.cheque_no' => ['nullable', 'string'],
-            'products.*.cheque_date' => ['nullable', 'date'],
-            'products.*.mobile_bank' => ['nullable', 'string'],
-        ];
     }
 
     private function closedShifts()

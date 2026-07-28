@@ -1,9 +1,11 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
     Select,
     SelectContent,
@@ -11,32 +13,45 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    type AssignedVehicleProduct,
-    getOrderedVehicleProducts,
-} from '@/lib/vehicle-products';
 import { router } from '@inertiajs/react';
-import { Edit, Plus, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Edit, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+interface SaleItem {
+    id: number;
+    product_id: number;
+    product_name_snapshot: string;
+    quantity: number;
+    unit_price: number;
+    discount_amount: number;
+    line_total: number;
+    remarks?: string | null;
+}
+
+interface SalePaymentDetail {
+    payment_method: string;
+}
 
 export interface Sale {
     id: number;
     sale_date: string;
     invoice_no: string;
     customer: string;
-    vehicle_no: string;
-    product_id: number;
-    shift: { name: string };
+    mobile_number?: string | null;
+    vehicle_no?: string | null;
+    product_id?: number | null;
+    shift?: { name: string } | null;
     quantity: number;
     total_amount: number;
     paid_amount: number;
     due_amount: number;
     remarks: string;
     created_at: string;
-    batch_code?: string;
+    items?: SaleItem[];
+    payment_detail?: SalePaymentDetail | null;
     transaction?: {
-        payment_type: string;
-    };
+        payment_type?: string | null;
+    } | null;
 }
 
 interface Account {
@@ -61,9 +76,6 @@ interface Vehicle {
     id: number;
     vehicle_number: string;
     customer_id: number | null;
-    products?: (AssignedVehicleProduct & {
-        product_name: string;
-    })[];
     customer?: {
         id: number;
         name: string;
@@ -80,10 +92,50 @@ interface ClosedShift {
     shift_id: number;
 }
 
-interface SalesHistory {
+interface CustomerLookup {
+    id: number;
+    name: string;
+    mobile: string;
+    address?: string | null;
+    previous_due: number;
+    vehicles: {
+        id: number;
+        vehicle_number: string;
+        vehicle_name?: string | null;
+    }[];
+}
+
+interface CartLine {
+    key: string;
+    product_id: string;
+    quantity: string;
+    discount: string;
+    remarks: string;
+}
+
+interface FormState {
+    sale_date: string;
+    shift_id: string;
+    memo_no: string;
+    customer_id: string;
+    customer_name: string;
+    customer_mobile: string;
+    customer_address: string;
+    save_customer: boolean;
+    vehicle_id: string;
     vehicle_no: string;
-    customer: string;
-    product_id: number;
+    payment_type: string;
+    to_account_id: string;
+    paid_amount: string;
+    bank_type: string;
+    bank_name: string;
+    branch_name: string;
+    account_no: string;
+    cheque_no: string;
+    cheque_date: string;
+    mobile_bank: string;
+    payment_mobile_number: string;
+    remarks: string;
 }
 
 interface SaleModalProps {
@@ -95,14 +147,35 @@ interface SaleModalProps {
     groupedAccounts: Record<string, Account[]>;
     products: Product[];
     vehicles: Vehicle[];
-    salesHistory?: SalesHistory[];
     shifts: Shift[];
     closedShifts: ClosedShift[];
-    uniqueCustomers?: string[];
-    uniqueVehicles?: string[];
     initialSaleDate?: string;
     initialShiftId?: string;
 }
+
+const emptyLine = (): CartLine => ({
+    key: `${Date.now()}-${Math.random()}`,
+    product_id: '',
+    quantity: '',
+    discount: '',
+    remarks: '',
+});
+
+const paymentLabel = (method?: string | null) => {
+    switch (method?.toLowerCase()) {
+        case 'bank':
+        case 'cheque':
+            return 'Bank';
+        case 'mobile_bank':
+        case 'mobile bank':
+            return 'Mobile Bank';
+        default:
+            return 'Cash';
+    }
+};
+
+const normalizeMobile = (mobile: string) =>
+    mobile.trim().replace(/[\s\-()]+/g, '');
 
 export function SaleModal({
     isOpen,
@@ -115,377 +188,70 @@ export function SaleModal({
     vehicles,
     shifts,
     closedShifts,
-    uniqueCustomers = [],
     initialSaleDate,
     initialShiftId,
 }: SaleModalProps) {
-    const buildInitialState = () => ({
+    const initialState = (): FormState => ({
         sale_date: initialSaleDate || '',
         shift_id: initialShiftId || '',
-        products: [
-            {
-                product_id: '',
-                customer: '',
-                vehicle_no: '',
-                memo_no: '',
-                quantity: '',
-                amount: '',
-                discount_type: 'Fixed',
-                discount: '',
-                payment_type: 'Cash',
-                to_account_id: '',
-                paid_amount: '',
-                due_amount: '',
-                bank_type: '',
-                bank_name: '',
-                cheque_no: '',
-                cheque_date: '',
-                branch_name: '',
-                account_no: '',
-                mobile_bank: '',
-                mobile_number: '',
-                remarks: '',
-            },
-        ],
+        memo_no: '',
+        customer_id: '',
+        customer_name: '',
+        customer_mobile: '',
+        customer_address: '',
+        save_customer: false,
+        vehicle_id: '',
+        vehicle_no: '',
+        payment_type: 'Cash',
+        to_account_id: '',
+        paid_amount: '',
+        bank_type: '',
+        bank_name: '',
+        branch_name: '',
+        account_no: '',
+        cheque_no: '',
+        cheque_date: '',
+        mobile_bank: '',
+        payment_mobile_number: '',
+        remarks: '',
     });
 
-    const [data, setDataState] = useState(buildInitialState());
-
+    const [data, setData] = useState<FormState>(initialState);
+    const [draftLine, setDraftLine] = useState<CartLine>(emptyLine);
+    const [cart, setCart] = useState<CartLine[]>([]);
     const [processing, setProcessing] = useState(false);
     const [availableShifts, setAvailableShifts] = useState<Shift[]>(shifts);
-    const [vehicleError, setVehicleError] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [lookupError, setLookupError] = useState('');
+    const [lookupLoading, setLookupLoading] = useState(false);
+    const [previousDue, setPreviousDue] = useState(0);
+    const [lookupEnabled, setLookupEnabled] = useState(true);
+    const latestLookupRef = useRef('');
+    const resolvedLookupRef = useRef('');
 
-    async function loadEditData() {
-        if (!editingSale) return;
-        try {
-            const response = await fetch(`/sales/${editingSale.id}/edit`);
-            const data = await response.json();
-            const saleData = data.sale;
-
-            let paymentType = 'Cash';
-            const dbPaymentType =
-                saleData.transaction?.payment_type?.toLowerCase();
-            if (dbPaymentType === 'cash') paymentType = 'Cash';
-            else if (dbPaymentType === 'bank') paymentType = 'Bank';
-            else if (
-                dbPaymentType === 'mobile bank' ||
-                dbPaymentType === 'mobile_bank'
-            )
-                paymentType = 'Mobile Bank';
-
-            setDataState({
-                sale_date: saleData.sale_date.split('T')[0],
-                shift_id: saleData.shift_id?.toString() || '',
-                products: [
-                    {
-                        product_id: saleData.product_id?.toString() || '',
-                        customer: saleData.customer || '',
-                        vehicle_no: saleData.vehicle_no || '',
-                        memo_no: saleData.memo_no || '',
-                        quantity: saleData.quantity?.toString() || '',
-                        amount: saleData.amount?.toString() || '',
-                        discount_type: 'Fixed',
-                        discount: saleData.discount?.toString() || '',
-                        payment_type: paymentType,
-                        to_account_id: saleData.transaction?.ac_number
-                            ? accounts
-                                  .find(
-                                      (a) =>
-                                          a.ac_number ===
-                                          saleData.transaction.ac_number,
-                                  )
-                                  ?.id.toString() || ''
-                            : '',
-                        paid_amount: saleData.paid_amount?.toString() || '',
-                        due_amount: saleData.due_amount?.toString() || '',
-                        bank_type: saleData.transaction?.cheque_type || '',
-                        bank_name: saleData.transaction?.bank_name || '',
-                        cheque_no: saleData.transaction?.cheque_no || '',
-                        cheque_date: saleData.transaction?.cheque_date || '',
-                        branch_name: saleData.transaction?.branch_name || '',
-                        account_no: saleData.transaction?.account_number || '',
-                        mobile_bank:
-                            saleData.transaction?.mobile_bank_name || '',
-                        mobile_number:
-                            saleData.transaction?.mobile_number || '',
-                        remarks: saleData.remarks || '',
-                    },
-                ],
-            });
-        } catch (error) {
-            console.error('Error loading sale:', error);
-        }
-    }
-
-    function reset() {
-        const initialState = buildInitialState();
-        setDataState(initialState);
-        setAvailableShifts(getAvailableShifts(initialState.sale_date));
-        setVehicleError('');
-    }
-
-    const setData = (key: string, value: string) => {
-        setDataState((prev) => ({ ...prev, [key]: value }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const validProducts = data.products.filter(
-            (p) =>
-                p.product_id &&
-                p.customer &&
-                p.vehicle_no &&
-                p.quantity &&
-                p.amount,
-        );
-        if (validProducts.length === 0) {
-            alert('Please add at least one product to cart');
-            return;
-        }
-
-        if (editingSale) {
-            const updateData = {
-                sale_date: data.sale_date,
-                shift_id: data.shift_id,
-                product_id: validProducts[0].product_id,
-                customer: validProducts[0].customer,
-                vehicle_no: validProducts[0].vehicle_no,
-                memo_no: validProducts[0].memo_no,
-                quantity: validProducts[0].quantity,
-                amount: validProducts[0].amount,
-                discount: validProducts[0].discount || 0,
-                payment_type: validProducts[0].payment_type,
-                to_account_id: validProducts[0].to_account_id,
-                paid_amount: validProducts[0].paid_amount,
-                bank_type: validProducts[0].bank_type,
-                bank_name: validProducts[0].bank_name,
-                cheque_no: validProducts[0].cheque_no,
-                cheque_date: validProducts[0].cheque_date,
-                branch_name: validProducts[0].branch_name,
-                account_no: validProducts[0].account_no,
-                mobile_bank: validProducts[0].mobile_bank,
-                mobile_number: validProducts[0].mobile_number,
-                remarks: validProducts[0].remarks,
-                invoice_no: editingSale.invoice_no,
-            };
-
-            router.put(`/sales/${editingSale.id}`, updateData, {
-                onSuccess: () => {
-                    onClose();
-                    reset();
-                    onSuccess?.();
-                },
-            });
-        } else {
-            setProcessing(true);
-            router.post(
-                '/sales',
-                {
-                    sale_date: data.sale_date,
-                    shift_id: data.shift_id,
-                    products: validProducts,
-                },
-                {
-                    onSuccess: () => {
-                        onClose();
-                        reset();
-                        setProcessing(false);
-                        onSuccess?.();
-                    },
-                    onError: () => {
-                        setProcessing(false);
-                    },
-                },
-            );
-        }
-    };
-
-    const updateProduct = (index: number, field: string, value: string) => {
-        setDataState((prevData) => {
-            const newProducts = [...prevData.products];
-            newProducts[index] = { ...newProducts[index], [field]: value };
-
-            if (field === 'product_id' && value) {
-                const selectedProduct = products.find(
-                    (p) => p.id.toString() === value,
-                );
-                if (selectedProduct && selectedProduct.sales_price) {
-                    const quantity =
-                        parseFloat(newProducts[index].quantity) || 0;
-                    const amount = selectedProduct.sales_price * quantity;
-                    const discount =
-                        parseFloat(newProducts[index].discount) || 0;
-                    newProducts[index].amount = amount.toString();
-                    newProducts[index].paid_amount = (
-                        amount - discount
-                    ).toFixed(2);
-                    newProducts[index].due_amount = '0.00';
-                }
-            }
-
-            if (field === 'quantity' && value) {
-                const selectedProduct = products.find(
-                    (p) => p.id.toString() === newProducts[index].product_id,
-                );
-                if (selectedProduct && selectedProduct.sales_price) {
-                    const quantity = parseFloat(value) || 0;
-                    const amount = selectedProduct.sales_price * quantity;
-                    const discount =
-                        parseFloat(newProducts[index].discount) || 0;
-                    newProducts[index].amount = amount.toString();
-                    newProducts[index].paid_amount = (
-                        amount - discount
-                    ).toFixed(2);
-                    newProducts[index].due_amount = '0.00';
-                }
-            }
-
-            if (field === 'amount' && value) {
-                const selectedProduct = products.find(
-                    (p) => p.id.toString() === newProducts[index].product_id,
-                );
-                if (
-                    selectedProduct &&
-                    selectedProduct.sales_price &&
-                    selectedProduct.sales_price > 0
-                ) {
-                    const amount = parseFloat(value) || 0;
-                    const discount =
-                        parseFloat(newProducts[index].discount) || 0;
-                    newProducts[index].quantity = (
-                        amount / selectedProduct.sales_price
-                    ).toFixed(2);
-                    newProducts[index].paid_amount = (
-                        amount - discount
-                    ).toFixed(2);
-                    newProducts[index].due_amount = '0.00';
-                }
-            }
-
-            if (field === 'discount' && value !== undefined) {
-                const amount = parseFloat(newProducts[index].amount) || 0;
-                const discount = parseFloat(value) || 0;
-                newProducts[index].paid_amount = (amount - discount).toFixed(2);
-                newProducts[index].due_amount = '0.00';
-            }
-
-            if (field === 'to_account_id' && value) {
-                const selectedAccount = accounts.find(
-                    (a) => a.id.toString() === value,
-                );
-                if (selectedAccount) {
-                    newProducts[index].account_no = selectedAccount.ac_number;
-                }
-            }
-
-            return {
-                ...prevData,
-                products: newProducts,
-            };
-        });
-    };
-
-    const addProduct = () => {
-        const firstProduct = data.products[0];
-        if (
-            !firstProduct.product_id ||
-            !firstProduct.customer ||
-            !firstProduct.vehicle_no ||
-            !firstProduct.quantity ||
-            !firstProduct.amount ||
-            !firstProduct.to_account_id ||
-            !firstProduct.paid_amount
-        ) {
-            alert('Please fill all required fields');
-            return;
-        }
-
-        const newProducts = [
-            {
-                product_id: '',
-                customer: '',
-                vehicle_no: '',
-                memo_no: '',
-                quantity: '',
-                amount: '',
-                discount_type: 'Fixed',
-                discount: '',
-                payment_type: 'Cash',
-                to_account_id: '',
-                paid_amount: '',
-                due_amount: '',
-                bank_type: '',
-                bank_name: '',
-                cheque_no: '',
-                cheque_date: '',
-                branch_name: '',
-                account_no: '',
-                mobile_bank: '',
-                mobile_number: '',
-                remarks: '',
-            },
-            ...data.products,
-        ];
-
-        setDataState({
-            ...data,
-            products: newProducts,
-        });
-    };
-
-    const removeProduct = (index: number) => {
-        const newProducts = data.products.filter((_, i) => i !== index);
-        setDataState((prev) => ({ ...prev, products: newProducts }));
-    };
-
-    const getFilteredAccounts = (paymentType: string) => {
-        if (paymentType === 'Cash') {
-            return (
-                groupedAccounts['Cash in hand'] || groupedAccounts['Cash'] || []
-            );
-        } else if (paymentType === 'Bank') {
-            return (
-                groupedAccounts['Bank Account'] || groupedAccounts['Bank'] || []
-            );
-        } else if (paymentType === 'Mobile Bank') {
-            return groupedAccounts['Mobile Bank'] || [];
-        }
-        return [];
-    };
-
-    function getAvailableShifts(selectedDate: string) {
-        if (!selectedDate) return shifts;
-
-        const closedShiftIds = closedShifts
-            .filter((cs) => cs.close_date === selectedDate)
-            .map((cs) => cs.shift_id);
-
-        return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
-    }
-
-    const selectedVehicleNumber = data.products[0]?.vehicle_no || '';
-    const selectedProductId = data.products[0]?.product_id || '';
-    const selectedVehicle = useMemo(
-        () =>
-            vehicles.find(
-                (vehicle) =>
-                    vehicle.vehicle_number === selectedVehicleNumber,
-            ),
-        [selectedVehicleNumber, vehicles],
+    const productsById = useMemo(
+        () => new Map(products.map((product) => [product.id.toString(), product])),
+        [products],
     );
-    const filteredProducts = useMemo(
-        () =>
-            getOrderedVehicleProducts(selectedVehicle?.products, products),
-        [products, selectedVehicle?.products],
-    );
-    const selectedProduct = useMemo(
-        () =>
-            filteredProducts.find(
-                (product) => product.id.toString() === selectedProductId,
-            ),
-        [filteredProducts, selectedProductId],
-    );
+    const selectedDraftProduct = productsById.get(draftLine.product_id);
+    const draftGross =
+        (selectedDraftProduct?.sales_price || 0) *
+        (parseFloat(draftLine.quantity) || 0);
+    const draftDiscount = parseFloat(draftLine.discount) || 0;
+    const draftTotal = Math.max(0, draftGross - draftDiscount);
 
+    const lineTotal = (line: CartLine) => {
+        const product = productsById.get(line.product_id);
+        const gross =
+            (product?.sales_price || 0) * (parseFloat(line.quantity) || 0);
+
+        return Math.max(0, gross - (parseFloat(line.discount) || 0));
+    };
+
+    const cartTotal = cart.reduce((total, line) => total + lineTotal(line), 0);
+    const nestedItemError = Object.entries(errors).find(([key]) =>
+        key.startsWith('items.'),
+    )?.[1];
     const vehicleNumbers = useMemo(
         () =>
             Array.from(
@@ -494,151 +260,535 @@ export function SaleModal({
         [vehicles],
     );
 
-    const clearProductSelection = useCallback(
-        (
-            product: ReturnType<
-                typeof buildInitialState
-            >['products'][number],
-        ) => {
-            product.product_id = '';
-            product.amount = '';
-            product.paid_amount = '';
-            product.due_amount = '';
-        },
-        [],
-    );
+    function getAvailableShifts(selectedDate: string) {
+        if (!selectedDate) return shifts;
 
-    const selectProductForLine = useCallback(
-        (
-            line: ReturnType<typeof buildInitialState>['products'][number],
-            productId: string,
-        ) => {
-            line.product_id = productId;
-            const selectedProduct = products.find(
-                (product) => product.id.toString() === productId,
+        const closedShiftIds = closedShifts
+            .filter((closing) => closing.close_date === selectedDate)
+            .map((closing) => closing.shift_id);
+
+        return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
+    }
+
+    const getFilteredAccounts = (paymentType: string) => {
+        if (paymentType === 'Cash') {
+            return (
+                groupedAccounts['Cash in hand'] || groupedAccounts['Cash'] || []
             );
-
-            if (!selectedProduct) {
-                clearProductSelection(line);
-                return;
-            }
-
-            const quantity = parseFloat(line.quantity) || 0;
-            const amount = selectedProduct.sales_price * quantity;
-            const discount = parseFloat(line.discount) || 0;
-            line.amount = quantity > 0 ? amount.toString() : '';
-            line.paid_amount =
-                quantity > 0
-                    ? Math.max(0, amount - discount).toFixed(2)
-                    : '';
-            line.due_amount = quantity > 0 ? '0.00' : '';
-        },
-        [clearProductSelection, products],
-    );
-
-    const handleVehicleChange = (index: number, value: string) => {
-        const vehicle = vehicles.find((item) => item.vehicle_number === value);
-
-        if (!value) {
-            setVehicleError('');
-        } else if (!vehicle) {
-            setVehicleError('The selected vehicle is unavailable.');
-        } else if (!vehicle.customer || !vehicle.customer_id) {
-            setVehicleError('This vehicle is not assigned to any customer.');
-        } else if (!vehicle.products || vehicle.products.length === 0) {
-            setVehicleError('This vehicle has no assigned products.');
-        } else {
-            setVehicleError('');
         }
 
-        setDataState((prevData) => {
-            const newProducts = [...prevData.products];
-            const line = { ...newProducts[index], vehicle_no: value };
+        if (paymentType === 'Bank') {
+            return (
+                groupedAccounts['Bank Account'] || groupedAccounts['Bank'] || []
+            );
+        }
 
-            if (!value) {
-                clearProductSelection(line);
-            } else if (vehicle) {
-                if (!vehicle.customer || !vehicle.customer_id) {
-                    line.vehicle_no = '';
-                    line.customer = '';
-                    clearProductSelection(line);
-                } else {
-                    line.customer = vehicle.customer.name;
-                    clearProductSelection(line);
-                }
-            } else {
-                line.vehicle_no = '';
-                line.customer = '';
-                clearProductSelection(line);
-            }
+        if (paymentType === 'Mobile Bank') {
+            return groupedAccounts['Mobile Bank'] || [];
+        }
 
-            newProducts[index] = line;
-
-            return { ...prevData, products: newProducts };
-        });
+        return [];
     };
 
-    /* eslint-disable react-hooks/set-state-in-effect -- Reconcile the controlled product only after the selected vehicle's dynamic product list is available. */
-    useEffect(() => {
-        if (!selectedVehicleNumber || !selectedVehicle?.products) {
+    const reset = () => {
+        const state = initialState();
+        latestLookupRef.current = '';
+        resolvedLookupRef.current = '';
+        setData(state);
+        setDraftLine(emptyLine());
+        setCart([]);
+        setAvailableShifts(getAvailableShifts(state.sale_date));
+        setErrors({});
+        setLookupError('');
+        setLookupLoading(false);
+        setPreviousDue(0);
+        setLookupEnabled(true);
+    };
+
+    const clearCartForCustomerChange = () => {
+        setCart([]);
+        setDraftLine(emptyLine());
+        setData((current) => ({ ...current, paid_amount: '' }));
+    };
+
+    const confirmCustomerChange = () =>
+        cart.length === 0 && !draftLine.product_id
+            ? true
+            : window.confirm(
+                  'Changing customer will clear the current cart. Continue?',
+              );
+
+    const handleMobileChange = (value: string) => {
+        if (
+            value !== data.customer_mobile &&
+            !confirmCustomerChange()
+        ) {
             return;
         }
 
-        setDataState((prevData) => {
-            const currentLine = prevData.products[0];
-
-            if (
-                !currentLine ||
-                currentLine.vehicle_no !== selectedVehicleNumber
-            ) {
-                return prevData;
-            }
-
-            const currentProductIsAvailable = filteredProducts.some(
-                (product) =>
-                    product.id.toString() === currentLine.product_id,
-            );
-
-            if (currentProductIsAvailable) {
-                return prevData;
-            }
-
-            const newProducts = [...prevData.products];
-            const line = { ...currentLine };
-            const firstProduct = filteredProducts[0];
-
-            if (firstProduct) {
-                selectProductForLine(line, firstProduct.id.toString());
-            } else {
-                clearProductSelection(line);
-            }
-
-            newProducts[0] = line;
-
-            return { ...prevData, products: newProducts };
-        });
-    }, [
-        clearProductSelection,
-        filteredProducts,
-        selectedVehicle,
-        selectedVehicleNumber,
-        selectProductForLine,
-    ]);
-    /* eslint-enable react-hooks/set-state-in-effect */
-
-    /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- Opening the modal synchronizes its local form snapshot. */
-    useEffect(() => {
-        if (editingSale && isOpen) {
-            loadEditData();
-        } else if (isOpen) {
-            const initialState = buildInitialState();
-            setDataState(initialState);
-            setAvailableShifts(getAvailableShifts(initialState.sale_date));
-        } else if (!isOpen) {
-            reset();
+        if (value !== data.customer_mobile) {
+            clearCartForCustomerChange();
         }
+
+        latestLookupRef.current = normalizeMobile(value);
+        resolvedLookupRef.current = '';
+        setLookupEnabled(true);
+        setData((current) => ({
+            ...current,
+            customer_mobile: value,
+            customer_id: '',
+            customer_name: current.customer_id ? '' : current.customer_name,
+            customer_address: current.customer_id
+                ? ''
+                : current.customer_address,
+            save_customer: false,
+            vehicle_id: '',
+            vehicle_no: '',
+        }));
+        setPreviousDue(0);
+        setLookupError('');
+    };
+
+    const handleCustomerNameChange = (value: string) => {
+        if (
+            value !== data.customer_name &&
+            !confirmCustomerChange()
+        ) {
+            return;
+        }
+
+        if (value !== data.customer_name) {
+            clearCartForCustomerChange();
+        }
+
+        setData((current) => ({
+            ...current,
+            customer_id: '',
+            customer_name: value,
+            save_customer: false,
+        }));
+        setPreviousDue(0);
+    };
+
+    const handleVehicleChange = (vehicleNumber: string) => {
+        const vehicle = vehicles.find(
+            (item) => item.vehicle_number === vehicleNumber,
+        );
+
+        setData((current) => ({
+            ...current,
+            vehicle_id: vehicle?.id.toString() || '',
+            vehicle_no: vehicleNumber,
+        }));
+    };
+
+    const updateDraftLine = (changes: Partial<CartLine>) => {
+        const nextLine = { ...draftLine, ...changes };
+        const product = productsById.get(nextLine.product_id);
+        const quantity = parseFloat(nextLine.quantity);
+        const discount = parseFloat(nextLine.discount) || 0;
+        const nextDraftTotal =
+            product && Number.isFinite(quantity) && quantity > 0
+                ? Math.max(0, product.sales_price * quantity - discount)
+                : 0;
+
+        setDraftLine(nextLine);
+        setData((current) => ({
+            ...current,
+            paid_amount:
+                cartTotal + nextDraftTotal > 0
+                    ? (cartTotal + nextDraftTotal).toFixed(2)
+                    : '',
+        }));
+    };
+
+    const addToCart = () => {
+        const product = productsById.get(draftLine.product_id);
+        const quantity = parseFloat(draftLine.quantity);
+
+        if (!product) {
+            setErrors((current) => ({
+                ...current,
+                draft_product_id: 'Select a product.',
+            }));
+            return;
+        }
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            setErrors((current) => ({
+                ...current,
+                draft_quantity: 'Quantity must be greater than zero.',
+            }));
+            return;
+        }
+
+        if (draftDiscount > draftGross) {
+            setErrors((current) => ({
+                ...current,
+                draft_discount: 'Discount cannot exceed the product amount.',
+            }));
+            return;
+        }
+
+        if (cart.some((line) => line.product_id === draftLine.product_id)) {
+            setErrors((current) => ({
+                ...current,
+                draft_product_id: 'This product is already in the cart.',
+            }));
+            return;
+        }
+
+        const nextCart = [...cart, { ...draftLine }];
+        const nextTotal = nextCart.reduce(
+            (total, line) => total + lineTotal(line),
+            0,
+        );
+        setCart(nextCart);
+        setDraftLine(emptyLine());
+        setData((current) => ({
+            ...current,
+            paid_amount: nextTotal.toFixed(2),
+        }));
+        setErrors((current) => {
+            const next = { ...current };
+            delete next.draft_product_id;
+            delete next.draft_quantity;
+            delete next.draft_discount;
+
+            return next;
+        });
+    };
+
+    const editCartLine = (line: CartLine) => {
+        const nextCart = cart.filter((item) => item.key !== line.key);
+        const nextTotal = nextCart.reduce(
+            (total, item) => total + lineTotal(item),
+            0,
+        );
+        setCart(nextCart);
+        setDraftLine(line);
+        setData((current) => ({
+            ...current,
+            paid_amount: nextTotal > 0 ? nextTotal.toFixed(2) : '',
+        }));
+    };
+
+    const removeCartLine = (key: string) => {
+        const nextCart = cart.filter((line) => line.key !== key);
+        const nextTotal = nextCart.reduce(
+            (total, line) => total + lineTotal(line),
+            0,
+        );
+        setCart(nextCart);
+        setData((current) => ({
+            ...current,
+            paid_amount: nextTotal > 0 ? nextTotal.toFixed(2) : '',
+        }));
+    };
+
+    const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        setErrors({});
+
+        const items = [...cart];
+
+        if (draftLine.product_id || draftLine.quantity) {
+            const product = productsById.get(draftLine.product_id);
+            const quantity = parseFloat(draftLine.quantity);
+
+            if (!product || !Number.isFinite(quantity) || quantity <= 0) {
+                setErrors({
+                    items: 'Complete the current product before submitting.',
+                });
+                return;
+            }
+
+            if (items.some((line) => line.product_id === draftLine.product_id)) {
+                setErrors({
+                    items: 'The same product cannot be added more than once.',
+                });
+                return;
+            }
+
+            items.push(draftLine);
+        }
+
+        if (items.length === 0) {
+            setErrors({ items: 'Add at least one product to the cart.' });
+            return;
+        }
+
+        const total = items.reduce(
+            (sum, line) => sum + lineTotal(line),
+            0,
+        );
+        const paidAmount = parseFloat(data.paid_amount);
+
+        if (
+            !Number.isFinite(paidAmount) ||
+            Math.abs(paidAmount - total) >= 0.005
+        ) {
+            setErrors({
+                paid_amount:
+                    'Paid amount must equal the sale total for a POS sale.',
+            });
+            return;
+        }
+
+        const payload = {
+            ...data,
+            paid_amount: total.toFixed(2),
+            items: items.map((line) => ({
+                product_id: line.product_id,
+                quantity: line.quantity,
+                discount: line.discount || 0,
+                remarks: line.remarks || null,
+            })),
+        };
+        const options = {
+            preserveScroll: true,
+            onStart: () => setProcessing(true),
+            onError: (validationErrors: Record<string, string>) => {
+                setErrors(validationErrors);
+            },
+            onFinish: () => setProcessing(false),
+            onSuccess: () => {
+                if (editingSale) {
+                    onClose();
+                }
+
+                reset();
+                onSuccess?.();
+            },
+        };
+
+        if (editingSale) {
+            router.put(`/sales/${editingSale.id}`, payload, options);
+        } else {
+            router.post('/sales', payload, options);
+        }
+    };
+
+    useEffect(() => {
+        if (
+            !isOpen ||
+            !lookupEnabled ||
+            !data.customer_mobile.trim()
+        ) {
+            return;
+        }
+
+        const controller = new AbortController();
+        const mobile = data.customer_mobile.trim();
+        const lookupKey = normalizeMobile(mobile);
+
+        latestLookupRef.current = lookupKey;
+
+        if (resolvedLookupRef.current === lookupKey) {
+            return;
+        }
+
+        const timer = window.setTimeout(async () => {
+            setLookupLoading(true);
+            setLookupError('');
+
+            try {
+                const response = await fetch(
+                    `/sales/customer-lookup?mobile=${encodeURIComponent(mobile)}`,
+                    {
+                        signal: controller.signal,
+                        headers: { Accept: 'application/json' },
+                    },
+                );
+                const payload = await response.json();
+
+                if (latestLookupRef.current !== lookupKey) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    const message =
+                        payload.errors?.mobile?.[0] ||
+                        payload.message ||
+                        'Unable to look up this mobile number.';
+                    setLookupError(message);
+                    return;
+                }
+
+                const customer = payload.data as CustomerLookup | null;
+
+                if (!customer) {
+                    resolvedLookupRef.current = lookupKey;
+                    setData((current) =>
+                        current.customer_mobile.trim() === mobile &&
+                        current.customer_id
+                            ? {
+                                  ...current,
+                                  customer_id: '',
+                                  customer_name: '',
+                                  customer_address: '',
+                                  vehicle_id: '',
+                                  vehicle_no: '',
+                              }
+                            : current,
+                    );
+                    setPreviousDue(0);
+                    return;
+                }
+
+                resolvedLookupRef.current = lookupKey;
+                setData((current) => {
+                    if (
+                        normalizeMobile(current.customer_mobile) !==
+                        lookupKey
+                    ) {
+                        return current;
+                    }
+
+                    const firstVehicle = customer.vehicles[0];
+
+                    return {
+                        ...current,
+                        customer_id: customer.id.toString(),
+                        customer_name: customer.name,
+                        customer_mobile: customer.mobile,
+                        customer_address: customer.address || '',
+                        save_customer: false,
+                        vehicle_id:
+                            current.vehicle_id ||
+                            firstVehicle?.id.toString() ||
+                            '',
+                        vehicle_no:
+                            current.vehicle_no ||
+                            firstVehicle?.vehicle_number ||
+                            '',
+                    };
+                });
+                if (latestLookupRef.current === lookupKey) {
+                    setPreviousDue(customer.previous_due);
+                }
+            } catch (error) {
+                if ((error as Error).name !== 'AbortError') {
+                    setLookupError(
+                        'Unable to look up this mobile number. Please retry.',
+                    );
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setLookupLoading(false);
+                }
+            }
+        }, 500);
+
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [data.customer_mobile, isOpen, lookupEnabled]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            reset();
+            return;
+        }
+
+        if (!editingSale) {
+            const state = initialState();
+            latestLookupRef.current = '';
+            resolvedLookupRef.current = '';
+            setData(state);
+            setDraftLine(emptyLine());
+            setCart([]);
+            setAvailableShifts(getAvailableShifts(state.sale_date));
+            setLookupEnabled(true);
+            return;
+        }
+
+        setLookupEnabled(false);
+        const controller = new AbortController();
+
+        void fetch(`/sales/${editingSale.id}/edit`, {
+            signal: controller.signal,
+            headers: { Accept: 'application/json' },
+        })
+            .then(async (response) => {
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        payload.message || 'Unable to load the selected sale.',
+                    );
+                }
+
+                const sale = payload.sale;
+                const payment = sale.payment || {};
+                const lines: CartLine[] = (sale.items || []).map(
+                    (item: {
+                        id: number;
+                        product_id: number;
+                        quantity: number;
+                        discount: number;
+                        remarks?: string | null;
+                    }) => ({
+                        key: `sale-item-${item.id}`,
+                        product_id: item.product_id.toString(),
+                        quantity: item.quantity.toString(),
+                        discount: item.discount
+                            ? item.discount.toString()
+                            : '',
+                        remarks: item.remarks || '',
+                    }),
+                );
+                const state: FormState = {
+                    sale_date: sale.sale_date || '',
+                    shift_id: sale.shift_id?.toString() || '',
+                    memo_no: sale.memo_no || '',
+                    customer_id: sale.customer_id?.toString() || '',
+                    customer_name: sale.customer_name || '',
+                    customer_mobile: sale.customer_mobile || '',
+                    customer_address: sale.customer_address || '',
+                    save_customer: false,
+                    vehicle_id: sale.vehicle_id?.toString() || '',
+                    vehicle_no: sale.vehicle_no || '',
+                    payment_type: paymentLabel(payment.payment_type),
+                    to_account_id:
+                        payment.to_account_id?.toString() || '',
+                    paid_amount:
+                        payment.paid_amount?.toString() ||
+                        sale.grand_total?.toString() ||
+                        '',
+                    bank_type: payment.bank_type || '',
+                    bank_name: payment.bank_name || '',
+                    branch_name: payment.branch_name || '',
+                    account_no: payment.account_no || '',
+                    cheque_no: payment.cheque_no || '',
+                    cheque_date: payment.cheque_date || '',
+                    mobile_bank: payment.mobile_bank || '',
+                    payment_mobile_number:
+                        payment.payment_mobile_number || '',
+                    remarks: sale.remarks || '',
+                };
+
+                setData(state);
+                setCart(lines);
+                setDraftLine(emptyLine());
+                setAvailableShifts(getAvailableShifts(state.sale_date));
+                latestLookupRef.current = normalizeMobile(
+                    state.customer_mobile,
+                );
+                resolvedLookupRef.current = latestLookupRef.current;
+            })
+            .catch((error) => {
+                if ((error as Error).name !== 'AbortError') {
+                    setErrors({
+                        sale: (error as Error).message,
+                    });
+                }
+            });
+
+        return () => controller.abort();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingSale, isOpen]);
-    /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
     return (
         <FormModal
@@ -648,35 +798,45 @@ export function SaleModal({
             onSubmit={handleSubmit}
             processing={processing}
             submitText={editingSale ? 'Update Sale' : 'Create Sale'}
-            className="max-w-[65vw]"
+            errors={errors}
+            className="w-[calc(100vw-2rem)] max-w-[65vw] max-md:max-w-[calc(100vw-2rem)]"
         >
             <div className="space-y-4">
-                <div className="grid grid-cols-5 gap-4">
+                <InputError message={errors.sale} />
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
+                        <Label>
                             Sale Date <span className="text-red-500">*</span>
                         </Label>
                         <Input
+                            name="sale_date"
                             type="date"
                             value={data.sale_date}
-                            onChange={(e) => {
-                                setData('sale_date', e.target.value);
-                                setAvailableShifts(
-                                    getAvailableShifts(e.target.value),
-                                );
-                                setData('shift_id', '');
+                            onChange={(event) => {
+                                const value = event.target.value;
+                                setData((current) => ({
+                                    ...current,
+                                    sale_date: value,
+                                    shift_id: '',
+                                }));
+                                setAvailableShifts(getAvailableShifts(value));
                             }}
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
+                        <InputError message={errors.sale_date} />
                     </div>
+
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
+                        <Label>
                             Shift <span className="text-red-500">*</span>
                         </Label>
                         <Select
                             value={data.shift_id}
                             onValueChange={(value) =>
-                                setData('shift_id', value)
+                                setData((current) => ({
+                                    ...current,
+                                    shift_id: value,
+                                }))
                             }
                             disabled={!data.sale_date}
                         >
@@ -694,192 +854,258 @@ export function SaleModal({
                                 ))}
                             </SelectContent>
                         </Select>
+                        <InputError message={errors.shift_id} />
                     </div>
+
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Memo No <span className="text-red-500">*</span>
-                        </Label>
+                        <Label>Memo No</Label>
                         <Input
-                            value={data.products[0]?.memo_no || ''}
-                            onChange={(e) =>
-                                updateProduct(0, 'memo_no', e.target.value)
+                            value={data.memo_no}
+                            onChange={(event) =>
+                                setData((current) => ({
+                                    ...current,
+                                    memo_no: event.target.value,
+                                }))
                             }
                             placeholder="Enter memo number"
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                        <InputError message={errors.memo_no} />
+                    </div>
+
+                    <div>
+                        <Label>
+                            Mobile Number{' '}
+                            <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                            <Input
+                                name="customer_mobile"
+                                value={data.customer_mobile}
+                                onChange={(event) =>
+                                    handleMobileChange(event.target.value)
+                                }
+                                placeholder="Enter mobile number"
+                                className="pr-9"
+                            />
+                            {lookupLoading && (
+                                <LoaderCircle className="absolute top-2.5 right-3 h-4 w-4 animate-spin text-gray-500" />
+                            )}
+                        </div>
+                        <InputError
+                            message={errors.customer_mobile || lookupError}
                         />
                     </div>
+
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
+                        <Label>
                             Customer <span className="text-red-500">*</span>
                         </Label>
-                        <Combobox
-                            options={Array.from(
-                                new Set([
-                                    ...vehicles
-                                        .filter((v) => v.customer)
-                                        .map((v) => v.customer!.name),
-                                    ...uniqueCustomers,
-                                ]),
-                            ).sort()}
-                            value={data.products[0]?.customer || ''}
-                            onValueChange={(value) => {
-                                setVehicleError('');
-                                setDataState((prevData) => {
-                                    const newProducts = [...prevData.products];
-                                    const line = {
-                                        ...newProducts[0],
-                                        customer: value,
-                                    };
-                                    line.vehicle_no = '';
-                                    clearProductSelection(line);
-
-                                    newProducts[0] = line;
-
-                                    return {
-                                        ...prevData,
-                                        products: newProducts,
-                                    };
-                                });
-                            }}
-                            placeholder="Type customer name"
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        <Input
+                            name="customer_name"
+                            value={data.customer_name}
+                            onChange={(event) =>
+                                handleCustomerNameChange(event.target.value)
+                            }
+                            readOnly={Boolean(data.customer_id)}
+                            placeholder="Enter customer name"
+                            className={
+                                data.customer_id
+                                    ? 'bg-gray-100 dark:bg-gray-600'
+                                    : ''
+                            }
                         />
-                    </div>
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Vehicle <span className="text-red-500">*</span>
-                        </Label>
-                        <Combobox
-                            options={vehicleNumbers}
-                            value={data.products[0]?.vehicle_no || ''}
-                            onValueChange={(value) => {
-                                handleVehicleChange(0, value);
-                            }}
-                            placeholder="Type vehicle number"
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                        <InputError message={vehicleError} />
+                        <InputError message={errors.customer_name} />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-5 gap-4">
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Mobile Number
-                        </Label>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                    <div className="md:col-span-2">
+                        <Label>Address</Label>
                         <Input
-                            value={data.products[0]?.mobile_number || ''}
-                            onChange={(e) =>
-                                updateProduct(
-                                    0,
-                                    'mobile_number',
-                                    e.target.value,
-                                )
+                            value={data.customer_address}
+                            onChange={(event) =>
+                                setData((current) => ({
+                                    ...current,
+                                    customer_address: event.target.value,
+                                }))
                             }
-                            placeholder="Enter mobile number"
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            readOnly={Boolean(data.customer_id)}
+                            placeholder="Enter customer address"
+                            className={
+                                data.customer_id
+                                    ? 'bg-gray-100 dark:bg-gray-600'
+                                    : ''
+                            }
+                        />
+                        <InputError message={errors.customer_address} />
+                    </div>
+
+                    <div>
+                        <Label>Previous Due</Label>
+                        <Input
+                            value={previousDue.toFixed(2)}
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
                         />
                     </div>
+
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Product
+                        <Label>Vehicle</Label>
+                        <Combobox
+                            options={vehicleNumbers}
+                            value={data.vehicle_no}
+                            onValueChange={handleVehicleChange}
+                            placeholder="Type vehicle number"
+                        />
+                        <InputError
+                            message={errors.vehicle_id || errors.vehicle_no}
+                        />
+                    </div>
+
+                    <div className="flex items-end pb-2">
+                        {!data.customer_id && (
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="save-customer"
+                                    checked={data.save_customer}
+                                    onCheckedChange={(checked) =>
+                                        setData((current) => ({
+                                            ...current,
+                                            save_customer: checked === true,
+                                        }))
+                                    }
+                                />
+                                <Label htmlFor="save-customer">
+                                    Save Customer
+                                </Label>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+                    <div>
+                        <Label>
+                            Product <span className="text-red-500">*</span>
                         </Label>
-                        <Select
-                            value={data.products[0]?.product_id || ''}
+                        <SearchableSelect
+                            options={products.map((product) => ({
+                                value: product.id.toString(),
+                                label: product.product_name,
+                                subtitle: product.product_code,
+                            }))}
+                            value={draftLine.product_id}
                             onValueChange={(value) =>
-                                updateProduct(0, 'product_id', value)
+                                updateDraftLine({ product_id: value })
                             }
-                            disabled={
-                                !selectedVehicleNumber ||
-                                filteredProducts.length === 0
+                            placeholder="Select product"
+                            searchPlaceholder="Search products..."
+                        />
+                        <InputError
+                            message={
+                                errors.draft_product_id ||
+                                errors['items.0.product_id']
+                            }
+                        />
+                    </div>
+
+                    <div>
+                        <Label>Sales Price</Label>
+                        <Input
+                            value={
+                                selectedDraftProduct
+                                    ? selectedDraftProduct.sales_price.toFixed(2)
+                                    : ''
+                            }
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
+                        />
+                    </div>
+
+                    <div>
+                        <Label>
+                            Quantity <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draftLine.quantity}
+                            onChange={(event) =>
+                                updateDraftLine({
+                                    quantity: event.target.value,
+                                })
+                            }
+                        />
+                        <InputError
+                            message={
+                                errors.draft_quantity ||
+                                errors['items.0.quantity']
+                            }
+                        />
+                    </div>
+
+                    <div>
+                        <Label>Discount</Label>
+                        <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draftLine.discount}
+                            onChange={(event) =>
+                                updateDraftLine({
+                                    discount: event.target.value,
+                                })
+                            }
+                        />
+                        <InputError
+                            message={
+                                errors.draft_discount ||
+                                errors['items.0.discount']
+                            }
+                        />
+                    </div>
+
+                    <div>
+                        <Label>Amount</Label>
+                        <Input
+                            value={
+                                draftLine.product_id && draftLine.quantity
+                                    ? draftTotal.toFixed(2)
+                                    : ''
+                            }
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
+                        />
+                    </div>
+
+                    <div className="flex flex-col justify-end">
+                        <Button type="button" onClick={addToCart}>
+                            <Plus className="h-4 w-4" />
+                            Add to Cart
+                        </Button>
+                    </div>
+                </div>
+
+                <InputError message={errors.items || nestedItemError} />
+
+                <div
+                    className="grid grid-cols-1 gap-4 md:grid-cols-3"
+                    data-payment-method={data.payment_type}
+                >
+                    <div>
+                        <Label>Payment Method</Label>
+                        <Select
+                            value={data.payment_type}
+                            onValueChange={(value) =>
+                                setData((current) => ({
+                                    ...current,
+                                    payment_type: value,
+                                    to_account_id: '',
+                                }))
                             }
                         >
                             <SelectTrigger>
-                                <SelectValue
-                                    placeholder={
-                                        selectedVehicleNumber &&
-                                        filteredProducts.length === 0
-                                            ? 'No assigned products'
-                                            : 'Select product'
-                                    }
-                                >
-                                    {selectedProduct?.product_name}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filteredProducts.map((product) => (
-                                    <SelectItem
-                                        key={product.id}
-                                        value={product.id.toString()}
-                                    >
-                                        {product.product_name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Sales Price
-                        </Label>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            value={
-                                selectedProduct?.sales_price || ''
-                            }
-                            readOnly
-                            className="bg-gray-100 dark:border-gray-600 dark:bg-gray-600 dark:text-white"
-                        />
-                    </div>
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Quantity
-                        </Label>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            value={data.products[0]?.quantity || ''}
-                            onChange={(e) =>
-                                updateProduct(0, 'quantity', e.target.value)
-                            }
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                    </div>
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Amount
-                        </Label>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            value={data.products[0]?.amount || ''}
-                            onChange={(e) =>
-                                updateProduct(0, 'amount', e.target.value)
-                            }
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                    </div>
-                </div>
-
-                <div
-                    className="grid gap-4"
-                    style={{
-                        gridTemplateColumns: `repeat(${data.products[0]?.payment_type === 'Bank' ? (data.products[0]?.bank_type === 'Cheque' ? 6 : 5) : data.products[0]?.payment_type === 'Mobile Bank' ? 5 : 3}, minmax(0, 1fr))`,
-                    }}
-                >
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Payment Method
-                        </Label>
-                        <Select
-                            value={data.products[0]?.payment_type || 'Cash'}
-                            onValueChange={(value) => {
-                                updateProduct(0, 'payment_type', value);
-                                updateProduct(0, 'to_account_id', '');
-                            }}
-                        >
-                            <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 <SelectValue placeholder="Select payment method" />
                             </SelectTrigger>
                             <SelectContent>
@@ -890,44 +1116,77 @@ export function SaleModal({
                                 </SelectItem>
                             </SelectContent>
                         </Select>
+                        <InputError message={errors.payment_type} />
                     </div>
+
                     <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            To Account
-                        </Label>
+                        <Label>To Account</Label>
                         <Select
-                            value={data.products[0]?.to_account_id || ''}
-                            onValueChange={(value) =>
-                                updateProduct(0, 'to_account_id', value)
-                            }
+                            value={data.to_account_id}
+                            onValueChange={(value) => {
+                                const account = accounts.find(
+                                    (item) => item.id.toString() === value,
+                                );
+                                setData((current) => ({
+                                    ...current,
+                                    to_account_id: value,
+                                    account_no:
+                                        account?.ac_number ||
+                                        current.account_no,
+                                }));
+                            }}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select payment account" />
                             </SelectTrigger>
                             <SelectContent>
-                                {getFilteredAccounts(
-                                    data.products[0]?.payment_type || 'Cash',
-                                ).map((account) => (
-                                    <SelectItem
-                                        key={account.id}
-                                        value={account.id.toString()}
-                                    >
-                                        {account.name}
-                                    </SelectItem>
-                                ))}
+                                {getFilteredAccounts(data.payment_type).map(
+                                    (account) => (
+                                        <SelectItem
+                                            key={account.id}
+                                            value={account.id.toString()}
+                                        >
+                                            {account.name}
+                                        </SelectItem>
+                                    ),
+                                )}
                             </SelectContent>
                         </Select>
+                        <InputError message={errors.to_account_id} />
                     </div>
-                    {data.products[0]?.payment_type === 'Bank' && (
+
+                    <div>
+                        <Label>
+                            Paid Amount{' '}
+                            <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={data.paid_amount}
+                            onChange={(event) =>
+                                setData((current) => ({
+                                    ...current,
+                                    paid_amount: event.target.value,
+                                }))
+                            }
+                            placeholder={cartTotal.toFixed(2)}
+                        />
+                        <InputError message={errors.paid_amount} />
+                    </div>
+
+                    {data.payment_type === 'Bank' && (
                         <>
                             <div>
-                                <Label className="text-sm font-medium dark:text-gray-200">
-                                    Bank Type
-                                </Label>
+                                <Label>Bank Type</Label>
                                 <Select
-                                    value={data.products[0]?.bank_type || ''}
+                                    value={data.bank_type}
                                     onValueChange={(value) =>
-                                        updateProduct(0, 'bank_type', value)
+                                        setData((current) => ({
+                                            ...current,
+                                            bank_type: value,
+                                        }))
                                     }
                                 >
                                     <SelectTrigger>
@@ -949,55 +1208,74 @@ export function SaleModal({
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <InputError message={errors.bank_type} />
                             </div>
+
                             <div>
-                                <Label className="text-sm font-medium dark:text-gray-200">
-                                    Bank Name
-                                </Label>
+                                <Label>Bank Name</Label>
                                 <Input
-                                    value={data.products[0]?.bank_name || ''}
-                                    onChange={(e) =>
-                                        updateProduct(
-                                            0,
-                                            'bank_name',
-                                            e.target.value,
-                                        )
+                                    value={data.bank_name}
+                                    onChange={(event) =>
+                                        setData((current) => ({
+                                            ...current,
+                                            bank_name: event.target.value,
+                                        }))
                                     }
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 />
+                                <InputError message={errors.bank_name} />
                             </div>
-                            {data.products[0]?.bank_type === 'Cheque' && (
-                                <div>
-                                    <Label className="text-sm font-medium dark:text-gray-200">
-                                        Cheque No
-                                    </Label>
-                                    <Input
-                                        value={
-                                            data.products[0]?.cheque_no || ''
-                                        }
-                                        onChange={(e) =>
-                                            updateProduct(
-                                                0,
-                                                'cheque_no',
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
+
+                            {data.bank_type === 'Cheque' && (
+                                <>
+                                    <div>
+                                        <Label>Cheque No</Label>
+                                        <Input
+                                            value={data.cheque_no}
+                                            onChange={(event) =>
+                                                setData((current) => ({
+                                                    ...current,
+                                                    cheque_no:
+                                                        event.target.value,
+                                                }))
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.cheque_no}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Cheque Date</Label>
+                                        <Input
+                                            type="date"
+                                            value={data.cheque_date}
+                                            onChange={(event) =>
+                                                setData((current) => ({
+                                                    ...current,
+                                                    cheque_date:
+                                                        event.target.value,
+                                                }))
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.cheque_date}
+                                        />
+                                    </div>
+                                </>
                             )}
                         </>
                     )}
-                    {data.products[0]?.payment_type === 'Mobile Bank' && (
+
+                    {data.payment_type === 'Mobile Bank' && (
                         <>
                             <div>
-                                <Label className="text-sm font-medium dark:text-gray-200">
-                                    Mobile Bank
-                                </Label>
+                                <Label>Mobile Bank</Label>
                                 <Select
-                                    value={data.products[0]?.mobile_bank || ''}
+                                    value={data.mobile_bank}
                                     onValueChange={(value) =>
-                                        updateProduct(0, 'mobile_bank', value)
+                                        setData((current) => ({
+                                            ...current,
+                                            mobile_bank: value,
+                                        }))
                                     }
                                 >
                                     <SelectTrigger>
@@ -1015,205 +1293,164 @@ export function SaleModal({
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <InputError message={errors.mobile_bank} />
                             </div>
+
                             <div>
-                                <Label className="text-sm font-medium dark:text-gray-200">
-                                    Mobile Number
-                                </Label>
+                                <Label>Payment Mobile Number</Label>
                                 <Input
-                                    value={
-                                        data.products[0]?.mobile_number || ''
+                                    value={data.payment_mobile_number}
+                                    onChange={(event) =>
+                                        setData((current) => ({
+                                            ...current,
+                                            payment_mobile_number:
+                                                event.target.value,
+                                        }))
                                     }
-                                    onChange={(e) =>
-                                        updateProduct(
-                                            0,
-                                            'mobile_number',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                                <InputError
+                                    message={errors.payment_mobile_number}
                                 />
                             </div>
                         </>
                     )}
-                    <div>
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Paid Amount <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            value={data.products[0]?.paid_amount || ''}
-                            onChange={(e) =>
-                                updateProduct(0, 'paid_amount', e.target.value)
-                            }
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                    </div>
                 </div>
 
-                <div className="grid grid-cols-12 gap-4">
-                    <div
-                        className={editingSale ? 'col-span-12' : 'col-span-10'}
-                    >
-                        <Label className="text-sm font-medium dark:text-gray-200">
-                            Remarks
-                        </Label>
-                        <Input
-                            value={data.products[0]?.remarks || ''}
-                            onChange={(e) =>
-                                updateProduct(0, 'remarks', e.target.value)
-                            }
-                            placeholder="Enter any remarks"
-                            className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        />
-                    </div>
-                    {!editingSale && (
-                        <div className="col-span-2 flex flex-col justify-end">
-                            <Button
-                                type="button"
-                                onClick={addProduct}
-                                disabled={
-                                    Boolean(vehicleError) ||
-                                    !data.products[0]?.product_id
-                                }
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                <Plus className="mr-1 h-4 w-4" />
-                                Add to Cart
-                            </Button>
-                        </div>
-                    )}
+                <div>
+                    <Label>Remarks</Label>
+                    <Input
+                        value={data.remarks}
+                        onChange={(event) =>
+                            setData((current) => ({
+                                ...current,
+                                remarks: event.target.value,
+                            }))
+                        }
+                        placeholder="Enter any remarks"
+                    />
+                    <InputError message={errors.remarks} />
                 </div>
 
-                {!editingSale && (
-                    <div className="mt-6">
-                        <table className="w-full border border-gray-300 dark:border-gray-600">
-                            <thead className="bg-gray-100 dark:bg-gray-700">
+                <div className="overflow-x-auto">
+                    <table className="w-full border border-gray-300 dark:border-gray-600">
+                        <thead className="bg-gray-100 dark:bg-gray-700">
+                            <tr>
+                                <th className="p-2 text-left text-sm font-medium">
+                                    SL
+                                </th>
+                                <th className="p-2 text-left text-sm font-medium">
+                                    Product
+                                </th>
+                                <th className="p-2 text-right text-sm font-medium">
+                                    Price
+                                </th>
+                                <th className="p-2 text-right text-sm font-medium">
+                                    Quantity
+                                </th>
+                                <th className="p-2 text-right text-sm font-medium">
+                                    Discount
+                                </th>
+                                <th className="p-2 text-right text-sm font-medium">
+                                    Total
+                                </th>
+                                <th className="p-2 text-left text-sm font-medium">
+                                    Action
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cart.length > 0 ? (
+                                cart.map((line, index) => {
+                                    const product = productsById.get(
+                                        line.product_id,
+                                    );
+
+                                    return (
+                                        <tr
+                                            key={line.key}
+                                            className="border-t dark:border-gray-600"
+                                        >
+                                            <td className="p-2 text-sm">
+                                                {index + 1}
+                                            </td>
+                                            <td className="p-2 text-sm">
+                                                {product?.product_name || 'N/A'}
+                                            </td>
+                                            <td className="p-2 text-right text-sm">
+                                                {(
+                                                    product?.sales_price || 0
+                                                ).toFixed(2)}
+                                            </td>
+                                            <td className="p-2 text-right text-sm">
+                                                {line.quantity}
+                                            </td>
+                                            <td className="p-2 text-right text-sm">
+                                                {(
+                                                    parseFloat(line.discount) ||
+                                                    0
+                                                ).toFixed(2)}
+                                            </td>
+                                            <td className="p-2 text-right text-sm">
+                                                {lineTotal(line).toFixed(2)}
+                                            </td>
+                                            <td className="p-2">
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            editCartLine(line)
+                                                        }
+                                                        aria-label={`Edit ${product?.product_name || 'product'}`}
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            removeCartLine(
+                                                                line.key,
+                                                            )
+                                                        }
+                                                        aria-label={`Remove ${product?.product_name || 'product'}`}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            ) : (
                                 <tr>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        SL
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Customer
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Vehicle
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Product Name
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Quantity
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Total
-                                    </th>
-                                    <th className="p-2 text-left text-sm font-medium dark:text-gray-200">
-                                        Action
-                                    </th>
+                                    <td
+                                        colSpan={7}
+                                        className="p-6 text-center text-sm text-gray-500"
+                                    >
+                                        No products added
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {data.products
-                                    .slice(1)
-                                    .filter((p) => p.product_id)
-                                    .map((product, index) => {
-                                        const selectedProduct = products.find(
-                                            (p) =>
-                                                p.id.toString() ===
-                                                product.product_id,
-                                        );
-                                        const actualIndex = index + 1;
-                                        const hasError =
-                                            !product.product_id ||
-                                            !product.customer ||
-                                            !product.vehicle_no ||
-                                            !product.quantity ||
-                                            !product.amount ||
-                                            !product.to_account_id ||
-                                            !product.paid_amount;
-                                        return (
-                                            <tr
-                                                key={actualIndex}
-                                                className={`border-t dark:border-gray-600 ${hasError ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : ''}`}
-                                            >
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {index + 1}
-                                                </td>
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {product.customer || '-'}
-                                                </td>
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {product.vehicle_no || '-'}
-                                                </td>
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {
-                                                        selectedProduct?.product_name
-                                                    }
-                                                </td>
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {product.quantity}
-                                                </td>
-                                                <td className="p-2 text-sm dark:text-white">
-                                                    {product.paid_amount || '0'}
-                                                </td>
-                                                <td className="p-2">
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => {
-                                                                const editProduct =
-                                                                    data
-                                                                        .products[
-                                                                        actualIndex
-                                                                    ];
-                                                                const newProducts =
-                                                                    data.products.filter(
-                                                                        (
-                                                                            _,
-                                                                            i,
-                                                                        ) =>
-                                                                            i !==
-                                                                            actualIndex,
-                                                                    );
-                                                                newProducts[0] =
-                                                                    editProduct;
-                                                                setDataState(
-                                                                    (prev) => ({
-                                                                        ...prev,
-                                                                        products:
-                                                                            newProducts,
-                                                                    }),
-                                                                );
-                                                            }}
-                                                            className="text-indigo-600 hover:text-indigo-800"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                removeProduct(
-                                                                    actualIndex,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                            )}
+                        </tbody>
+                        <tfoot>
+                            <tr className="border-t bg-gray-50 font-medium dark:border-gray-600 dark:bg-gray-700">
+                                <td
+                                    colSpan={5}
+                                    className="p-2 text-right text-sm"
+                                >
+                                    Grand Total
+                                </td>
+                                <td className="p-2 text-right text-sm">
+                                    {cartTotal.toFixed(2)}
+                                </td>
+                                <td />
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </FormModal>
     );

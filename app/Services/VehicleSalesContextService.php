@@ -8,6 +8,30 @@ use Illuminate\Validation\ValidationException;
 
 class VehicleSalesContextService
 {
+    public function forPosSelection(): Collection
+    {
+        return Vehicle::query()
+            ->where('vehicles.status', true)
+            ->with('customer:id,name')
+            ->orderBy('vehicles.vehicle_number')
+            ->get([
+                'vehicles.id',
+                'vehicles.vehicle_number',
+                'vehicles.customer_id',
+            ])
+            ->map(fn (Vehicle $vehicle) => [
+                'id' => $vehicle->id,
+                'vehicle_number' => $vehicle->vehicle_number,
+                'customer_id' => $vehicle->customer_id,
+                'customer' => $vehicle->customer
+                    ? [
+                        'id' => $vehicle->customer->id,
+                        'name' => $vehicle->customer->name,
+                    ]
+                    : null,
+            ]);
+    }
+
     public function forSalesSelection(): Collection
     {
         return Vehicle::query()

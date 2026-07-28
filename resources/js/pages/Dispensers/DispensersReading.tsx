@@ -126,8 +126,6 @@ interface DispenserReadingProps {
     accounts?: Account[];
     groupedAccounts?: Record<string, Account[]>;
     employees?: Employee[];
-    uniqueCustomers?: string[];
-    uniqueVehicles?: string[];
     voucherCategories?: VoucherCategory[];
     paymentSubTypes?: PaymentSubType[];
 }
@@ -143,8 +141,6 @@ export default function DispenserReading({
     accounts = [],
     groupedAccounts = {},
     employees = [],
-    uniqueCustomers = [],
-    uniqueVehicles = [],
     voucherCategories = [],
     paymentSubTypes = [],
 }: DispenserReadingProps) {
@@ -1240,7 +1236,7 @@ export default function DispenserReading({
                                         </thead>
                                         <tbody>
 
-                                            {Object.entries(productWiseData).filter(([productId, productData]) => {
+                                            {Object.entries(productWiseData).filter(([, productData]) => {
                                                 return productData.total_sale > 0 || productData.net_reading > 0;
                                             }).map(([productId, productData]) => {
                                                 const productInfo = dispenserReading.find(
@@ -1346,9 +1342,9 @@ export default function DispenserReading({
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
                                                     {[
-                                                        ...Object.entries(productWiseData).filter(([productId, productData]) => {
+                                                        ...Object.entries(productWiseData).filter(([, productData]) => {
                                                             return productData.total_sale > 0 || productData.net_reading > 0;
-                                                        }).map(([productId, productData]) => productData.total_sale || 0),
+                                                        }).map(([, productData]) => productData.total_sale || 0),
                                                         ...otherProductsSales.filter(sale => sale.sell_quantity > 0).map(sale => sale.total_sales || 0)
                                                     ].reduce((sum, sale) => sum + sale, 0).toFixed(2)}
                                                 </td>
@@ -1398,11 +1394,8 @@ export default function DispenserReading({
                     groupedAccounts={groupedAccounts}
                     products={products}
                     vehicles={vehicles}
-                    salesHistory={[]}
                     shifts={shifts}
                     closedShifts={closedShifts}
-                    uniqueCustomers={uniqueCustomers}
-                    uniqueVehicles={uniqueVehicles}
                     initialSaleDate={data.transaction_date}
                     initialShiftId={data.shift_id}
                 />
