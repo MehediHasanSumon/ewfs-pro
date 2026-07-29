@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PaymentVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
 use App\Models\PaymentSubType;
@@ -20,8 +21,7 @@ class PaymentVoucherController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly VoucherPostingService $vouchers
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -62,19 +62,17 @@ class PaymentVoucherController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(PaymentVoucherRequest $request)
     {
-        $validated = $request->validate($this->batchRules());
-        $this->vouchers->createMany('payment', $validated);
+        $this->vouchers->createMany('payment', $request->validated());
 
         return back()->with('success', 'Payment voucher created successfully.');
     }
 
-    public function update(Request $request, Voucher $voucher)
+    public function update(PaymentVoucherRequest $request, Voucher $voucher)
     {
         abort_unless($voucher->voucher_type === 'payment', 404);
-        $validated = $request->validate($this->singleRules());
-        $this->vouchers->replace($voucher, $validated);
+        $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Payment voucher updated successfully.');
     }
@@ -148,49 +146,6 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             : 'created_at';
 
         return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
-    }
-
-    private function batchRules(): array
-    {
-        $rules = [
-            'date' => ['required', 'date'],
-            'shift_id' => ['nullable', 'exists:shifts,id'],
-            'vouchers' => ['required', 'array', 'min:1'],
-        ];
-
-        foreach ($this->lineRules() as $field => $rule) {
-            $rules['vouchers.*.'.$field] = $rule;
-        }
-
-        return $rules;
-    }
-
-    private function singleRules(): array
-    {
-        return ['date' => ['required', 'date'], 'shift_id' => ['nullable', 'exists:shifts,id']]
-            + $this->lineRules();
-    }
-
-    private function lineRules(): array
-    {
-        return [
-            'voucher_category_id' => ['required', 'exists:voucher_categories,id'],
-            'payment_sub_type_id' => ['required', 'exists:payment_sub_types,id'],
-            'from_account_id' => ['required', 'different:to_account_id', 'exists:accounts,id'],
-            'to_account_id' => ['required', 'exists:accounts,id'],
-            'amount' => ['required', 'numeric', 'gt:0'],
-            'payment_method' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'description' => ['nullable', 'string'],
-            'remarks' => ['nullable', 'string'],
-            'bank_name' => ['nullable', 'string'],
-            'branch_name' => ['nullable', 'string'],
-            'account_no' => ['nullable', 'string'],
-            'bank_type' => ['nullable', 'string'],
-            'cheque_no' => ['nullable', 'string'],
-            'cheque_date' => ['nullable', 'date'],
-            'mobile_bank' => ['nullable', 'string'],
-            'mobile_number' => ['nullable', 'string'],
-        ];
     }
 
     private function closedShifts()

@@ -3,12 +3,15 @@
 namespace App\Services;
 
 use App\Models\Account;
-use App\Models\PartyOpeningBalance;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class FinancialReportService
 {
+    public function __construct(
+        private readonly CustomerSecurityDepositService $securityDeposits
+    ) {}
+
     public function balanceSheet(string $asOfDate, string $startDate, string $endDate): array
     {
         $purchaseData = $this->purchaseData($startDate, $endDate);
@@ -435,9 +438,10 @@ class FinancialReportService
                     ->whereIn('je.status', ['posted', 'reversed'])
                     ->whereDate('je.business_date', '<=', $asOfDate);
             })
-            ->groupBy('c.id')
+            ->groupBy('c.id', 'a.id')
             ->selectRaw(
                 'c.id,
+                 a.id AS account_id,
                  COALESCE(
                     SUM(
                         CASE
@@ -450,20 +454,18 @@ class FinancialReportService
                     0
                  ) AS balance'
             )
-            ->pluck('balance', 'id');
-
-        $deposits = PartyOpeningBalance::query()
-            ->where('balance_type', 'customer_deposit')
-            ->where('status', 'posted')
-            ->whereDate('effective_date', '<=', $asOfDate)
-            ->pluck('amount', 'customer_id');
+            ->get();
+        $depositBalances = $this->securityDeposits->balancesByAccountIds(
+            $balances->pluck('account_id'),
+            $asOfDate
+        );
 
         $due = 0.0;
         $advance = 0.0;
-        $security = (float) $deposits->sum();
+        $security = (float) $depositBalances->sum();
 
         foreach ($balances as $balance) {
-            $operationalBalance = (float) $balance;
+            $operationalBalance = (float) $balance->balance;
             $due += max(0, $operationalBalance);
             $advance += max(0, -$operationalBalance);
         }

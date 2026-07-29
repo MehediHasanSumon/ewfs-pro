@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\PaymentSubType;
 use App\Models\Supplier;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,9 +15,15 @@ use Illuminate\Support\Facades\DB;
 
 class PartyLedgerService
 {
+    public function __construct(
+        private readonly CustomerSecurityDepositService $securityDeposits
+    ) {}
+
     public function customerMetrics(Collection $customers): Collection
     {
         $accountMap = $customers->pluck('id', 'account_id');
+        $depositBalances = $this->securityDeposits
+            ->balancesByAccountIds($accountMap->keys());
         $activity = DB::table('journal_lines as jl')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
             ->whereIn('jl.account_id', $accountMap->keys())
@@ -48,22 +55,6 @@ class PartyLedgerService
                  ) AS total_paid,
                  SUM(
                     CASE
-                        WHEN je.event_type LIKE 'customer_security_deposit%'
-                            OR (
-                                je.event_type LIKE 'customer_opening_balance%'
-                                AND (
-                                    LOWER(COALESCE(je.description, ''))
-                                        LIKE '%customer_deposit%'
-                                    OR LOWER(COALESCE(je.description, ''))
-                                        LIKE '%customer deposit%'
-                                )
-                            )
-                            THEN jl.credit_amount - jl.debit_amount
-                        ELSE 0
-                    END
-                 ) AS security_deposit,
-                 SUM(
-                    CASE
                         WHEN je.event_type LIKE 'customer_opening_balance%'
                             AND LOWER(COALESCE(je.description, ''))
                                 LIKE '%receivable%'
@@ -83,7 +74,10 @@ class PartyLedgerService
             ->get()
             ->keyBy('account_id');
 
-        return $customers->mapWithKeys(function (Customer $customer) use ($activity) {
+        return $customers->mapWithKeys(function (Customer $customer) use (
+            $activity,
+            $depositBalances
+        ) {
             $accountActivity = $activity->get($customer->account_id);
 
             return [$customer->id => [
@@ -96,7 +90,8 @@ class PartyLedgerService
                     -(float) ($accountActivity->current_due ?? 0)
                 ),
                 'previous_due' => (float) ($accountActivity->previous_due ?? 0),
-                'security_deposit' => (float) ($accountActivity->security_deposit ?? 0),
+                'security_deposit' => (float) $depositBalances
+                    ->get($customer->account_id, 0),
             ]];
         });
     }
@@ -390,6 +385,13 @@ class PartyLedgerService
                         $startDate,
                         $endDate
                     )
+                )
+                ->unionAll(
+                    $this->customerRefundQuery(
+                        $customerId,
+                        $startDate,
+                        $endDate
+                    )
                 ),
             'customer_payments'
         );
@@ -465,6 +467,53 @@ class PartyLedgerService
                  'Security Deposit' AS sub_type,
                  'Security Deposit' AS type,
                  COALESCE(je.description, 'Opening Security Deposit') AS remarks,
+                 'Completed' AS status"
+            );
+    }
+
+    private function customerRefundQuery(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): QueryBuilder {
+        return DB::table('vouchers as v')
+            ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
+            ->join('payment_sub_types as subtype', function ($join) {
+                $join->on('subtype.id', '=', 'v.payment_sub_type_id')
+                    ->where(
+                        'subtype.code',
+                        PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE
+                    );
+            })
+            ->join('voucher_lines as customer_line', function ($join) use ($customerId) {
+                $join->on('customer_line.voucher_id', '=', 'v.id')
+                    ->where('customer_line.customer_id', $customerId)
+                    ->where('customer_line.entry_side', 'debit');
+            })
+            ->leftJoin(
+                'voucher_payment_details as payment',
+                'payment.voucher_line_id',
+                '=',
+                'customer_line.id'
+            )
+            ->where('v.voucher_type', 'payment')
+            ->where('v.status', 'posted')
+            ->where('je.status', 'posted')
+            ->when($startDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '>=', $startDate))
+            ->when($endDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '<=', $endDate))
+            ->selectRaw(
+                "'security_deposit_refund' AS source_type,
+                 v.id AS source_id,
+                 v.voucher_no,
+                 v.voucher_date AS date,
+                 customer_line.amount,
+                 COALESCE(payment.payment_method, 'Cash') AS payment_type,
+                 'Security Deposit Refund' AS sub_type,
+                 'Security Deposit Refund' AS type,
+                 COALESCE(v.remarks, v.description, customer_line.description)
+                    AS remarks,
                  'Completed' AS status"
             );
     }

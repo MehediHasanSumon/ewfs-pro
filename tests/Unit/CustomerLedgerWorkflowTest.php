@@ -7,6 +7,7 @@ use App\Models\JournalEntry;
 use App\Services\AccountingService;
 use App\Services\CustomerReportService;
 use App\Services\DocumentNumberService;
+use App\Services\FinancialReportService;
 use App\Services\OpeningBalanceService;
 use App\Services\PartyLedgerService;
 use App\Services\SystemAccountService;
@@ -111,7 +112,11 @@ beforeEach(function () {
 
     Schema::create('payment_sub_types', function (Blueprint $table) {
         $table->id();
+        $table->string('code')->nullable();
         $table->string('name');
+        $table->foreignId('voucher_category_id')->nullable();
+        $table->string('type')->default('payment');
+        $table->boolean('status')->default(true);
     });
 
     Schema::create('voucher_categories', function (Blueprint $table) {
@@ -327,6 +332,9 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
     $ledgerSummary = app(CustomerReportService::class)
         ->ledgerSummary('2026-07-27', '2026-07-30', $customer->id)
         ->first();
+    $outstanding = app(FinancialReportService::class)
+        ->outstandingCustomers(5, '2026-07-30')
+        ->firstWhere('id', $customer->id);
 
     expect($metrics['total_sales'])->toBe(100.0)
         ->and($metrics['total_paid'])->toBe(40.0)
@@ -350,6 +358,7 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
         ->and($ledgerSummary->debit)->toBe(40.0)
         ->and($ledgerSummary->credit)->toBe(100.0)
         ->and($ledgerSummary->due)->toBe(60.0)
+        ->and($outstanding->balance)->toBe(60.0)
         ->and(collect($ledger[0]['transactions'])
             ->firstWhere('transaction_id', 'INV-00001')->vehicle_no)
         ->toBe('ABC-123')
@@ -413,12 +422,24 @@ it('excludes security deposits from paid and advance calculations', function () 
     $metric = app(PartyLedgerService::class)
         ->customerMetrics(collect([$customer]))
         ->get($customer->id);
+    $positionMethod = new ReflectionMethod(
+        FinancialReportService::class,
+        'customerPosition'
+    );
+    $positionMethod->setAccessible(true);
+    $position = $positionMethod->invoke(
+        app(FinancialReportService::class),
+        '2026-07-29'
+    );
 
     expect($metric['security_deposit'])->toBe(40000.0)
         ->and($metric['total_sales'])->toBe(2220.0)
         ->and($metric['total_paid'])->toBe(4544.0)
         ->and($metric['current_due'])->toBe(-2324.0)
-        ->and($metric['current_advance'])->toBe(2324.0);
+        ->and($metric['current_advance'])->toBe(2324.0)
+        ->and($position['due'])->toBe(0.0)
+        ->and($position['advance'])->toBe(2324.0)
+        ->and($position['security'])->toBe(40000.0);
 });
 
 it('posts security deposits with a deposit reference and ledger event', function () {

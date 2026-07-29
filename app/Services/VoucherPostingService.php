@@ -3,25 +3,35 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\PaymentSubType;
 use App\Models\Voucher;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class VoucherPostingService
 {
     public function __construct(
         private readonly AccountingService $accounting,
         private readonly SystemAccountService $systemAccounts,
-        private readonly DocumentNumberService $numbers
-    ) {
-    }
+        private readonly DocumentNumberService $numbers,
+        private readonly CustomerSecurityDepositService $securityDeposits
+    ) {}
 
     public function createMany(string $type, array $data): array
     {
         return DB::transaction(function () use ($type, $data) {
-            return array_map(
-                fn (array $voucher) => $this->createOne($type, $data, $voucher),
-                $data['vouchers']
-            );
+            $created = [];
+
+            foreach (array_values($data['vouchers']) as $index => $voucher) {
+                $created[] = $this->createOne(
+                    $type,
+                    $data,
+                    $voucher,
+                    'vouchers.'.$index.'.'
+                );
+            }
+
+            return $created;
         });
     }
 
@@ -67,22 +77,75 @@ class VoucherPostingService
         }
     }
 
-    private function createOne(string $type, array $headerData, array $lineData): Voucher
-    {
-        return $this->createDocument($type, $headerData, $lineData);
+    private function createOne(
+        string $type,
+        array $headerData,
+        array $lineData,
+        string $errorPrefix
+    ): Voucher {
+        return $this->createDocument(
+            $type,
+            $headerData,
+            $lineData,
+            $errorPrefix
+        );
     }
 
-    private function createDocument(string $type, array $headerData, array $lineData): Voucher
-    {
+    private function createDocument(
+        string $type,
+        array $headerData,
+        array $lineData,
+        string $errorPrefix = ''
+    ): Voucher {
         $businessDate = $headerData['date'] ?? $headerData['voucher_date'];
-        $fromAccount = Account::query()
+        $accounts = Account::query()
             ->with(['customer', 'supplier', 'employee'])
-            ->findOrFail($lineData['from_account_id']);
-        $toAccount = Account::query()
-            ->with(['customer', 'supplier', 'employee'])
-            ->findOrFail($lineData['to_account_id']);
+            ->whereIn('id', [
+                $lineData['from_account_id'],
+                $lineData['to_account_id'],
+            ])
+            ->get()
+            ->keyBy('id');
+        $fromAccount = $accounts->get((int) $lineData['from_account_id']);
+        $toAccount = $accounts->get((int) $lineData['to_account_id']);
+
+        if (! $fromAccount || ! $toAccount) {
+            throw ValidationException::withMessages([
+                $errorPrefix.'to_account_id' => 'The selected account is unavailable.',
+            ]);
+        }
+
+        $subType = PaymentSubType::query()
+            ->with('voucherCategory:id,name')
+            ->findOrFail($lineData['payment_sub_type_id']);
+
+        if (
+            (int) $subType->voucher_category_id
+                !== (int) $lineData['voucher_category_id']
+            || ! in_array($subType->type, [$type, 'both'], true)
+        ) {
+            throw ValidationException::withMessages([
+                $errorPrefix.'payment_sub_type_id' => 'The selected payment subtype does not belong to this category.',
+            ]);
+        }
+
         $amount = (float) $lineData['amount'];
         $paymentMethod = $this->normalizePaymentMethod($lineData);
+        $isSecurityDepositRefund = $type === 'payment'
+            && $this->securityDeposits->isRefundSubType($subType);
+
+        if ($isSecurityDepositRefund) {
+            $this->securityDeposits->assertRefundAllowed(
+                $toAccount,
+                $amount,
+                $errorPrefix.'amount'
+            );
+        }
+
+        $description = $lineData['description']
+            ?? ($isSecurityDepositRefund
+                ? 'Security Deposit Refund'
+                : null);
 
         $voucher = Voucher::query()->create([
             'voucher_no' => $this->numbers->next('voucher', 'V', $businessDate, 4),
@@ -93,7 +156,7 @@ class VoucherPostingService
             'voucher_category_id' => $lineData['voucher_category_id'] ?? null,
             'payment_sub_type_id' => $lineData['payment_sub_type_id'] ?? null,
             'status' => 'draft',
-            'description' => $lineData['description'] ?? null,
+            'description' => $description,
             'remarks' => $lineData['remarks'] ?? null,
             'created_by' => auth()->id(),
         ]);
@@ -109,7 +172,7 @@ class VoucherPostingService
             'customer_id' => $debitAccount->customer?->id,
             'supplier_id' => $debitAccount->supplier?->id,
             'employee_id' => $debitAccount->employee?->id,
-            'description' => $lineData['description'] ?? null,
+            'description' => $description,
         ]);
 
         $voucher->lines()->create([
@@ -120,7 +183,7 @@ class VoucherPostingService
             'customer_id' => $creditAccount->customer?->id,
             'supplier_id' => $creditAccount->supplier?->id,
             'employee_id' => $creditAccount->employee?->id,
-            'description' => $lineData['description'] ?? null,
+            'description' => $description,
         ]);
 
         $debitLine->paymentDetail()->create([
@@ -139,11 +202,13 @@ class VoucherPostingService
         $journal = $this->accounting->post([
             'shift_id' => $voucher->shift_id,
             'business_date' => $voucher->voucher_date,
-            'event_type' => $type.'_voucher',
+            'event_type' => $isSecurityDepositRefund
+                ? CustomerSecurityDepositService::REFUND_EVENT_TYPE
+                : $type.'_voucher',
             'source_type' => Voucher::class,
             'source_id' => $voucher->id,
             'reference_no' => $voucher->voucher_no,
-            'description' => $voucher->description,
+            'description' => $description,
             'idempotency_key' => 'voucher:'.$voucher->id,
         ], [
             [
@@ -154,7 +219,7 @@ class VoucherPostingService
                 'supplier_id' => $debitAccount->supplier?->id,
                 'employee_id' => $debitAccount->employee?->id,
                 'payment_method' => $paymentMethod,
-                'description' => $voucher->description,
+                'description' => $description,
             ],
             [
                 'account_id' => $creditAccount->id,
@@ -164,7 +229,7 @@ class VoucherPostingService
                 'supplier_id' => $creditAccount->supplier?->id,
                 'employee_id' => $creditAccount->employee?->id,
                 'payment_method' => $paymentMethod,
-                'description' => $voucher->description,
+                'description' => $description,
             ],
         ]);
 
