@@ -42,16 +42,6 @@ class PartyLedgerService
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'receipt_voucher%'
-                            OR je.event_type LIKE 'customer_security_deposit%'
-                            OR (
-                                je.event_type LIKE 'customer_opening_balance%'
-                                AND (
-                                    LOWER(COALESCE(je.description, ''))
-                                        LIKE '%customer_deposit%'
-                                    OR LOWER(COALESCE(je.description, ''))
-                                        LIKE '%customer deposit%'
-                                )
-                            )
                             THEN jl.credit_amount - jl.debit_amount
                         ELSE 0
                     END
@@ -81,7 +71,14 @@ class PartyLedgerService
                         ELSE 0
                     END
                  ) AS previous_due,
-                 SUM(jl.debit_amount - jl.credit_amount) AS current_due"
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'credit_sale%'
+                            OR je.event_type LIKE 'receipt_voucher%'
+                            THEN jl.debit_amount - jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS current_due"
             )
             ->get()
             ->keyBy('account_id');
@@ -106,7 +103,7 @@ class PartyLedgerService
 
     public function customerPaymentCount(int $customerId): int
     {
-        return $this->customerPaymentQuery($customerId)->count();
+        return $this->customerReceiptQuery($customerId)->count();
     }
 
     public function customerPayments(
@@ -247,7 +244,13 @@ class PartyLedgerService
             $journalCredit = (float) $row->credit_amount;
             $debit = $perspective === 'supplier' ? $journalCredit : $journalDebit;
             $credit = $perspective === 'supplier' ? $journalDebit : $journalCredit;
-            $balance += $debit - $credit;
+
+            if (
+                $perspective !== 'customer'
+                || $this->isCustomerOperationalEvent($row->event_type)
+            ) {
+                $balance += $debit - $credit;
+            }
 
             return [
                 'id' => $row->id,
@@ -379,7 +382,25 @@ class PartyLedgerService
         ?string $startDate = null,
         ?string $endDate = null
     ): QueryBuilder {
-        $vouchers = DB::table('vouchers as v')
+        return DB::query()->fromSub(
+            $this->customerReceiptQuery($customerId, $startDate, $endDate)
+                ->unionAll(
+                    $this->customerDepositQuery(
+                        $customerId,
+                        $startDate,
+                        $endDate
+                    )
+                ),
+            'customer_payments'
+        );
+    }
+
+    private function customerReceiptQuery(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): QueryBuilder {
+        return DB::table('vouchers as v')
             ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
             ->join('voucher_lines as customer_line', function ($join) use ($customerId) {
                 $join->on('customer_line.voucher_id', '=', 'v.id')
@@ -417,8 +438,14 @@ class PartyLedgerService
                     AS remarks,
                  'Received' AS status"
             );
+    }
 
-        $deposits = DB::table('party_opening_balances as balance')
+    private function customerDepositQuery(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): QueryBuilder {
+        return DB::table('party_opening_balances as balance')
             ->join('journal_entries as je', 'je.id', '=', 'balance.journal_entry_id')
             ->where('balance.customer_id', $customerId)
             ->where('balance.balance_type', 'customer_deposit')
@@ -440,11 +467,6 @@ class PartyLedgerService
                  COALESCE(je.description, 'Opening Security Deposit') AS remarks,
                  'Completed' AS status"
             );
-
-        return DB::query()->fromSub(
-            $vouchers->unionAll($deposits),
-            'customer_payments'
-        );
     }
 
     private function normalizeCustomerPayment(object $row): array
@@ -464,5 +486,11 @@ class PartyLedgerService
             'remarks' => $row->remarks,
             'status' => $row->status,
         ];
+    }
+
+    private function isCustomerOperationalEvent(string $eventType): bool
+    {
+        return str_starts_with($eventType, 'credit_sale')
+            || str_starts_with($eventType, 'receipt_voucher');
     }
 }

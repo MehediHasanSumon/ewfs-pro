@@ -315,28 +315,110 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
         ->customerMetrics(collect([$customer]))
         ->get($customer->id);
     $payments = app(PartyLedgerService::class)->customerPayments($customer->id);
+    $paymentCount = app(PartyLedgerService::class)
+        ->customerPaymentCount($customer->id);
+    $statement = app(PartyLedgerService::class)
+        ->statement($customerAccount, 'customer');
     $ledger = app(CustomerReportService::class)->ledgerDetails(
         $customer,
         '2026-07-27',
         '2026-07-30'
     );
+    $ledgerSummary = app(CustomerReportService::class)
+        ->ledgerSummary('2026-07-27', '2026-07-30', $customer->id)
+        ->first();
 
     expect($metrics['total_sales'])->toBe(100.0)
-        ->and($metrics['total_paid'])->toBe(60.0)
+        ->and($metrics['total_paid'])->toBe(40.0)
         ->and($metrics['security_deposit'])->toBe(20.0)
         ->and($metrics['previous_due'])->toBe(50.0)
-        ->and($metrics['current_due'])->toBe(90.0)
+        ->and($metrics['current_due'])->toBe(60.0)
+        ->and($metrics['current_advance'])->toBe(0.0)
+        ->and($paymentCount)->toBe(1)
         ->and($payments)->toHaveCount(2)
         ->and($payments->firstWhere('sub_type', 'Security Deposit')['amount'])
         ->toBe(20.0)
+        ->and($statement->pluck('balance')->all())
+        ->toBe([0.0, 0.0, 100.0, 60.0])
         ->and(collect($ledger[0]['transactions'])->pluck('transaction_id')->all())
         ->toBe(['CC001', 'DEP-00001', 'INV-00001', 'RCV-00001'])
+        ->and(collect($ledger[0]['transactions'])->pluck('due')->all())
+        ->toBe([0.0, 0.0, 100.0, 60.0])
+        ->and($ledger[0]['total_debit'])->toBe(40.0)
+        ->and($ledger[0]['total_credit'])->toBe(100.0)
+        ->and($ledger[0]['total_due'])->toBe(60.0)
+        ->and($ledgerSummary->debit)->toBe(40.0)
+        ->and($ledgerSummary->credit)->toBe(100.0)
+        ->and($ledgerSummary->due)->toBe(60.0)
         ->and(collect($ledger[0]['transactions'])
             ->firstWhere('transaction_id', 'INV-00001')->vehicle_no)
         ->toBe('ABC-123')
         ->and(collect($ledger[0]['transactions'])
             ->firstWhere('transaction_id', 'INV-00001')->memo_no)
         ->toBe('M-00045');
+});
+
+it('excludes security deposits from paid and advance calculations', function () {
+    $customerAccount = ledgerAccount('Customer Receivable', 'AR-1');
+    $offsetAccount = ledgerAccount('Offset', 'OF-1');
+    $cashAccount = ledgerAccount('Cash', 'CASH-1');
+    $customer = Customer::query()->create([
+        'account_id' => $customerAccount->id,
+        'name' => 'Advance Customer',
+        'mobile' => '01700000001',
+        'status' => true,
+    ]);
+
+    ledgerJournal(
+        $customerAccount->id,
+        'credit_sale',
+        'INV-00002',
+        2220,
+        0,
+        $offsetAccount->id,
+        '2026-07-29',
+        'Credit sale'
+    );
+    ledgerJournal(
+        $customerAccount->id,
+        'receipt_voucher',
+        'RCV-00002',
+        0,
+        4544,
+        $cashAccount->id,
+        '2026-07-29',
+        'Customer receipt'
+    );
+    $depositEntry = ledgerJournal(
+        $customerAccount->id,
+        'customer_security_deposit',
+        'DEP-00002',
+        0,
+        40000,
+        $offsetAccount->id,
+        '2026-07-29',
+        'Opening Security Deposit'
+    );
+    DB::table('party_opening_balances')->insert([
+        'customer_id' => $customer->id,
+        'balance_type' => 'customer_deposit',
+        'effective_date' => '2026-07-29',
+        'amount' => 40000,
+        'journal_entry_id' => $depositEntry->id,
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $metric = app(PartyLedgerService::class)
+        ->customerMetrics(collect([$customer]))
+        ->get($customer->id);
+
+    expect($metric['security_deposit'])->toBe(40000.0)
+        ->and($metric['total_sales'])->toBe(2220.0)
+        ->and($metric['total_paid'])->toBe(4544.0)
+        ->and($metric['current_due'])->toBe(-2324.0)
+        ->and($metric['current_advance'])->toBe(2324.0);
 });
 
 it('posts security deposits with a deposit reference and ledger event', function () {

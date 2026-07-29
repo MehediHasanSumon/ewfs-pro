@@ -242,13 +242,6 @@ class FinancialReportService
 
     public function outstandingCustomers(int $limit = 5, ?string $asOfDate = null): Collection
     {
-        $deposits = PartyOpeningBalance::query()
-            ->where('balance_type', 'customer_deposit')
-            ->where('status', 'posted')
-            ->when($asOfDate, fn ($query) => $query
-                ->whereDate('effective_date', '<=', $asOfDate))
-            ->pluck('amount', 'customer_id');
-
         return DB::table('customers as c')
             ->join('accounts as a', 'a.id', '=', 'c.account_id')
             ->leftJoin('journal_lines as jl', 'jl.account_id', '=', 'a.id')
@@ -265,12 +258,21 @@ class FinancialReportService
                 'c.id,
                  c.name AS customer,
                  c.mobile AS mobile_number,
-                 COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.debit_amount - jl.credit_amount ELSE 0 END), 0) AS balance'
+                 COALESCE(
+                    SUM(
+                        CASE
+                            WHEN je.event_type LIKE \'credit_sale%\'
+                                OR je.event_type LIKE \'receipt_voucher%\'
+                                THEN jl.debit_amount - jl.credit_amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                 ) AS balance'
             )
             ->get()
-            ->map(function (object $row) use ($deposits) {
-                $row->balance = (float) $row->balance
-                    + (float) ($deposits->get($row->id) ?? 0);
+            ->map(function (object $row) {
+                $row->balance = (float) $row->balance;
 
                 return $row;
             })
@@ -436,7 +438,17 @@ class FinancialReportService
             ->groupBy('c.id')
             ->selectRaw(
                 'c.id,
-                 COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.debit_amount - jl.credit_amount ELSE 0 END), 0) AS balance'
+                 COALESCE(
+                    SUM(
+                        CASE
+                            WHEN je.event_type LIKE \'credit_sale%\'
+                                OR je.event_type LIKE \'receipt_voucher%\'
+                                THEN jl.debit_amount - jl.credit_amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                 ) AS balance'
             )
             ->pluck('balance', 'id');
 
@@ -450,9 +462,8 @@ class FinancialReportService
         $advance = 0.0;
         $security = (float) $deposits->sum();
 
-        foreach ($balances as $customerId => $balance) {
-            $operationalBalance = (float) $balance
-                + (float) ($deposits->get($customerId) ?? 0);
+        foreach ($balances as $balance) {
+            $operationalBalance = (float) $balance;
             $due += max(0, $operationalBalance);
             $advance += max(0, -$operationalBalance);
         }

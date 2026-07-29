@@ -30,9 +30,30 @@ class CustomerReportService
                  c.name AS customer_name,
                  c.mobile AS customer_mobile,
                  c.address AS customer_address,
-                 SUM(jl.credit_amount) AS debit,
-                 SUM(jl.debit_amount) AS credit,
-                 SUM(jl.debit_amount - jl.credit_amount) AS due'
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE \'credit_sale%\'
+                            OR je.event_type LIKE \'receipt_voucher%\'
+                            THEN jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS debit,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE \'credit_sale%\'
+                            OR je.event_type LIKE \'receipt_voucher%\'
+                            THEN jl.debit_amount
+                        ELSE 0
+                    END
+                 ) AS credit,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE \'credit_sale%\'
+                            OR je.event_type LIKE \'receipt_voucher%\'
+                            THEN jl.debit_amount - jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS due'
             )
             ->get()
             ->map(function (object $ledger) {
@@ -91,6 +112,7 @@ class CustomerReportService
             ->selectRaw(
                 "jl.id,
                  je.business_date AS date,
+                 je.event_type,
                  s.name AS shift,
                  COALESCE(v.voucher_no, je.reference_no, je.entry_no) AS transaction_id,
                  jl.credit_amount AS debit,
@@ -125,11 +147,20 @@ class CustomerReportService
             $row->debit = (float) $row->debit;
             $row->credit = (float) $row->credit;
             $row->balance = (float) $row->balance;
-            $runningBalance += $row->credit - $row->debit;
+
+            if ($this->isCustomerOperationalEvent($row->event_type)) {
+                $runningBalance += $row->credit - $row->debit;
+            }
+
             $row->due = $runningBalance;
 
             return $row;
         });
+        $operationalTransactions = $transactions->filter(
+            fn (object $row) => $this->isCustomerOperationalEvent(
+                $row->event_type
+            )
+        );
 
         return [[
             'customer_name' => $customer->name,
@@ -137,8 +168,8 @@ class CustomerReportService
             'customer_mobile' => $customer->mobile ?? 'N/A',
             'customer_address' => $customer->address ?? 'N/A',
             'transactions' => $transactions->all(),
-            'total_debit' => (float) $transactions->sum('debit'),
-            'total_credit' => (float) $transactions->sum('credit'),
+            'total_debit' => (float) $operationalTransactions->sum('debit'),
+            'total_credit' => (float) $operationalTransactions->sum('credit'),
             'total_due' => $runningBalance,
         ]];
     }
@@ -239,5 +270,11 @@ class CustomerReportService
 
                 return $sale;
             });
+    }
+
+    private function isCustomerOperationalEvent(string $eventType): bool
+    {
+        return str_starts_with($eventType, 'credit_sale')
+            || str_starts_with($eventType, 'receipt_voucher');
     }
 }
