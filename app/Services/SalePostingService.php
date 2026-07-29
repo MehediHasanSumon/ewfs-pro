@@ -354,7 +354,6 @@ class SalePostingService
             'account_id' => $paymentAccount->id,
             'debit_amount' => $grandTotal,
             'credit_amount' => 0,
-            'customer_id' => $customer?->id,
             'payment_method' => $paymentMethod,
             'description' => $description,
         ]];
@@ -365,7 +364,6 @@ class SalePostingService
                 'account_id' => $revenueAccount->id,
                 'debit_amount' => 0,
                 'credit_amount' => $resolved['line_total'],
-                'customer_id' => $customer?->id,
                 'product_id' => $product->id,
                 'description' => $description,
             ];

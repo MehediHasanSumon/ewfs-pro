@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\CreditSale;
 use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Services\AccountingService;
@@ -223,6 +224,12 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
     $creditSaleId = DB::table('credit_sales')->insertGetId([
         'memo_no' => 'M-00045',
     ]);
+    DB::table('journal_entries')
+        ->where('id', $saleEntry->id)
+        ->update([
+            'source_type' => CreditSale::class,
+            'source_id' => $creditSaleId,
+        ]);
     $allocationId = DB::table('credit_sale_customers')->insertGetId([
         'credit_sale_id' => $creditSaleId,
         'customer_id' => $customer->id,
@@ -311,7 +318,7 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
     $ledger = app(CustomerReportService::class)->ledgerDetails(
         $customer,
         '2026-07-27',
-        '2026-07-29'
+        '2026-07-30'
     );
 
     expect($metrics['total_sales'])->toBe(100.0)
@@ -322,6 +329,8 @@ it('projects customer metrics and payments from ledger-backed transactions', fun
         ->and($payments)->toHaveCount(2)
         ->and($payments->firstWhere('sub_type', 'Security Deposit')['amount'])
         ->toBe(20.0)
+        ->and(collect($ledger[0]['transactions'])->pluck('transaction_id')->all())
+        ->toBe(['CC001', 'DEP-00001', 'INV-00001', 'RCV-00001'])
         ->and(collect($ledger[0]['transactions'])
             ->firstWhere('transaction_id', 'INV-00001')->vehicle_no)
         ->toBe('ABC-123')

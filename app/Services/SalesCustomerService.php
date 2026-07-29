@@ -7,11 +7,6 @@ use Illuminate\Validation\ValidationException;
 
 class SalesCustomerService
 {
-    public function __construct(
-        private readonly PartyAccountService $partyAccounts,
-        private readonly DocumentNumberService $numbers
-    ) {}
-
     public function lookup(string $mobile): ?Customer
     {
         $customer = $this->customerQuery($mobile)
@@ -73,21 +68,8 @@ class SalesCustomerService
             return $existing;
         }
 
-        $account = $this->partyAccounts->createCustomerAccount(
-            $data['customer_name'],
-            true
-        );
-
-        return Customer::query()->create([
-            'account_id' => $account->id,
-            'code' => $this->numbers->next('customer', 'CC', null, 3),
-            'name' => $data['customer_name'],
-            'mobile' => $this->normalizeMobile($data['customer_mobile']),
-            'discount_rate' => 0,
-            'credit_limit' => 0,
-            'credit_days' => 0,
-            'status' => true,
-        ]);
+        // Walk-in identity remains on the sale snapshots and has no party account.
+        return null;
     }
 
     public function normalizeMobile(string $mobile): string

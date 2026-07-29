@@ -95,7 +95,7 @@ class PartyLedgerService
                 'total_paid' => (float) ($accountActivity->total_paid ?? 0),
                 'current_due' => (float) ($accountActivity->current_due ?? 0),
                 'current_advance' => max(
-                    0,
+                    0.0,
                     -(float) ($accountActivity->current_due ?? 0)
                 ),
                 'previous_due' => (float) ($accountActivity->previous_due ?? 0),

@@ -11,7 +11,7 @@ use App\Services\AccountingService;
 use App\Services\DocumentNumberService;
 use App\Services\InventoryService;
 use App\Services\OperationalReportService;
-use App\Services\PartyAccountService;
+use App\Services\PartyLedgerService;
 use App\Services\SalePostingService;
 use App\Services\SalesCustomerService;
 use App\Services\SystemAccountService;
@@ -367,17 +367,11 @@ function makeSalesPosFixture(): array
         createPosProduct($categoryId, $unitId, 'Engine Oil', 5.555),
     ];
 
-    $partyAccounts = Mockery::mock(PartyAccountService::class);
-    $partyAccounts->shouldReceive('createCustomerAccount')
-        ->zeroOrMoreTimes()
-        ->andReturn($receivable);
     $numbers = Mockery::mock(DocumentNumberService::class);
     $numbers->shouldReceive('next')
         ->zeroOrMoreTimes()
-        ->andReturnUsing(fn (string $type) => $type === 'customer'
-            ? 'CC-WALK-IN'
-            : 'IN0001');
-    $customers = new SalesCustomerService($partyAccounts, $numbers);
+        ->andReturn('IN0001');
+    $customers = new SalesCustomerService;
     $accounting = Mockery::mock(AccountingService::class);
     $journalNumber = 0;
     $accounting->shouldReceive('post')
@@ -547,6 +541,8 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($sale->customer_id)->toBe($fixture['customer']->id)
         ->and($sale->vehicle_id)->toBe($fixture['vehicle']->id)
         ->and($sale->vehicle?->customer_id)->toBe($fixture['otherCustomer']->id)
+        ->and($sale->journalEntry->lines->whereNotNull('customer_id'))
+        ->toHaveCount(0)
         ->and($sale->items->pluck('unit_price')->map(fn ($price) => (float) $price)->all())
         ->toBe([10.125, 20.0, 5.555])
         ->and((float) $sale->journalEntry->lines->sum('debit_amount'))
@@ -565,10 +561,22 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($report->first()['invoice_no'])->toBe($sale->invoice_no)
         ->and($report->first()['quantity'])->toBe(6.0)
         ->and($report->first()['total_amount'])->toBe(65.8);
+
+    $metric = app(PartyLedgerService::class)
+        ->customerMetrics(collect([$fixture['customer']]))
+        ->get($fixture['customer']->id);
+
+    expect($metric['total_sales'])->toBe(0.0)
+        ->and($metric['total_paid'])->toBe(0.0)
+        ->and($metric['current_due'])->toBe(0.0)
+        ->and($metric['current_advance'])->toBe(0.0);
 });
 
-it('automatically creates a customer and typed vehicle for a new mobile', function () {
+it('stores walk-in identity as sale snapshots without creating party records', function () {
     $fixture = makeSalesPosFixture();
+    $customerCount = Customer::query()->count();
+    $vehicleCount = Vehicle::query()->count();
+    $accountCount = Account::query()->count();
     $payload = regularPosPayload($fixture, [
         'customer_id' => null,
         'customer_name' => 'New POS Customer',
@@ -584,32 +592,30 @@ it('automatically creates a customer and typed vehicle for a new mobile', functi
 
     $sale = $fixture['service']->create($payload);
 
-    $savedCustomer = Customer::query()
-        ->where('mobile', '01911111111')
-        ->firstOrFail();
-
-    expect($sale->customer_id)->toBe($savedCustomer->id)
-        ->and($sale->vehicle?->vehicle_number)->toBe('NEW-VEHICLE')
-        ->and($sale->vehicle?->customer_id)->toBe($savedCustomer->id);
+    expect($sale->customer_id)->toBeNull()
+        ->and($sale->vehicle_id)->toBeNull()
+        ->and($sale->customer_name_snapshot)->toBe('New POS Customer')
+        ->and($sale->customer_mobile_snapshot)->toBe('01911111111')
+        ->and($sale->vehicle_number_snapshot)->toBe('NEW-VEHICLE')
+        ->and(Customer::query()->count())->toBe($customerCount)
+        ->and(Vehicle::query()->count())->toBe($vehicleCount)
+        ->and(Account::query()->count())->toBe($accountCount)
+        ->and(Customer::query()->where('mobile', '01911111111')->exists())
+        ->toBeFalse();
 });
 
-it('reuses a normalized mobile and updates editable customer details', function () {
+it('reuses a permanent customer by normalized mobile and updates editable details', function () {
     $fixture = makeSalesPosFixture();
-    $first = DB::transaction(fn () => $fixture['customers']->resolve([
+    $customerCount = Customer::query()->count();
+    $resolved = DB::transaction(fn () => $fixture['customers']->resolve([
         'customer_id' => null,
-        'customer_name' => 'First Name',
-        'customer_mobile' => '01922-222222',
-    ]));
-    $second = DB::transaction(fn () => $fixture['customers']->resolve([
-        'customer_id' => null,
-        'customer_name' => 'Updated Name',
-        'customer_mobile' => '01922222222',
+        'customer_name' => 'Updated Rahim',
+        'customer_mobile' => '017-1111-1111',
     ]));
 
-    expect($second?->id)->toBe($first?->id)
-        ->and($second?->fresh()->name)->toBe('Updated Name')
-        ->and(Customer::query()->where('mobile', '01922222222')->count())
-        ->toBe(1);
+    expect($resolved?->id)->toBe($fixture['customer']->id)
+        ->and($resolved?->fresh()->name)->toBe('Updated Rahim')
+        ->and(Customer::query()->count())->toBe($customerCount);
 });
 
 it('rejects a payment account that does not match the payment method', function () {
@@ -627,9 +633,10 @@ it('rejects a payment account that does not match the payment method', function 
     }
 });
 
-it('rolls back automatic customer creation when sale posting fails', function () {
+it('does not persist walk-in party data when sale posting fails', function () {
     $fixture = makeSalesPosFixture();
     $customerCount = Customer::query()->count();
+    $accountCount = Account::query()->count();
     $payload = regularPosPayload($fixture, [
         'customer_id' => null,
         'customer_name' => 'Rollback Customer',
@@ -649,8 +656,10 @@ it('rolls back automatic customer creation when sale posting fails', function ()
         $this->fail('Expected payment account validation to fail.');
     } catch (ValidationException) {
         expect(Customer::query()->count())->toBe($customerCount)
+            ->and(Account::query()->count())->toBe($accountCount)
             ->and(Customer::query()->where('mobile', '01633333333')->exists())
-            ->toBeFalse();
+            ->toBeFalse()
+            ->and(DB::table('sales')->count())->toBe(0);
     }
 });
 
