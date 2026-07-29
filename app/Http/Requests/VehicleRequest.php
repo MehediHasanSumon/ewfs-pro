@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Vehicle;
 use App\Models\Customer;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

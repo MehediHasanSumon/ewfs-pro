@@ -30,7 +30,11 @@ class CustomerResource extends JsonResource
                 'name' => $this->account?->name,
                 'ac_number' => $this->account?->ac_number,
             ]),
-            'vehicles' => VehicleResource::collection($this->whenLoaded('vehicles')),
+            'vehicles' => $this->whenLoaded(
+                'vehicles',
+                fn () => VehicleResource::collection($this->vehicles)
+                    ->resolve($request)
+            ),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
     }

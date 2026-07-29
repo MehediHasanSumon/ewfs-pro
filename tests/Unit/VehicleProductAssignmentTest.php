@@ -159,6 +159,47 @@ it('rejects duplicate ordering and inactive products', function () {
         ->and($validator->errors()->has('products.2.product_id'))->toBeTrue();
 });
 
+it('uses the nested customer route as the vehicle owner', function () {
+    [$customerId] = createAssignmentFixture();
+    $otherCustomerId = DB::table('customers')->insertGetId([
+        'name' => 'Other Customer',
+        'status' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $request = VehicleRequest::create(
+        "/customers/{$customerId}/vehicles",
+        'POST',
+        [
+            'customer_id' => $otherCustomerId,
+            'vehicle_number' => 'ROUTE-OWNER-1',
+        ]
+    );
+    $request->setContainer(app());
+    $customer = Customer::query()->findOrFail($customerId);
+    $request->setRouteResolver(fn () => new class($customer)
+    {
+        public function __construct(
+            private readonly Customer $customer
+        ) {}
+
+        public function parameter(string $key, mixed $default = null): mixed
+        {
+            return $key === 'customer' ? $this->customer : $default;
+        }
+    });
+
+    $prepare = new ReflectionMethod($request, 'prepareForValidation');
+    $prepare->invoke($request);
+
+    expect((int) $request->input('customer_id'))->toBe($customerId)
+        ->and(Validator::make(
+            $request->all(),
+            $request->rules(),
+            $request->messages()
+        )->passes())->toBeTrue();
+});
+
 it('rejects products that are not assigned to the vehicle', function () {
     [, $productIds, $vehicle] = createAssignmentFixture();
     $service = app(VehicleProductAssignmentService::class);
@@ -178,11 +219,24 @@ it('serializes proprietor name and ordered vehicle products', function () {
         ['product_id' => $productIds[0], 'sort_order' => 2],
     ]);
 
-    $customer = Customer::query()->findOrFail($customerId);
+    $customer = Customer::query()
+        ->with('vehicles.products')
+        ->findOrFail($customerId);
     $vehicle->load(['customer', 'products']);
+    $customerResource = (new CustomerResource($customer))->resolve();
 
-    expect((new CustomerResource($customer))->resolve()['proprietor_name'])
+    expect($customerResource['proprietor_name'])
         ->toBe('A. Rahman')
+        ->and($customerResource['vehicles'])->toBeArray()
+        ->and($customerResource['vehicles'])->toHaveCount(1)
+        ->and($customerResource['vehicles'][0]['customer_id'])
+        ->toBe($customerId)
+        ->and($customerResource['vehicles'][0]['vehicle_number'])
+        ->toBe('DHAKA-1001')
+        ->and(collect($customerResource['vehicles'][0]['products'])
+            ->pluck('id')
+            ->all())
+        ->toBe([$productIds[2], $productIds[0]])
         ->and(
             collect((new VehicleResource($vehicle))->resolve()['products'])
                 ->pluck('id')
