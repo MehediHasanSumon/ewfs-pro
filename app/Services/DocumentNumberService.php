@@ -19,10 +19,40 @@ class DocumentNumberService
             ? (int) Carbon::parse($date)->format('Y')
             : (int) now()->format('Y');
 
+        return $this->nextForSequence(
+            $documentType,
+            $prefix,
+            $year,
+            $padding
+        );
+    }
+
+    public function nextGlobal(
+        string $documentType,
+        string $prefix,
+        int $padding = 6,
+        int $minimum = 1
+    ): string {
+        return $this->nextForSequence(
+            $documentType,
+            $prefix,
+            0,
+            $padding,
+            $minimum
+        );
+    }
+
+    private function nextForSequence(
+        string $documentType,
+        string $prefix,
+        int $fiscalYear,
+        int $padding,
+        int $minimum = 1
+    ): string {
         DB::table('document_sequences')->insertOrIgnore([
             'document_type' => $documentType,
             'prefix' => $prefix,
-            'fiscal_year' => $year,
+            'fiscal_year' => $fiscalYear,
             'next_number' => 1,
             'version' => 0,
             'created_at' => now(),
@@ -31,11 +61,11 @@ class DocumentNumberService
 
         $sequence = DocumentSequence::query()
             ->where('document_type', $documentType)
-            ->where('fiscal_year', $year)
+            ->where('fiscal_year', $fiscalYear)
             ->lockForUpdate()
             ->firstOrFail();
 
-        $number = $sequence->next_number;
+        $number = max($sequence->next_number, $minimum);
 
         $sequence->update([
             'next_number' => $number + 1,

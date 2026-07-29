@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\EmployeeRequest;
+use App\Http\Resources\EmployeeResource;
 use App\Models\CompanySetting;
 use App\Models\EmpDepartment;
 use App\Models\EmpDesignation;
 use App\Models\Employee;
 use App\Models\EmpType;
 use App\Models\Group;
-use App\Services\DocumentNumberService;
-use App\Services\PartyAccountService;
+use App\Services\EmployeeProfileService;
 use App\Services\PartyLedgerService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,15 +24,15 @@ use Inertia\Inertia;
 class EmployeeController extends Controller implements HasMiddleware
 {
     private const SALARY_CODES = ['1001', '1004', '1005', '1006', '1007', '1014'];
+
     private const ADVANCE_CODES = ['1002', '1003'];
+
     private const ADVANCE_RETURN_CODES = ['1002', '1003', '1008'];
 
     public function __construct(
-        private readonly DocumentNumberService $numbers,
-        private readonly PartyAccountService $partyAccounts,
-        private readonly PartyLedgerService $partyLedger
-    ) {
-    }
+        private readonly PartyLedgerService $partyLedger,
+        private readonly EmployeeProfileService $employeeProfiles
+    ) {}
 
     public static function middleware(): array
     {
@@ -112,31 +113,16 @@ class EmployeeController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(EmployeeRequest $request)
     {
-        $validated = $request->validate($this->rules());
-
-        DB::transaction(function () use ($validated, $request) {
-            $status = $request->boolean('status', true);
-            $account = $this->partyAccounts->createEmployeeAccount(
-                $validated['employee_name'],
-                $status
-            );
-
-            Employee::query()->create([
-                ...$this->employeePayload($validated, $status),
-                'account_id' => $account->id,
-                'employee_code' => $validated['employee_code']
-                    ?? $this->numbers->next('employee', 'EMP', null, 4),
-            ]);
-        });
+        $this->employeeProfiles->create($request->validated());
 
         return redirect()->route('employees.index')->with('success', 'Employee created successfully.');
     }
 
     public function show(Employee $employee)
     {
-        $employee->load('account', 'empType', 'department', 'designation');
+        $employee->load('account', 'empType', 'department', 'designation', 'salaryStructure');
 
         $salaryQuery = $this->employeeVouchers($employee, 'payment', self::SALARY_CODES);
         $advanceQuery = $this->employeeVouchers($employee, 'payment', self::ADVANCE_CODES);
@@ -185,30 +171,17 @@ class EmployeeController extends Controller implements HasMiddleware
 
     public function edit(Employee $employee)
     {
-        $employee->load('account', 'empType', 'department', 'designation');
+        $employee->load('account', 'empType', 'department', 'designation', 'salaryStructure');
 
         return Inertia::render('Employee/Update', [
-            'employee' => $employee,
+            'employee' => EmployeeResource::make($employee)->resolve(),
             ...$this->formOptions(),
         ]);
     }
 
-    public function update(Request $request, Employee $employee)
+    public function update(EmployeeRequest $request, Employee $employee)
     {
-        $validated = $request->validate($this->rules());
-
-        DB::transaction(function () use ($validated, $request, $employee) {
-            $status = $request->boolean('status', true);
-            $employee->loadMissing('account');
-            $employee->account?->update([
-                'name' => $validated['employee_name'],
-                'status' => $status,
-            ]);
-            $employee->update([
-                ...$this->employeePayload($validated, $status),
-                'employee_code' => $validated['employee_code'] ?? $employee->employee_code,
-            ]);
-        });
+        $this->employeeProfiles->update($employee, $request->validated());
 
         return redirect()->route('employees.index')->with('success', 'Employee updated successfully.');
     }
@@ -231,6 +204,9 @@ class EmployeeController extends Controller implements HasMiddleware
             ->whereIn('id', $request->ids)
             ->with('account')
             ->get();
+        $files = $employees
+            ->flatMap(fn (Employee $employee) => $this->employeeProfiles->filePaths($employee))
+            ->all();
 
         DB::transaction(function () use ($employees) {
             foreach ($employees as $employee) {
@@ -243,6 +219,8 @@ class EmployeeController extends Controller implements HasMiddleware
                 $account?->delete();
             }
         });
+
+        $this->employeeProfiles->deleteStoredFiles($files);
 
         return redirect()->back()->with('success', 'Selected employees deleted successfully.');
     }
@@ -388,69 +366,10 @@ class EmployeeController extends Controller implements HasMiddleware
             'departments' => EmpDepartment::query()->where('status', true)->get(['id', 'name']),
             'designations' => EmpDesignation::query()->where('status', true)->get(['id', 'name']),
             'groups' => Group::query()->active()->get(['id', 'code', 'name']),
-        ];
-    }
-
-    private function rules(): array
-    {
-        return [
-            'employee_code' => ['nullable', 'string', 'max:50'],
-            'employee_name' => ['required', 'string', 'max:100'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'emp_type_id' => ['nullable', 'exists:emp_types,id'],
-            'department_id' => ['nullable', 'exists:emp_departments,id'],
-            'designation_id' => ['nullable', 'exists:emp_designations,id'],
-            'mobile' => ['nullable', 'string', 'max:100'],
-            'mobile_two' => ['nullable', 'string', 'max:20'],
-            'dob' => ['nullable', 'date'],
-            'gender' => ['nullable', 'string', 'max:10'],
-            'blood_group' => ['nullable', 'string', 'max:10'],
-            'marital_status' => ['nullable', 'string', 'max:20'],
-            'religion' => ['nullable', 'string', 'max:100'],
-            'nid' => ['nullable', 'string', 'max:100'],
-            'emergency_contact_person' => ['nullable', 'string', 'max:100'],
-            'emergency_contact_number' => ['nullable', 'string', 'max:100'],
-            'father_name' => ['nullable', 'string', 'max:100'],
-            'mother_name' => ['nullable', 'string', 'max:100'],
-            'present_address' => ['nullable', 'string', 'max:250'],
-            'permanent_address' => ['nullable', 'string', 'max:350'],
-            'job_status' => ['nullable', 'string', 'max:50'],
-            'salary' => ['nullable', 'numeric', 'min:0'],
-            'joining_date' => ['nullable', 'date'],
-            'order' => ['nullable', 'integer'],
-            'highest_education' => ['nullable', 'string', 'max:100'],
-            'status' => ['boolean'],
-        ];
-    }
-
-    private function employeePayload(array $validated, bool $status): array
-    {
-        return [
-            'emp_type_id' => $validated['emp_type_id'] ?? null,
-            'department_id' => $validated['department_id'] ?? null,
-            'designation_id' => $validated['designation_id'] ?? null,
-            'employee_name' => $validated['employee_name'],
-            'email' => $validated['email'] ?? null,
-            'order' => $validated['order'] ?? 1,
-            'dob' => $validated['dob'] ?? null,
-            'gender' => $validated['gender'] ?? null,
-            'blood_group' => $validated['blood_group'] ?? null,
-            'marital_status' => $validated['marital_status'] ?? null,
-            'emergency_contact_person' => $validated['emergency_contact_person'] ?? null,
-            'religion' => $validated['religion'] ?? null,
-            'nid' => $validated['nid'] ?? null,
-            'mobile' => $validated['mobile'] ?? null,
-            'mobile_two' => $validated['mobile_two'] ?? null,
-            'emergency_contact_number' => $validated['emergency_contact_number'] ?? null,
-            'father_name' => $validated['father_name'] ?? null,
-            'mother_name' => $validated['mother_name'] ?? null,
-            'present_address' => $validated['present_address'] ?? null,
-            'permanent_address' => $validated['permanent_address'] ?? null,
-            'job_status' => $validated['job_status'] ?? null,
-            'salary' => $validated['salary'] ?? null,
-            'joining_date' => $validated['joining_date'] ?? null,
-            'highest_education' => $validated['highest_education'] ?? null,
-            'status' => $status,
+            'employeeUploadLimits' => [
+                'image_max_kb' => (int) config('erp.employee_uploads.image_max_kb', 5120),
+                'nid_max_kb' => (int) config('erp.employee_uploads.nid_max_kb', 10240),
+            ],
         ];
     }
 
@@ -474,6 +393,8 @@ class EmployeeController extends Controller implements HasMiddleware
 
     private function deleteEmployee(Employee $employee): void
     {
+        $files = $this->employeeProfiles->filePaths($employee);
+
         DB::transaction(function () use ($employee) {
             $employee->loadMissing('account');
             $this->assertEmployeeCanBeDeleted($employee);
@@ -481,6 +402,8 @@ class EmployeeController extends Controller implements HasMiddleware
             $employee->delete();
             $account?->delete();
         });
+
+        $this->employeeProfiles->deleteStoredFiles($files);
     }
 
     private function assertEmployeeCanBeDeleted(Employee $employee): void

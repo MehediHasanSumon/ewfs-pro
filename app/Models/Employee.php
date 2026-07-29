@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
@@ -39,13 +40,14 @@ class Employee extends Model
         'status_date',
         'photo',
         'signature',
+        'nid_document_path',
         'highest_education',
         'reference_one_name',
         'reference_one_phone',
         'reference_one_address',
         'reference_two_name',
         'reference_two_phone',
-        'reference_two_address'
+        'reference_two_address',
     ];
 
     protected function casts(): array
@@ -82,6 +84,11 @@ class Employee extends Model
     public function designation(): BelongsTo
     {
         return $this->belongsTo(EmpDesignation::class);
+    }
+
+    public function salaryStructure(): HasOne
+    {
+        return $this->hasOne(EmployeeSalaryStructure::class);
     }
 
     public function shiftClosingProductItems(): HasMany
