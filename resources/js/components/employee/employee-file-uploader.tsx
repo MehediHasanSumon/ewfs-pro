@@ -1,16 +1,9 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import { FileText, Image, Upload, X } from 'lucide-react';
-import {
-    type DragEvent,
-    type KeyboardEvent,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from 'react';
+import { FileText, Image, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface EmployeeFileUploaderProps {
     id: string;
@@ -43,9 +36,8 @@ function EmployeeFileUploader({
     onChange,
     onRemove,
 }: EmployeeFileUploaderProps) {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const [isDragging, setIsDragging] = useState(false);
     const [localError, setLocalError] = useState<string>();
+    const [inputVersion, setInputVersion] = useState(0);
     const previewUrl = useMemo(
         () => (value ? URL.createObjectURL(value) : null),
         [value],
@@ -59,42 +51,31 @@ function EmployeeFileUploader({
         };
     }, [previewUrl]);
 
-    const validateAndSelect = (file: File | null) => {
+    const validateAndSelect = (file: File | null): boolean => {
         setLocalError(undefined);
 
         if (!file) {
             onChange(null);
-            return;
+            return true;
         }
 
         if (!acceptedTypes.includes(file.type)) {
             setLocalError(
                 `Select a supported ${allowPdf ? 'image or PDF' : 'image'} file.`,
             );
-            return;
+            return false;
         }
 
         if (file.size > maxSizeKb * 1024) {
             setLocalError(
                 `File size must not exceed ${(maxSizeKb / 1024).toFixed(maxSizeKb % 1024 === 0 ? 0 : 1)} MB.`,
             );
-            return;
+            return false;
         }
 
         onChange(file);
-    };
 
-    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        setIsDragging(false);
-        validateAndSelect(event.dataTransfer.files?.[0] ?? null);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            inputRef.current?.click();
-        }
+        return true;
     };
 
     const visibleUrl = value
@@ -117,84 +98,61 @@ function EmployeeFileUploader({
             <Label htmlFor={id} className="dark:text-gray-200">
                 {label}
             </Label>
-            <div
-                role="button"
-                tabIndex={0}
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={handleKeyDown}
-                onDragEnter={(event) => {
-                    event.preventDefault();
-                    setIsDragging(true);
-                }}
-                onDragOver={(event) => event.preventDefault()}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={cn(
-                    'mt-1 flex min-h-32 cursor-pointer items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-3 text-center transition-colors dark:border-gray-600 dark:bg-gray-700',
-                    isDragging &&
-                        'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/30',
-                    (error || localError) &&
-                        'border-red-500 dark:border-red-400',
-                )}
+            <Input
+                key={inputVersion}
+                id={id}
+                type="file"
+                accept={accept}
+                className="mt-1 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                error={Boolean(error || localError)}
                 aria-describedby={
                     error || localError ? `${id}-error` : undefined
                 }
-            >
-                <input
-                    ref={inputRef}
-                    id={id}
-                    type="file"
-                    accept={accept}
-                    className="sr-only"
-                    onChange={(event) => {
-                        validateAndSelect(event.target.files?.[0] ?? null);
+                onChange={(event) => {
+                    if (!validateAndSelect(event.target.files?.[0] ?? null)) {
                         event.target.value = '';
-                    }}
-                />
+                    }
+                }}
+            />
 
-                {hasFile ? (
-                    <div className="flex min-w-0 flex-col items-center gap-2">
-                        {visibleUrl && !isPdf ? (
-                            <img
-                                src={visibleUrl}
-                                alt={`${label} preview`}
-                                className="h-16 w-20 rounded object-contain"
-                            />
-                        ) : isPdf ? (
-                            <FileText
-                                className="h-12 w-12 text-red-500"
-                                aria-hidden="true"
-                            />
-                        ) : (
-                            <Image
-                                className="h-12 w-12 text-gray-400"
-                                aria-hidden="true"
-                            />
-                        )}
-                        <span className="max-w-full truncate text-xs text-gray-600 dark:text-gray-300">
-                            {visibleName}
-                        </span>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                setLocalError(undefined);
-                                onRemove();
-                            }}
-                        >
-                            <X className="h-4 w-4" aria-hidden="true" />
-                            Remove
-                        </Button>
-                    </div>
-                ) : (
-                    <Upload
-                        className="h-8 w-8 text-gray-400"
-                        aria-label={`Upload ${label}`}
-                    />
-                )}
-            </div>
+            {hasFile && (
+                <div className="mt-2 flex min-w-0 items-center gap-3 rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                    {visibleUrl && !isPdf ? (
+                        <img
+                            src={visibleUrl}
+                            alt={`${label} preview`}
+                            className="h-14 w-16 shrink-0 rounded object-contain"
+                        />
+                    ) : isPdf ? (
+                        <FileText
+                            className="h-10 w-10 shrink-0 text-red-500"
+                            aria-hidden="true"
+                        />
+                    ) : (
+                        <Image
+                            className="h-10 w-10 shrink-0 text-gray-400"
+                            aria-hidden="true"
+                        />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-xs text-gray-600 dark:text-gray-300">
+                        {visibleName}
+                    </span>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            setLocalError(undefined);
+                            setInputVersion((current) => current + 1);
+                            onRemove();
+                        }}
+                        title={`Remove ${label}`}
+                        aria-label={`Remove ${label}`}
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                </div>
+            )}
             <InputError id={`${id}-error`} message={localError ?? error} />
         </div>
     );
