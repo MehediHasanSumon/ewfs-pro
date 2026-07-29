@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CreditSale;
 use App\Models\Customer;
 use App\Models\Voucher;
 use Illuminate\Support\Collection;
@@ -49,6 +50,11 @@ class CustomerReportService
         string $endDate
     ): array {
         $customer->loadMissing('account:id,ac_number');
+        $firstCreditItems = DB::table('credit_sale_items as item')
+            ->groupBy('item.credit_sale_customer_id')
+            ->selectRaw(
+                'item.credit_sale_customer_id, MIN(item.id) AS item_id'
+            );
 
         $rows = DB::table('journal_lines as jl')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
@@ -57,6 +63,25 @@ class CustomerReportService
                 $join->on('v.id', '=', 'je.source_id')
                     ->where('je.source_type', Voucher::class);
             })
+            ->leftJoin('credit_sale_customers as csc', function ($join) {
+                $join->on('csc.journal_entry_id', '=', 'je.id')
+                    ->where('je.source_type', CreditSale::class);
+            })
+            ->leftJoin('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
+            ->leftJoinSub(
+                $firstCreditItems,
+                'first_credit_item',
+                'first_credit_item.credit_sale_customer_id',
+                '=',
+                'csc.id'
+            )
+            ->leftJoin(
+                'credit_sale_items as csi',
+                'csi.id',
+                '=',
+                'first_credit_item.item_id'
+            )
+            ->leftJoin('vehicles as vehicle', 'vehicle.id', '=', 'csi.vehicle_id')
             ->where('jl.account_id', $customer->account_id)
             ->whereIn('je.status', ['posted', 'reversed'])
             ->whereBetween('je.business_date', [$startDate, $endDate])
@@ -64,14 +89,30 @@ class CustomerReportService
             ->orderBy('je.occurred_at')
             ->orderBy('jl.id')
             ->selectRaw(
-                'jl.id,
+                "jl.id,
                  je.business_date AS date,
                  s.name AS shift,
                  COALESCE(v.voucher_no, je.reference_no, je.entry_no) AS transaction_id,
                  jl.credit_amount AS debit,
                  jl.debit_amount AS credit,
-                 GREATEST(jl.debit_amount, jl.credit_amount) AS balance,
-                 COALESCE(v.remarks, jl.description, je.description) AS remarks'
+                 CASE
+                    WHEN jl.debit_amount >= jl.credit_amount
+                        THEN jl.debit_amount
+                    ELSE jl.credit_amount
+                 END AS balance,
+                 COALESCE(
+                    csi.vehicle_number_snapshot,
+                    vehicle.vehicle_number,
+                    '-'
+                 ) AS vehicle_no,
+                 COALESCE(
+                    cs.memo_no,
+                    v.external_reference,
+                    v.voucher_no,
+                    je.reference_no,
+                    'N/A'
+                 ) AS memo_no,
+                 COALESCE(v.remarks, jl.description, je.description) AS remarks"
             )
             ->get();
 

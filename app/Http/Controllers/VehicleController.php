@@ -32,7 +32,7 @@ class VehicleController extends Controller implements HasMiddleware
                 'permission:view-sale|create-sale|update-sale|view-credit-sale|create-credit-sale|update-credit-sale',
                 only: ['salesContext']
             ),
-            new Middleware('permission:create-vehicle', only: ['store']),
+            new Middleware('permission:create-vehicle', only: ['store', 'storeForCustomer']),
             new Middleware('permission:update-vehicle', only: ['update']),
             new Middleware('permission:delete-vehicle', only: ['destroy', 'bulkDelete']),
             new Middleware('permission:can-vehicle-download', only: ['downloadPdf']),
@@ -96,9 +96,25 @@ class VehicleController extends Controller implements HasMiddleware
 
     public function store(VehicleRequest $request)
     {
-        $validated = $request->validated();
+        $this->createVehicle($request->validated());
 
-        DB::transaction(function () use ($validated): void {
+        return redirect()->back()->with('success', 'Vehicle created successfully.');
+    }
+
+    public function storeForCustomer(
+        VehicleRequest $request,
+        Customer $customer
+    ) {
+        $validated = $request->validated();
+        $validated['customer_id'] = $customer->id;
+        $this->createVehicle($validated);
+
+        return redirect()->back()->with('success', 'Vehicle created successfully.');
+    }
+
+    private function createVehicle(array $validated): Vehicle
+    {
+        return DB::transaction(function () use ($validated): Vehicle {
             $vehicle = Vehicle::query()->create([
                 'customer_id' => $validated['customer_id'],
                 'vehicle_type' => $validated['vehicle_type'] ?? null,
@@ -109,9 +125,9 @@ class VehicleController extends Controller implements HasMiddleware
             ]);
 
             $this->vehicleProducts->sync($vehicle, $validated['products'] ?? []);
-        });
 
-        return redirect()->back()->with('success', 'Vehicle created successfully.');
+            return $vehicle->load('products:id,product_name');
+        });
     }
 
     public function update(VehicleRequest $request, Vehicle $vehicle)

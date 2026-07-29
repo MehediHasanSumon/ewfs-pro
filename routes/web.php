@@ -223,6 +223,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('customers/download-pdf', [CustomerController::class, 'downloadPdf'])->name('customers.download.pdf');
     Route::delete('customers/bulk/delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulk.delete');
     Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::post('customers/{customer}/vehicles', [VehicleController::class, 'storeForCustomer'])->name('customers.vehicles.store');
     Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::get('customers/{customer}/statement', [CustomerController::class, 'statement'])->name('customers.statement');
     Route::get('customers/{customer}/sales-pdf', [CustomerController::class, 'downloadSalesPdf'])->name('customers.sales.pdf');

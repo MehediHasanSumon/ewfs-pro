@@ -12,7 +12,8 @@ class OpeningBalanceService
 {
     public function __construct(
         private readonly AccountingService $accounting,
-        private readonly SystemAccountService $systemAccounts
+        private readonly SystemAccountService $systemAccounts,
+        private readonly DocumentNumberService $numbers
     ) {
     }
 
@@ -130,14 +131,23 @@ class OpeningBalanceService
         string $idempotencyKey
     ): JournalEntry {
         $equity = $this->systemAccounts->openingBalanceEquity();
+        $isSecurityDeposit = $type === 'customer_deposit';
+        $description = $isSecurityDeposit
+            ? 'Opening Security Deposit'
+            : 'Customer opening '.$type;
+        $referenceNo = $isSecurityDeposit
+            ? $this->numbers->next('customer_deposit', 'DEP', $date, 5)
+            : $customer->code;
 
         return $this->accounting->post([
             'business_date' => $date,
-            'event_type' => 'customer_opening_balance',
+            'event_type' => $isSecurityDeposit
+                ? 'customer_security_deposit'
+                : 'customer_opening_balance',
             'source_type' => Customer::class,
             'source_id' => $customer->id,
-            'reference_no' => $customer->code,
-            'description' => 'Customer opening '.$type,
+            'reference_no' => $referenceNo,
+            'description' => $description,
             'idempotency_key' => $idempotencyKey,
         ], [
             [
@@ -145,12 +155,14 @@ class OpeningBalanceService
                 'debit_amount' => $amount,
                 'credit_amount' => 0,
                 'customer_id' => $customer->id,
+                'description' => $description,
             ],
             [
                 'account_id' => $customerIsDebit ? $equity->id : $customer->account_id,
                 'debit_amount' => 0,
                 'credit_amount' => $amount,
                 'customer_id' => $customer->id,
+                'description' => $description,
             ],
         ]);
     }

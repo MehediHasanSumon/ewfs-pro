@@ -3,14 +3,11 @@
 namespace App\Services;
 
 use App\Models\Account;
-use App\Models\CreditSale;
-use App\Models\CreditSaleCustomer;
 use App\Models\Customer;
-use App\Models\Employee;
-use App\Models\PartyOpeningBalance;
 use App\Models\Supplier;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,46 +16,139 @@ class PartyLedgerService
 {
     public function customerMetrics(Collection $customers): Collection
     {
-        $customerIds = $customers->pluck('id');
         $accountMap = $customers->pluck('id', 'account_id');
-        $activity = $this->accountActivity($accountMap->keys());
-
-        $sales = DB::table('credit_sale_customers as csc')
-            ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
-            ->whereIn('csc.customer_id', $customerIds)
-            ->whereIn('cs.status', ['posted', 'partially_paid', 'paid'])
-            ->groupBy('csc.customer_id')
+        $activity = DB::table('journal_lines as jl')
+            ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
+            ->whereIn('jl.account_id', $accountMap->keys())
+            ->whereIn('je.status', ['posted', 'reversed'])
+            ->groupBy('jl.account_id')
             ->selectRaw(
-                'csc.customer_id, SUM(csc.grand_total) AS total_sales, COUNT(*) AS sales_count'
+                "jl.account_id,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'credit_sale%'
+                            THEN jl.debit_amount - jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS total_sales,
+                 COUNT(
+                    DISTINCT CASE
+                        WHEN je.event_type = 'credit_sale'
+                            AND je.status = 'posted'
+                            THEN je.id
+                        ELSE NULL
+                    END
+                 ) AS sales_count,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'receipt_voucher%'
+                            OR je.event_type LIKE 'customer_security_deposit%'
+                            OR (
+                                je.event_type LIKE 'customer_opening_balance%'
+                                AND (
+                                    LOWER(COALESCE(je.description, ''))
+                                        LIKE '%customer_deposit%'
+                                    OR LOWER(COALESCE(je.description, ''))
+                                        LIKE '%customer deposit%'
+                                )
+                            )
+                            THEN jl.credit_amount - jl.debit_amount
+                        ELSE 0
+                    END
+                 ) AS total_paid,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'customer_security_deposit%'
+                            OR (
+                                je.event_type LIKE 'customer_opening_balance%'
+                                AND (
+                                    LOWER(COALESCE(je.description, ''))
+                                        LIKE '%customer_deposit%'
+                                    OR LOWER(COALESCE(je.description, ''))
+                                        LIKE '%customer deposit%'
+                                )
+                            )
+                            THEN jl.credit_amount - jl.debit_amount
+                        ELSE 0
+                    END
+                 ) AS security_deposit,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'customer_opening_balance%'
+                            AND LOWER(COALESCE(je.description, ''))
+                                LIKE '%receivable%'
+                            THEN jl.debit_amount - jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS previous_due,
+                 SUM(jl.debit_amount - jl.credit_amount) AS current_due"
             )
             ->get()
-            ->keyBy('customer_id');
+            ->keyBy('account_id');
 
-        $payments = $this->partyPaymentTotals('customer_id', $customerIds, 'receipt');
-        $deposits = PartyOpeningBalance::query()
-            ->whereIn('customer_id', $customerIds)
-            ->where('balance_type', 'customer_deposit')
-            ->where('status', 'posted')
-            ->pluck('amount', 'customer_id');
-
-        return $customers->mapWithKeys(function (Customer $customer) use (
-            $activity,
-            $sales,
-            $payments,
-            $deposits
-        ) {
+        return $customers->mapWithKeys(function (Customer $customer) use ($activity) {
             $accountActivity = $activity->get($customer->account_id);
-            $sale = $sales->get($customer->id);
 
             return [$customer->id => [
-                'total_sales' => (float) ($sale->total_sales ?? 0),
-                'sales_count' => (int) ($sale->sales_count ?? 0),
-                'total_paid' => (float) ($payments->get($customer->id) ?? 0),
-                'current_due' => (float) ($accountActivity->total_debit ?? 0)
-                    - (float) ($accountActivity->total_credit ?? 0),
-                'security_deposit' => (float) ($deposits->get($customer->id) ?? 0),
+                'total_sales' => (float) ($accountActivity->total_sales ?? 0),
+                'sales_count' => (int) ($accountActivity->sales_count ?? 0),
+                'total_paid' => (float) ($accountActivity->total_paid ?? 0),
+                'current_due' => (float) ($accountActivity->current_due ?? 0),
+                'current_advance' => max(
+                    0,
+                    -(float) ($accountActivity->current_due ?? 0)
+                ),
+                'previous_due' => (float) ($accountActivity->previous_due ?? 0),
+                'security_deposit' => (float) ($accountActivity->security_deposit ?? 0),
             ]];
         });
+    }
+
+    public function customerPaymentCount(int $customerId): int
+    {
+        return $this->customerPaymentQuery($customerId)->count();
+    }
+
+    public function customerPayments(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?int $limit = null
+    ): Collection {
+        return $this->customerPaymentQuery(
+            $customerId,
+            $startDate,
+            $endDate
+        )
+            ->orderByDesc('date')
+            ->orderByDesc('source_id')
+            ->when($limit, fn (QueryBuilder $query) => $query->limit($limit))
+            ->get()
+            ->map(fn (object $row) => $this->normalizeCustomerPayment($row));
+    }
+
+    public function paginatedCustomerPayments(
+        int $customerId,
+        int $perPage,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): LengthAwarePaginator {
+        $paginator = $this->customerPaymentQuery(
+            $customerId,
+            $startDate,
+            $endDate
+        )
+            ->orderByDesc('date')
+            ->orderByDesc('source_id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $paginator->setCollection(
+            $paginator->getCollection()
+                ->map(fn (object $row) => $this->normalizeCustomerPayment($row))
+        );
+
+        return $paginator;
     }
 
     public function supplierMetrics(Collection $suppliers): Collection
@@ -284,20 +374,95 @@ class PartyLedgerService
             ->keyBy('account_id');
     }
 
-    private function partyPaymentTotals(
-        string $partyColumn,
-        Collection $partyIds,
-        string $voucherType
-    ): Collection {
-        return DB::table('voucher_lines as vl')
-            ->join('vouchers as v', 'v.id', '=', 'vl.voucher_id')
+    private function customerPaymentQuery(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): QueryBuilder {
+        $vouchers = DB::table('vouchers as v')
             ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
-            ->whereIn('vl.'.$partyColumn, $partyIds)
-            ->where('v.voucher_type', $voucherType)
+            ->join('voucher_lines as customer_line', function ($join) use ($customerId) {
+                $join->on('customer_line.voucher_id', '=', 'v.id')
+                    ->where('customer_line.customer_id', $customerId);
+            })
+            ->leftJoin('voucher_lines as payment_line', function ($join) {
+                $join->on('payment_line.voucher_id', '=', 'v.id')
+                    ->where('payment_line.entry_side', 'debit');
+            })
+            ->leftJoin(
+                'voucher_payment_details as payment',
+                'payment.voucher_line_id',
+                '=',
+                'payment_line.id'
+            )
+            ->leftJoin('payment_sub_types as subtype', 'subtype.id', '=', 'v.payment_sub_type_id')
+            ->leftJoin('voucher_categories as category', 'category.id', '=', 'v.voucher_category_id')
+            ->where('v.voucher_type', 'receipt')
             ->where('v.status', 'posted')
             ->where('je.status', 'posted')
-            ->groupBy('vl.'.$partyColumn)
-            ->selectRaw('vl.'.$partyColumn.' AS party_id, SUM(vl.amount) AS total')
-            ->pluck('total', 'party_id');
+            ->when($startDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '>=', $startDate))
+            ->when($endDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '<=', $endDate))
+            ->selectRaw(
+                "'voucher' AS source_type,
+                 v.id AS source_id,
+                 v.voucher_no,
+                 v.voucher_date AS date,
+                 customer_line.amount,
+                 COALESCE(payment.payment_method, 'Cash') AS payment_type,
+                 COALESCE(subtype.name, category.name, 'Receipt') AS sub_type,
+                 COALESCE(payment.payment_method, 'Cash') AS type,
+                 COALESCE(v.remarks, v.description, customer_line.description)
+                    AS remarks,
+                 'Received' AS status"
+            );
+
+        $deposits = DB::table('party_opening_balances as balance')
+            ->join('journal_entries as je', 'je.id', '=', 'balance.journal_entry_id')
+            ->where('balance.customer_id', $customerId)
+            ->where('balance.balance_type', 'customer_deposit')
+            ->where('balance.status', 'posted')
+            ->where('je.status', 'posted')
+            ->when($startDate, fn (QueryBuilder $query) => $query
+                ->whereDate('balance.effective_date', '>=', $startDate))
+            ->when($endDate, fn (QueryBuilder $query) => $query
+                ->whereDate('balance.effective_date', '<=', $endDate))
+            ->selectRaw(
+                "'security_deposit' AS source_type,
+                 balance.id AS source_id,
+                 COALESCE(je.reference_no, 'N/A') AS voucher_no,
+                 balance.effective_date AS date,
+                 balance.amount,
+                 'Security Deposit' AS payment_type,
+                 'Security Deposit' AS sub_type,
+                 'Security Deposit' AS type,
+                 COALESCE(je.description, 'Opening Security Deposit') AS remarks,
+                 'Completed' AS status"
+            );
+
+        return DB::query()->fromSub(
+            $vouchers->unionAll($deposits),
+            'customer_payments'
+        );
+    }
+
+    private function normalizeCustomerPayment(object $row): array
+    {
+        return [
+            'id' => (int) $row->source_id,
+            'key' => $row->source_type.'-'.$row->source_id,
+            'source_type' => $row->source_type,
+            'voucher_no' => $row->voucher_no,
+            'date' => $row->date,
+            'amount' => (float) $row->amount,
+            'payment_type' => $row->payment_type,
+            'type' => $row->type,
+            'sub_type' => $row->sub_type,
+            'sub_type_name' => $row->sub_type,
+            'description' => $row->remarks,
+            'remarks' => $row->remarks,
+            'status' => $row->status,
+        ];
     }
 }

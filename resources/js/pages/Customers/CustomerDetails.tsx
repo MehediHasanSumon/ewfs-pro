@@ -1,3 +1,4 @@
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,8 +13,13 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    ProductAssignment,
+    VehicleProductSelector,
+} from '@/components/vehicle-product-selector';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import {
     ArrowLeft,
     Banknote,
@@ -23,6 +29,7 @@ import {
     DollarSign,
     FileText,
     MessageSquare,
+    Plus,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -53,6 +60,7 @@ interface Customer {
         vehicle_name?: string;
         vehicle_type?: string;
         reg_date?: string;
+        status: boolean;
         products?: Array<{
             id: number;
             product_name: string;
@@ -64,6 +72,7 @@ interface Customer {
 
 interface RecentPayment {
     id: number;
+    key?: string;
     voucher_no: string;
     date: string;
     amount: number;
@@ -97,6 +106,11 @@ interface CustomerDetailsProps {
         type: string;
         message: string;
     }>;
+    products: Array<{
+        id: number;
+        name: string;
+    }>;
+    vehicleProductLimit: number;
 }
 
 export default function CustomerDetails({
@@ -109,14 +123,55 @@ export default function CustomerDetails({
     paymentCount,
     currentDue,
     smsTemplates = [],
+    products = [],
+    vehicleProductLimit,
 }: CustomerDetailsProps) {
+    const { can } = usePermission();
     const [isVehicleOpen, setIsVehicleOpen] = useState(false);
+    const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
     const [isSMSModalOpen, setIsSMSModalOpen] = useState(false);
     const [messageType, setMessageType] = useState('template');
     const [selectedTemplate, setSelectedTemplate] = useState('');
     const [customMessage, setCustomMessage] = useState('');
     const [phoneNumber, setPhoneNumber] = useState(customer.mobile || '');
     const [processing, setProcessing] = useState(false);
+    const {
+        data: vehicleData,
+        setData: setVehicleData,
+        post: postVehicle,
+        processing: vehicleProcessing,
+        errors: vehicleErrors,
+        reset: resetVehicle,
+    } = useForm({
+        vehicle_number: '',
+        vehicle_name: '',
+        vehicle_type: '',
+        reg_date: '',
+        status: true,
+        products: [] as ProductAssignment[],
+    });
+    const productAssignmentError =
+        vehicleErrors.products ||
+        Object.entries(vehicleErrors).find(([key]) =>
+            key.startsWith('products.'),
+        )?.[1];
+
+    const closeVehicleModal = () => {
+        setIsAddVehicleOpen(false);
+        resetVehicle();
+    };
+
+    const submitVehicle = (event: React.FormEvent) => {
+        event.preventDefault();
+        postVehicle(`/customers/${customer.id}/vehicles`, {
+            preserveScroll: true,
+            only: ['customer'],
+            onSuccess: () => {
+                closeVehicleModal();
+                setIsVehicleOpen(true);
+            },
+        });
+    };
 
     return (
         <AppLayout>
@@ -554,7 +609,10 @@ export default function CustomerDetails({
                                             recentPayments.map(
                                                 (payment, index) => (
                                                     <tr
-                                                        key={payment.id}
+                                                        key={
+                                                            payment.key ||
+                                                            payment.id
+                                                        }
                                                         className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
                                                     >
                                                         <td className="p-4 text-[13px] dark:text-white">
@@ -606,13 +664,13 @@ export default function CustomerDetails({
 
                 {/* Vehicle Accordion */}
                 <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between gap-3">
                         <button
                             onClick={() => setIsVehicleOpen(!isVehicleOpen)}
-                            className="flex w-full cursor-pointer items-center justify-between text-left"
+                            className="flex min-w-0 flex-1 cursor-pointer items-center justify-between text-left"
                         >
                             <CardTitle className="dark:text-white">
-                                Show vehicle
+                                Vehicles
                             </CardTitle>
                             {isVehicleOpen ? (
                                 <ChevronUp className="h-5 w-5 dark:text-white" />
@@ -620,17 +678,19 @@ export default function CustomerDetails({
                                 <ChevronDown className="h-5 w-5 dark:text-white" />
                             )}
                         </button>
+                        {can('create-vehicle') && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => setIsAddVehicleOpen(true)}
+                            >
+                                <Plus className="h-4 w-4" />
+                                Add Vehicle
+                            </Button>
+                        )}
                     </CardHeader>
-                    <div
-                        className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                            isVehicleOpen
-                                ? 'max-h-screen opacity-100'
-                                : 'max-h-0 opacity-0'
-                        }`}
-                    >
-                        <CardContent
-                            className={isVehicleOpen ? 'pb-6' : 'pb-0'}
-                        >
+                    {isVehicleOpen && (
+                        <CardContent className="pb-6">
                             {customer.vehicles &&
                             customer.vehicles.length > 0 ? (
                                 <div className="overflow-x-auto">
@@ -654,6 +714,9 @@ export default function CustomerDetails({
                                                 </th>
                                                 <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
                                                     Registration Date
+                                                </th>
+                                                <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                                    Status
                                                 </th>
                                             </tr>
                                         </thead>
@@ -722,6 +785,19 @@ export default function CustomerDetails({
                                                                   )
                                                                 : 'N/A'}
                                                         </td>
+                                                        <td className="p-4">
+                                                            <Badge
+                                                                variant={
+                                                                    vehicle.status
+                                                                        ? 'default'
+                                                                        : 'secondary'
+                                                                }
+                                                            >
+                                                                {vehicle.status
+                                                                    ? 'Active'
+                                                                    : 'Inactive'}
+                                                            </Badge>
+                                                        </td>
                                                     </tr>
                                                 ),
                                             )}
@@ -734,11 +810,129 @@ export default function CustomerDetails({
                                 </p>
                             )}
                         </CardContent>
-                    </div>
+                    )}
                 </Card>
 
                 {/* Design your page here */}
             </div>
+
+            <FormModal
+                isOpen={isAddVehicleOpen}
+                onClose={closeVehicleModal}
+                title={`Add Vehicle - ${customer.name}`}
+                onSubmit={submitVehicle}
+                processing={vehicleProcessing}
+                submitText="Create Vehicle"
+                errors={vehicleErrors}
+                className="w-[calc(100vw-2rem)] max-w-4xl"
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <Label>
+                                Vehicle Number{' '}
+                                <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                value={vehicleData.vehicle_number}
+                                onChange={(event) =>
+                                    setVehicleData(
+                                        'vehicle_number',
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Enter vehicle number"
+                            />
+                            <InputError
+                                message={vehicleErrors.vehicle_number}
+                            />
+                        </div>
+                        <div>
+                            <Label>Vehicle Name</Label>
+                            <Input
+                                value={vehicleData.vehicle_name}
+                                onChange={(event) =>
+                                    setVehicleData(
+                                        'vehicle_name',
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Enter vehicle name"
+                            />
+                            <InputError message={vehicleErrors.vehicle_name} />
+                        </div>
+                        <div>
+                            <Label>Vehicle Type</Label>
+                            <Input
+                                value={vehicleData.vehicle_type}
+                                onChange={(event) =>
+                                    setVehicleData(
+                                        'vehicle_type',
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Enter vehicle type"
+                            />
+                            <InputError message={vehicleErrors.vehicle_type} />
+                        </div>
+                        <div>
+                            <Label>Registration Date</Label>
+                            <Input
+                                type="date"
+                                value={vehicleData.reg_date}
+                                onChange={(event) =>
+                                    setVehicleData(
+                                        'reg_date',
+                                        event.target.value,
+                                    )
+                                }
+                            />
+                            <InputError message={vehicleErrors.reg_date} />
+                        </div>
+                        <div>
+                            <Label>Status</Label>
+                            <Select
+                                value={
+                                    vehicleData.status ? 'active' : 'inactive'
+                                }
+                                onValueChange={(value) =>
+                                    setVehicleData(
+                                        'status',
+                                        value === 'active',
+                                    )
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">
+                                        Active
+                                    </SelectItem>
+                                    <SelectItem value="inactive">
+                                        Inactive
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <InputError message={vehicleErrors.status} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label>Assigned Products</Label>
+                        <VehicleProductSelector
+                            products={products}
+                            value={vehicleData.products}
+                            onChange={(assignments) =>
+                                setVehicleData('products', assignments)
+                            }
+                            error={productAssignmentError}
+                            disabled={vehicleProcessing}
+                            maxProducts={vehicleProductLimit}
+                        />
+                    </div>
+                </div>
+            </FormModal>
 
             {/* SMS Modal */}
             <FormModal

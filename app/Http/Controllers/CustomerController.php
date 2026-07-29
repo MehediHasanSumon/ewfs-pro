@@ -104,6 +104,8 @@ class CustomerController extends Controller implements HasMiddleware
                     'total_sales' => $metric['total_sales'],
                     'total_paid' => $metric['total_paid'],
                     'current_due' => $metric['current_due'],
+                    'current_advance' => $metric['current_advance'],
+                    'previous_due' => $metric['previous_due'],
                     'created_at' => $customer->created_at->format('Y-m-d'),
                 ];
             })
@@ -191,23 +193,27 @@ class CustomerController extends Controller implements HasMiddleware
     {
         $customer->load([
             'account:id,name,ac_number',
-            'vehicles:id,customer_id,vehicle_number,vehicle_name,vehicle_type,reg_date,status,created_at',
-            'vehicles.products:id,product_name',
+            'vehicles' => fn ($query) => $query
+                ->select([
+                    'vehicles.id',
+                    'vehicles.customer_id',
+                    'vehicles.vehicle_number',
+                    'vehicles.vehicle_name',
+                    'vehicles.vehicle_type',
+                    'vehicles.reg_date',
+                    'vehicles.status',
+                    'vehicles.created_at',
+                ])
+                ->orderBy('vehicles.vehicle_number')
+                ->orderBy('vehicles.id'),
+            'vehicles.products' => fn ($query) => $query
+                ->select(['products.id', 'products.product_name']),
         ]);
 
-        $paymentQuery = $this->partyLedger->vouchers(
-            'customer_id',
+        $paymentCount = $this->partyLedger->customerPaymentCount($customer->id);
+        $recentPayments = $this->partyLedger->customerPayments(
             $customer->id,
-            'receipt'
-        );
-        $paymentCount = (clone $paymentQuery)->count();
-        $recentPayments = $this->partyLedger->voucherRows(
-            $paymentQuery
-                ->orderByDesc('voucher_date')
-                ->orderByDesc('id')
-                ->limit(5)
-                ->get(),
-            'Received'
+            limit: 5
         );
 
         $recentSales = CreditSaleCustomer::query()
@@ -250,6 +256,8 @@ class CustomerController extends Controller implements HasMiddleware
                 (new CustomerResource($customer))->resolve(),
                 [
                     'security_deposit' => $metric['security_deposit'],
+                    'current_advance' => $metric['current_advance'],
+                    'previous_due' => $metric['previous_due'],
                 ]
             ),
             'recentPayments' => $recentPayments,
@@ -260,6 +268,14 @@ class CustomerController extends Controller implements HasMiddleware
             'paymentCount' => $paymentCount,
             'currentDue' => $metric['current_due'],
             'smsTemplates' => $smsTemplates,
+            'products' => Product::query()
+                ->active()
+                ->orderBy('product_name')
+                ->get(['id', 'product_name as name']),
+            'vehicleProductLimit' => max(
+                1,
+                (int) config('erp.vehicle_products.max_assigned', 50)
+            ),
         ]);
     }
 
@@ -278,16 +294,11 @@ class CustomerController extends Controller implements HasMiddleware
             (int) $year
         );
         $availableYears = $this->partyLedger->customerSalesYears($customer->id);
-        $recentPayments = $this->partyLedger->paginatedVoucherRows(
-            $this->partyLedger->vouchers(
-                'customer_id',
-                $customer->id,
-                'receipt',
-                $request->start_date,
-                $request->end_date
-            ),
+        $recentPayments = $this->partyLedger->paginatedCustomerPayments(
+            $customer->id,
             10,
-            'Received'
+            $request->start_date,
+            $request->end_date
         );
 
         return Inertia::render('Customers/CustomerStatement', [
@@ -298,6 +309,8 @@ class CustomerController extends Controller implements HasMiddleware
                 'mobile' => $customer->mobile,
                 'address' => $customer->address,
                 'security_deposit' => $metric['security_deposit'],
+                'current_advance' => $metric['current_advance'],
+                'previous_due' => $metric['previous_due'],
                 'account' => $customer->account,
             ],
             'transactions' => $transactions,
@@ -465,18 +478,10 @@ class CustomerController extends Controller implements HasMiddleware
     {
         $customer->load('account');
 
-        $payments = $this->partyLedger->voucherRows(
-            $this->partyLedger->vouchers(
-                'customer_id',
-                $customer->id,
-                'receipt',
-                $request->start_date,
-                $request->end_date
-            )
-                ->orderByDesc('voucher_date')
-                ->orderByDesc('id')
-                ->get(),
-            'Received'
+        $payments = $this->partyLedger->customerPayments(
+            $customer->id,
+            $request->start_date,
+            $request->end_date
         );
 
         $companySetting = CompanySetting::first();

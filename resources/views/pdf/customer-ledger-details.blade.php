@@ -159,6 +159,8 @@
                 <th>SL</th>
                 <th>Date</th>
                 <th>Invoice/Transaction ID</th>
+                <th>Vehicle No</th>
+                <th>Memo No</th>
                 <th class="text-right">Debit</th>
                 <th class="text-right">Credit</th>
                 <th class="text-right">Due Amount</th>
@@ -171,6 +173,8 @@
                 <td>{{ $index + 1 }}</td>
                 <td>{{ $transaction->date }}</td>
                 <td>{{ $transaction->transaction_id }}</td>
+                <td>{{ $transaction->vehicle_no ?? '-' }}</td>
+                <td>{{ $transaction->memo_no ?? 'N/A' }}</td>
                 <td class="text-right">{{ number_format($transaction->debit, 2) }}</td>
                 <td class="text-right">{{ number_format($transaction->credit, 2) }}</td>
                 <td class="text-right">{{ number_format($transaction->due, 2) }}</td>
@@ -178,7 +182,7 @@
             </tr>
             @endforeach
             <tr style="font-weight: bold; background-color: #e0e0e0;">
-                <td colspan="3">Total:</td>
+                <td colspan="5">Total:</td>
                 <td class="text-right">{{ number_format($ledger['total_debit'], 2) }}</td>
                 <td class="text-right">{{ number_format($ledger['total_credit'], 2) }}</td>
                 <td class="text-right">{{ number_format($ledger['total_due'], 2) }}</td>

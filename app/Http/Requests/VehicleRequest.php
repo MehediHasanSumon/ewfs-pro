@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Vehicle;
+use App\Models\Customer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,6 +16,12 @@ class VehicleRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $customer = $this->route('customer');
+
+        if ($customer instanceof Customer) {
+            $this->merge(['customer_id' => $customer->id]);
+        }
+
         if (! $this->has('products') && is_array($this->input('product_ids'))) {
             $this->merge([
                 'products' => collect($this->input('product_ids'))

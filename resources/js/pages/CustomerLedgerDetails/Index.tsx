@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
@@ -15,6 +14,8 @@ interface Transaction {
     date: string;
     shift: string;
     transaction_id: string;
+    vehicle_no?: string;
+    memo_no?: string;
     debit: number;
     credit: number;
     due: number;
@@ -188,6 +189,8 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">SL</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Invoice no</th>
+                                                    <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Vehicle No</th>
+                                                    <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Memo No</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Debit</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Credit</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
@@ -202,6 +205,8 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                         <td className="p-2 text-[13px] dark:text-white">{transactionIndex + 1}</td>
                                                         <td className="p-2 text-[13px] dark:text-white">{transaction.date}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{transaction.transaction_id}</td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">{transaction.vehicle_no || '-'}</td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">{transaction.memo_no || 'N/A'}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(transaction.debit).toFixed(2)}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(transaction.credit).toFixed(2)}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(transaction.due).toFixed(2)}</td>
@@ -209,7 +214,7 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                     </tr>
                                                 ))}
                                                 <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                    <td colSpan={3} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                    <td colSpan={5} className="p-2 text-[13px] dark:text-white">Total:</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_debit).toFixed(2)}</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_credit).toFixed(2)}</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_due).toFixed(2)}</td>
