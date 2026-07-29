@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Requests\SaleRequest;
 use App\Http\Resources\SaleEditResource;
 use App\Models\Account;
 use App\Models\Customer;
@@ -465,14 +466,11 @@ function regularPosPayload(array $fixture, array $overrides = []): array
         'customer_id' => $fixture['customer']->id,
         'customer_name' => $fixture['customer']->name,
         'customer_mobile' => $fixture['customer']->mobile,
-        'customer_address' => $fixture['customer']->address,
-        'save_customer' => false,
         'vehicle_id' => $fixture['vehicle']->id,
         'vehicle_no' => $fixture['vehicle']->vehicle_number,
         'memo_no' => null,
         'payment_type' => 'Cash',
         'to_account_id' => $fixture['cash']->id,
-        'paid_amount' => '65.80',
         'remarks' => null,
         'items' => [
             [
@@ -500,40 +498,21 @@ function regularPosPayload(array $fixture, array $overrides = []): array
     return $payload;
 }
 
-it('looks up a normalized mobile with vehicles and current due', function () {
+it('keeps removed modal fields out of the sale validation contract', function () {
+    $rules = (new SaleRequest)->rules();
+
+    foreach ([
+        'customer_address',
+        'previous_due',
+        'save_customer',
+        'paid_amount',
+    ] as $field) {
+        expect(array_key_exists($field, $rules))->toBeFalse();
+    }
+});
+
+it('looks up a normalized mobile with active vehicles', function () {
     $fixture = makeSalesPosFixture();
-    $journalId = DB::table('journal_entries')->insertGetId([
-        'entry_no' => 'DUE-1',
-        'business_date' => '2026-07-28',
-        'occurred_at' => now(),
-        'event_type' => 'opening',
-        'source_type' => Customer::class,
-        'source_id' => $fixture['customer']->id,
-        'status' => 'posted',
-        'idempotency_key' => 'due-1',
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-    DB::table('journal_lines')->insert([
-        [
-            'journal_entry_id' => $journalId,
-            'line_no' => 1,
-            'account_id' => $fixture['customer']->account_id,
-            'debit_amount' => 150,
-            'credit_amount' => 0,
-            'customer_id' => $fixture['customer']->id,
-            'created_at' => now(),
-        ],
-        [
-            'journal_entry_id' => $journalId,
-            'line_no' => 2,
-            'account_id' => $fixture['customer']->account_id,
-            'debit_amount' => 0,
-            'credit_amount' => 50,
-            'customer_id' => $fixture['customer']->id,
-            'created_at' => now(),
-        ],
-    ]);
     Vehicle::query()->create([
         'customer_id' => $fixture['customer']->id,
         'vehicle_number' => 'DHAKA-1001',
@@ -543,7 +522,6 @@ it('looks up a normalized mobile with vehicles and current due', function () {
     $customer = $fixture['customers']->lookup('017-1111-1111');
 
     expect($customer?->id)->toBe($fixture['customer']->id)
-        ->and($customer?->previous_due)->toBe(100.0)
         ->and($customer?->vehicles->pluck('vehicle_number')->all())
         ->toBe(['DHAKA-1001']);
 });
@@ -554,7 +532,6 @@ it('rejects a selected customer when the submitted mobile belongs elsewhere', fu
     expect(fn () => $fixture['customers']->resolve([
         'customer_id' => $fixture['customer']->id,
         'customer_mobile' => $fixture['otherCustomer']->mobile,
-        'save_customer' => false,
     ]))->toThrow(ValidationException::class);
 });
 
@@ -590,17 +567,14 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($report->first()['total_amount'])->toBe(65.8);
 });
 
-it('persists a typed vehicle when a walk-in customer is intentionally saved', function () {
+it('automatically creates a customer and typed vehicle for a new mobile', function () {
     $fixture = makeSalesPosFixture();
     $payload = regularPosPayload($fixture, [
         'customer_id' => null,
-        'customer_name' => 'Walk-in Saved',
+        'customer_name' => 'New POS Customer',
         'customer_mobile' => '01911-111111',
-        'customer_address' => 'Chattogram',
-        'save_customer' => true,
         'vehicle_id' => null,
         'vehicle_no' => 'NEW-VEHICLE',
-        'paid_amount' => '10.13',
         'items' => [[
             'product_id' => $fixture['products'][0]->id,
             'quantity' => 1,
@@ -619,6 +593,25 @@ it('persists a typed vehicle when a walk-in customer is intentionally saved', fu
         ->and($sale->vehicle?->customer_id)->toBe($savedCustomer->id);
 });
 
+it('reuses a normalized mobile and updates editable customer details', function () {
+    $fixture = makeSalesPosFixture();
+    $first = DB::transaction(fn () => $fixture['customers']->resolve([
+        'customer_id' => null,
+        'customer_name' => 'First Name',
+        'customer_mobile' => '01922-222222',
+    ]));
+    $second = DB::transaction(fn () => $fixture['customers']->resolve([
+        'customer_id' => null,
+        'customer_name' => 'Updated Name',
+        'customer_mobile' => '01922222222',
+    ]));
+
+    expect($second?->id)->toBe($first?->id)
+        ->and($second?->fresh()->name)->toBe('Updated Name')
+        ->and(Customer::query()->where('mobile', '01922222222')->count())
+        ->toBe(1);
+});
+
 it('rejects a payment account that does not match the payment method', function () {
     $fixture = makeSalesPosFixture();
     $payload = regularPosPayload($fixture, [
@@ -634,6 +627,33 @@ it('rejects a payment account that does not match the payment method', function 
     }
 });
 
+it('rolls back automatic customer creation when sale posting fails', function () {
+    $fixture = makeSalesPosFixture();
+    $customerCount = Customer::query()->count();
+    $payload = regularPosPayload($fixture, [
+        'customer_id' => null,
+        'customer_name' => 'Rollback Customer',
+        'customer_mobile' => '01633-333333',
+        'vehicle_id' => null,
+        'vehicle_no' => null,
+        'to_account_id' => $fixture['bank']->id,
+        'items' => [[
+            'product_id' => $fixture['products'][0]->id,
+            'quantity' => 1,
+            'discount' => 0,
+        ]],
+    ]);
+
+    try {
+        $fixture['service']->create($payload);
+        $this->fail('Expected payment account validation to fail.');
+    } catch (ValidationException) {
+        expect(Customer::query()->count())->toBe($customerCount)
+            ->and(Customer::query()->where('mobile', '01633333333')->exists())
+            ->toBeFalse();
+    }
+});
+
 it('edits the same voucher and replaces only its item set', function () {
     $fixture = makeSalesPosFixture();
     $sale = $fixture['service']->create(regularPosPayload($fixture));
@@ -641,7 +661,6 @@ it('edits the same voucher and replaces only its item set', function () {
     $originalInvoice = $sale->invoice_no;
     $originalJournalId = $sale->journal_entry_id;
     $replacement = regularPosPayload($fixture, [
-        'paid_amount' => '25.81',
         'items' => [
             [
                 'product_id' => $fixture['products'][0]->id,
@@ -686,5 +705,7 @@ it('falls back to the posted journal payment line for legacy sale edits', functi
 
     expect($resource['payment']['payment_type'])->toBe('cash')
         ->and($resource['payment']['to_account_id'])->toBe($fixture['cash']->id)
-        ->and($resource['payment']['account_no'])->toBe($fixture['cash']->ac_number);
+        ->and($resource['payment']['account_no'])->toBe($fixture['cash']->ac_number)
+        ->and($resource)->not->toHaveKey('customer_address')
+        ->and($resource['payment'])->not->toHaveKey('paid_amount');
 });

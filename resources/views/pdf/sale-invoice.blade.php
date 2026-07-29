@@ -44,7 +44,6 @@
             <td>
                 <strong>Customer:</strong> {{ $sale->customer_name_snapshot ?: 'Walk-in Customer' }}<br>
                 <strong>Mobile:</strong> {{ $sale->customer_mobile_snapshot ?: 'N/A' }}<br>
-                <strong>Address:</strong> {{ $sale->customer_address_snapshot ?: 'N/A' }}<br>
                 <strong>Vehicle:</strong> {{ $sale->vehicle_number_snapshot ?: 'N/A' }}
             </td>
             <td class="text-right">

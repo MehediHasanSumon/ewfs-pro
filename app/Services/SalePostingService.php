@@ -7,6 +7,8 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Vehicle;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -23,51 +25,57 @@ class SalePostingService
 
     public function create(array $data, string $saleType = 'regular'): Sale
     {
-        return DB::transaction(
-            fn () => $this->postRegularSale(null, $data, $saleType)
+        return $this->withCustomerMobileLock(
+            $data,
+            fn () => DB::transaction(
+                fn () => $this->postRegularSale(null, $data, $saleType)
+            )
         );
     }
 
     public function replace(Sale $sale, array $data): Sale
     {
-        return DB::transaction(function () use ($sale, $data) {
-            $lockedSale = Sale::query()
-                ->whereKey($sale->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-            $lockedSale->loadMissing('journalEntry');
+        return $this->withCustomerMobileLock(
+            $data,
+            fn () => DB::transaction(function () use ($sale, $data) {
+                $lockedSale = Sale::query()
+                    ->whereKey($sale->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $lockedSale->loadMissing('journalEntry');
 
-            if ($lockedSale->journalEntry?->status !== 'posted') {
-                throw ValidationException::withMessages([
-                    'sale' => 'Only an active posted sale can be edited.',
+                if ($lockedSale->journalEntry?->status !== 'posted') {
+                    throw ValidationException::withMessages([
+                        'sale' => 'Only an active posted sale can be edited.',
+                    ]);
+                }
+
+                $this->accounting->reverse(
+                    $lockedSale->journalEntry,
+                    'Sale reposted from the edit workflow.'
+                );
+
+                $this->inventory->reverseSource(
+                    Sale::class,
+                    $lockedSale->id,
+                    'Sale reposted from the edit workflow.'
+                );
+
+                $lockedSale->update([
+                    'journal_entry_id' => null,
+                    'status' => 'draft',
+                    'posted_by' => null,
+                    'posted_at' => null,
                 ]);
-            }
+                $lockedSale->items()->delete();
 
-            $this->accounting->reverse(
-                $lockedSale->journalEntry,
-                'Sale reposted from the edit workflow.'
-            );
-
-            $this->inventory->reverseSource(
-                Sale::class,
-                $lockedSale->id,
-                'Sale reposted from the edit workflow.'
-            );
-
-            $lockedSale->update([
-                'journal_entry_id' => null,
-                'status' => 'draft',
-                'posted_by' => null,
-                'posted_at' => null,
-            ]);
-            $lockedSale->items()->delete();
-
-            return $this->postRegularSale(
-                $lockedSale,
-                $data,
-                $lockedSale->sale_type
-            );
-        });
+                return $this->postRegularSale(
+                    $lockedSale,
+                    $data,
+                    $lockedSale->sale_type
+                );
+            })
+        );
     }
 
     public function createWhiteSale(array $data): Sale
@@ -265,20 +273,9 @@ class SalePostingService
             (float) collect($resolvedItems)->sum('line_total'),
             $currencyScale
         );
-        $paidAmount = round((float) $data['paid_amount'], $currencyScale);
-
         if ($grandTotal <= 0) {
             throw ValidationException::withMessages([
                 'items' => 'The sale total must be greater than zero.',
-            ]);
-        }
-
-        if (
-            abs($paidAmount - $grandTotal)
-            >= (0.5 / (10 ** $currencyScale))
-        ) {
-            throw ValidationException::withMessages([
-                'paid_amount' => 'Paid amount must equal the sale total for a POS sale.',
             ]);
         }
 
@@ -302,8 +299,6 @@ class SalePostingService
             'customer_name_snapshot' => $customer?->name
                 ?? $data['customer_name'],
             'customer_mobile_snapshot' => $customer?->mobile ?? $mobile,
-            'customer_address_snapshot' => $customer?->address
-                ?? ($data['customer_address'] ?? null),
             'vehicle_number_snapshot' => $vehicleNumber,
             'subtotal' => $subtotal,
             'discount_total' => $discountTotal,
@@ -564,7 +559,7 @@ class SalePostingService
             ->orderBy('id')
             ->first();
 
-        if ($vehicle || ! $customer || ! ($data['save_customer'] ?? false)) {
+        if ($vehicle || ! $customer) {
             return $vehicle;
         }
 
@@ -613,5 +608,23 @@ class SalePostingService
     private function currencyScale(): int
     {
         return min(4, max(0, (int) config('erp.sales.currency_scale', 2)));
+    }
+
+    private function withCustomerMobileLock(array $data, callable $callback): Sale
+    {
+        $mobile = $this->customers->normalizeMobile(
+            (string) ($data['customer_mobile'] ?? '')
+        );
+
+        try {
+            return Cache::lock(
+                'sales-customer-mobile:'.sha1($mobile),
+                15
+            )->block(5, $callback);
+        } catch (LockTimeoutException) {
+            throw ValidationException::withMessages([
+                'customer_mobile' => 'This mobile number is being processed. Please try again.',
+            ]);
+        }
     }
 }

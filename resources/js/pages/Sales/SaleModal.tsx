@@ -1,6 +1,5 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
@@ -96,8 +95,6 @@ interface CustomerLookup {
     id: number;
     name: string;
     mobile: string;
-    address?: string | null;
-    previous_due: number;
     vehicles: {
         id: number;
         vehicle_number: string;
@@ -120,13 +117,10 @@ interface FormState {
     customer_id: string;
     customer_name: string;
     customer_mobile: string;
-    customer_address: string;
-    save_customer: boolean;
     vehicle_id: string;
     vehicle_no: string;
     payment_type: string;
     to_account_id: string;
-    paid_amount: string;
     bank_type: string;
     bank_name: string;
     branch_name: string;
@@ -198,13 +192,10 @@ export function SaleModal({
         customer_id: '',
         customer_name: '',
         customer_mobile: '',
-        customer_address: '',
-        save_customer: false,
         vehicle_id: '',
         vehicle_no: '',
         payment_type: 'Cash',
         to_account_id: '',
-        paid_amount: '',
         bank_type: '',
         bank_name: '',
         branch_name: '',
@@ -224,7 +215,6 @@ export function SaleModal({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [lookupError, setLookupError] = useState('');
     const [lookupLoading, setLookupLoading] = useState(false);
-    const [previousDue, setPreviousDue] = useState(0);
     const [lookupEnabled, setLookupEnabled] = useState(true);
     const latestLookupRef = useRef('');
     const resolvedLookupRef = useRef('');
@@ -301,14 +291,12 @@ export function SaleModal({
         setErrors({});
         setLookupError('');
         setLookupLoading(false);
-        setPreviousDue(0);
         setLookupEnabled(true);
     };
 
     const clearCartForCustomerChange = () => {
         setCart([]);
         setDraftLine(emptyLine());
-        setData((current) => ({ ...current, paid_amount: '' }));
     };
 
     const confirmCustomerChange = () =>
@@ -338,36 +326,17 @@ export function SaleModal({
             customer_mobile: value,
             customer_id: '',
             customer_name: current.customer_id ? '' : current.customer_name,
-            customer_address: current.customer_id
-                ? ''
-                : current.customer_address,
-            save_customer: false,
             vehicle_id: '',
             vehicle_no: '',
         }));
-        setPreviousDue(0);
         setLookupError('');
     };
 
     const handleCustomerNameChange = (value: string) => {
-        if (
-            value !== data.customer_name &&
-            !confirmCustomerChange()
-        ) {
-            return;
-        }
-
-        if (value !== data.customer_name) {
-            clearCartForCustomerChange();
-        }
-
         setData((current) => ({
             ...current,
-            customer_id: '',
             customer_name: value,
-            save_customer: false,
         }));
-        setPreviousDue(0);
     };
 
     const handleVehicleChange = (vehicleNumber: string) => {
@@ -383,23 +352,7 @@ export function SaleModal({
     };
 
     const updateDraftLine = (changes: Partial<CartLine>) => {
-        const nextLine = { ...draftLine, ...changes };
-        const product = productsById.get(nextLine.product_id);
-        const quantity = parseFloat(nextLine.quantity);
-        const discount = parseFloat(nextLine.discount) || 0;
-        const nextDraftTotal =
-            product && Number.isFinite(quantity) && quantity > 0
-                ? Math.max(0, product.sales_price * quantity - discount)
-                : 0;
-
-        setDraftLine(nextLine);
-        setData((current) => ({
-            ...current,
-            paid_amount:
-                cartTotal + nextDraftTotal > 0
-                    ? (cartTotal + nextDraftTotal).toFixed(2)
-                    : '',
-        }));
+        setDraftLine((current) => ({ ...current, ...changes }));
     };
 
     const addToCart = () => {
@@ -438,17 +391,8 @@ export function SaleModal({
             return;
         }
 
-        const nextCart = [...cart, { ...draftLine }];
-        const nextTotal = nextCart.reduce(
-            (total, line) => total + lineTotal(line),
-            0,
-        );
-        setCart(nextCart);
+        setCart((current) => [...current, { ...draftLine }]);
         setDraftLine(emptyLine());
-        setData((current) => ({
-            ...current,
-            paid_amount: nextTotal.toFixed(2),
-        }));
         setErrors((current) => {
             const next = { ...current };
             delete next.draft_product_id;
@@ -460,30 +404,14 @@ export function SaleModal({
     };
 
     const editCartLine = (line: CartLine) => {
-        const nextCart = cart.filter((item) => item.key !== line.key);
-        const nextTotal = nextCart.reduce(
-            (total, item) => total + lineTotal(item),
-            0,
+        setCart((current) =>
+            current.filter((item) => item.key !== line.key),
         );
-        setCart(nextCart);
         setDraftLine(line);
-        setData((current) => ({
-            ...current,
-            paid_amount: nextTotal > 0 ? nextTotal.toFixed(2) : '',
-        }));
     };
 
     const removeCartLine = (key: string) => {
-        const nextCart = cart.filter((line) => line.key !== key);
-        const nextTotal = nextCart.reduce(
-            (total, line) => total + lineTotal(line),
-            0,
-        );
-        setCart(nextCart);
-        setData((current) => ({
-            ...current,
-            paid_amount: nextTotal > 0 ? nextTotal.toFixed(2) : '',
-        }));
+        setCart((current) => current.filter((line) => line.key !== key));
     };
 
     const handleSubmit = (event: React.FormEvent) => {
@@ -518,26 +446,8 @@ export function SaleModal({
             return;
         }
 
-        const total = items.reduce(
-            (sum, line) => sum + lineTotal(line),
-            0,
-        );
-        const paidAmount = parseFloat(data.paid_amount);
-
-        if (
-            !Number.isFinite(paidAmount) ||
-            Math.abs(paidAmount - total) >= 0.005
-        ) {
-            setErrors({
-                paid_amount:
-                    'Paid amount must equal the sale total for a POS sale.',
-            });
-            return;
-        }
-
         const payload = {
             ...data,
-            paid_amount: total.toFixed(2),
             items: items.map((line) => ({
                 product_id: line.product_id,
                 quantity: line.quantity,
@@ -626,13 +536,11 @@ export function SaleModal({
                                   ...current,
                                   customer_id: '',
                                   customer_name: '',
-                                  customer_address: '',
                                   vehicle_id: '',
                                   vehicle_no: '',
                               }
                             : current,
                     );
-                    setPreviousDue(0);
                     return;
                 }
 
@@ -652,8 +560,6 @@ export function SaleModal({
                         customer_id: customer.id.toString(),
                         customer_name: customer.name,
                         customer_mobile: customer.mobile,
-                        customer_address: customer.address || '',
-                        save_customer: false,
                         vehicle_id:
                             current.vehicle_id ||
                             firstVehicle?.id.toString() ||
@@ -664,9 +570,6 @@ export function SaleModal({
                             '',
                     };
                 });
-                if (latestLookupRef.current === lookupKey) {
-                    setPreviousDue(customer.previous_due);
-                }
             } catch (error) {
                 if ((error as Error).name !== 'AbortError') {
                     setLookupError(
@@ -746,17 +649,11 @@ export function SaleModal({
                     customer_id: sale.customer_id?.toString() || '',
                     customer_name: sale.customer_name || '',
                     customer_mobile: sale.customer_mobile || '',
-                    customer_address: sale.customer_address || '',
-                    save_customer: false,
                     vehicle_id: sale.vehicle_id?.toString() || '',
                     vehicle_no: sale.vehicle_no || '',
                     payment_type: paymentLabel(payment.payment_type),
                     to_account_id:
                         payment.to_account_id?.toString() || '',
-                    paid_amount:
-                        payment.paid_amount?.toString() ||
-                        sale.grand_total?.toString() ||
-                        '',
                     bank_type: payment.bank_type || '',
                     bank_name: payment.bank_name || '',
                     branch_name: payment.branch_name || '',
@@ -804,7 +701,7 @@ export function SaleModal({
             <div className="space-y-4">
                 <InputError message={errors.sale} />
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div>
                         <Label>
                             Sale Date <span className="text-red-500">*</span>
@@ -906,47 +803,9 @@ export function SaleModal({
                             onChange={(event) =>
                                 handleCustomerNameChange(event.target.value)
                             }
-                            readOnly={Boolean(data.customer_id)}
                             placeholder="Enter customer name"
-                            className={
-                                data.customer_id
-                                    ? 'bg-gray-100 dark:bg-gray-600'
-                                    : ''
-                            }
                         />
                         <InputError message={errors.customer_name} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="md:col-span-2">
-                        <Label>Address</Label>
-                        <Input
-                            value={data.customer_address}
-                            onChange={(event) =>
-                                setData((current) => ({
-                                    ...current,
-                                    customer_address: event.target.value,
-                                }))
-                            }
-                            readOnly={Boolean(data.customer_id)}
-                            placeholder="Enter customer address"
-                            className={
-                                data.customer_id
-                                    ? 'bg-gray-100 dark:bg-gray-600'
-                                    : ''
-                            }
-                        />
-                        <InputError message={errors.customer_address} />
-                    </div>
-
-                    <div>
-                        <Label>Previous Due</Label>
-                        <Input
-                            value={previousDue.toFixed(2)}
-                            readOnly
-                            className="bg-gray-100 dark:bg-gray-600"
-                        />
                     </div>
 
                     <div>
@@ -960,26 +819,6 @@ export function SaleModal({
                         <InputError
                             message={errors.vehicle_id || errors.vehicle_no}
                         />
-                    </div>
-
-                    <div className="flex items-end pb-2">
-                        {!data.customer_id && (
-                            <div className="flex items-center gap-2">
-                                <Checkbox
-                                    id="save-customer"
-                                    checked={data.save_customer}
-                                    onCheckedChange={(checked) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            save_customer: checked === true,
-                                        }))
-                                    }
-                                />
-                                <Label htmlFor="save-customer">
-                                    Save Customer
-                                </Label>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -1090,7 +929,7 @@ export function SaleModal({
                 <InputError message={errors.items || nestedItemError} />
 
                 <div
-                    className="grid grid-cols-1 gap-4 md:grid-cols-3"
+                    className="grid grid-cols-1 gap-4 md:grid-cols-2"
                     data-payment-method={data.payment_type}
                 >
                     <div>
@@ -1153,27 +992,6 @@ export function SaleModal({
                             </SelectContent>
                         </Select>
                         <InputError message={errors.to_account_id} />
-                    </div>
-
-                    <div>
-                        <Label>
-                            Paid Amount{' '}
-                            <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={data.paid_amount}
-                            onChange={(event) =>
-                                setData((current) => ({
-                                    ...current,
-                                    paid_amount: event.target.value,
-                                }))
-                            }
-                            placeholder={cartTotal.toFixed(2)}
-                        />
-                        <InputError message={errors.paid_amount} />
                     </div>
 
                     {data.payment_type === 'Bank' && (

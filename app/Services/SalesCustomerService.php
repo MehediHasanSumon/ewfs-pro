@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Customer;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SalesCustomerService
@@ -34,8 +33,6 @@ class SalesCustomerService
             return null;
         }
 
-        $customer->setAttribute('previous_due', $this->currentDue($customer));
-
         return $customer;
     }
 
@@ -44,6 +41,8 @@ class SalesCustomerService
         if (! empty($data['customer_id'])) {
             $customer = Customer::query()
                 ->active()
+                ->with('account')
+                ->lockForUpdate()
                 ->findOrFail($data['customer_id']);
 
             if (! $this->mobileMatches($customer, $data['customer_mobile'])) {
@@ -52,16 +51,15 @@ class SalesCustomerService
                 ]);
             }
 
+            $this->updateEditableFields($customer, $data);
+
             return $customer;
         }
 
-        $existingQuery = $this->customerQuery($data['customer_mobile']);
-
-        if ($data['save_customer'] ?? false) {
-            $existingQuery->lockForUpdate();
-        }
-
-        $existing = $existingQuery->first();
+        $existing = $this->customerQuery($data['customer_mobile'])
+            ->with('account')
+            ->lockForUpdate()
+            ->first();
 
         if ($existing) {
             if (! $existing->status) {
@@ -70,11 +68,9 @@ class SalesCustomerService
                 ]);
             }
 
-            return $existing;
-        }
+            $this->updateEditableFields($existing, $data);
 
-        if (! ($data['save_customer'] ?? false)) {
-            return null;
+            return $existing;
         }
 
         $account = $this->partyAccounts->createCustomerAccount(
@@ -87,7 +83,6 @@ class SalesCustomerService
             'code' => $this->numbers->next('customer', 'CC', null, 3),
             'name' => $data['customer_name'],
             'mobile' => $this->normalizeMobile($data['customer_mobile']),
-            'address' => $data['customer_address'] ?? null,
             'discount_rate' => 0,
             'credit_limit' => 0,
             'credit_days' => 0,
@@ -118,22 +113,25 @@ class SalesCustomerService
                 if ($normalized !== $raw) {
                     $query->orWhere('mobile', $normalized);
                 }
+
+                $query->orWhereRaw(
+                    "REPLACE(REPLACE(REPLACE(REPLACE(mobile, ' ', ''), '-', ''), '(', ''), ')', '') = ?",
+                    [$normalized]
+                );
             })
             ->orderByDesc('status')
             ->orderBy('id');
     }
 
-    private function currentDue(Customer $customer): float
+    private function updateEditableFields(Customer $customer, array $data): void
     {
-        $balance = DB::table('journal_lines as jl')
-            ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
-            ->where('jl.account_id', $customer->account_id)
-            ->whereIn('je.status', ['posted', 'reversed'])
-            ->selectRaw(
-                'COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) AS balance'
-            )
-            ->value('balance');
+        $name = trim((string) ($data['customer_name'] ?? ''));
 
-        return max(0, (float) $balance);
+        if ($name === '' || $name === $customer->name) {
+            return;
+        }
+
+        $customer->account?->update(['name' => $name]);
+        $customer->update(['name' => $name]);
     }
 }

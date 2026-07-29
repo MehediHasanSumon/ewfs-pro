@@ -25,7 +25,6 @@ class SaleEditResource extends JsonResource
             'customer_id' => $this->customer_id,
             'customer_name' => $this->customer_name_snapshot,
             'customer_mobile' => $this->customer_mobile_snapshot,
-            'customer_address' => $this->customer_address_snapshot,
             'vehicle_id' => $this->vehicle_id,
             'vehicle_no' => $this->vehicle_number_snapshot,
             'remarks' => $this->remarks,
@@ -45,7 +44,6 @@ class SaleEditResource extends JsonResource
                     ?? $paymentLine?->payment_method,
                 'to_account_id' => $paymentDetail?->account_id
                     ?? $paymentLine?->account_id,
-                'paid_amount' => (float) $this->grand_total,
                 'bank_type' => $paymentDetail?->bank_type,
                 'bank_name' => $paymentDetail?->bank_name,
                 'branch_name' => $paymentDetail?->branch_name,

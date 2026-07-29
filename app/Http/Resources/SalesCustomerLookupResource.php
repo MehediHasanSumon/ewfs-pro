@@ -13,8 +13,6 @@ class SalesCustomerLookupResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'mobile' => $this->mobile,
-            'address' => $this->address,
-            'previous_due' => (float) ($this->previous_due ?? 0),
             'vehicles' => $this->whenLoaded('vehicles', fn () => $this->vehicles
                 ->map(fn ($vehicle) => [
                     'id' => $vehicle->id,

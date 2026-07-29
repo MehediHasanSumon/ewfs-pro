@@ -55,8 +55,6 @@ class SaleRequest extends FormRequest
                 $legacyLine['customer'] ?? $this->input('customer')
             ),
             'customer_mobile' => trim((string) $customerMobile),
-            'customer_address' => $this->input('customer_address'),
-            'save_customer' => $this->boolean('save_customer'),
             'vehicle_id' => $this->input(
                 'vehicle_id',
                 $legacyLine['vehicle_id'] ?? null
@@ -76,10 +74,6 @@ class SaleRequest extends FormRequest
             'to_account_id' => $this->input(
                 'to_account_id',
                 $legacyLine['to_account_id'] ?? null
-            ),
-            'paid_amount' => $this->input(
-                'paid_amount',
-                $legacyLine['paid_amount'] ?? null
             ),
             'bank_type' => $this->input(
                 'bank_type',
@@ -144,8 +138,6 @@ class SaleRequest extends FormRequest
                 'max:150',
             ],
             'customer_mobile' => ['required', 'string', 'max:50'],
-            'customer_address' => ['nullable', 'string', 'max:2000'],
-            'save_customer' => ['boolean'],
             'vehicle_id' => [
                 'nullable',
                 'integer',
@@ -159,7 +151,6 @@ class SaleRequest extends FormRequest
                 'integer',
                 Rule::exists('accounts', 'id')->where('status', true),
             ],
-            'paid_amount' => ['required', 'numeric', 'min:0'],
             'bank_type' => ['nullable', 'required_if:payment_type,Bank', 'string', 'max:50'],
             'bank_name' => ['nullable', 'required_if:payment_type,Bank', 'string', 'max:150'],
             'branch_name' => ['nullable', 'string', 'max:150'],
