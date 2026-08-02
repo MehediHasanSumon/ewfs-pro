@@ -106,7 +106,7 @@ it('can reset and seed repeatedly without creating duplicates', function () {
         ->toBe(VoucherCategoryHelper::getSystemCategoryCodes());
 });
 
-it('remaps legacy voucher and payment subtype references before deleting old categories', function () {
+it('reuses category ids so posted voucher references remain immutable', function () {
     $office = VoucherCategory::query()->create([
         'name' => 'Office',
         'status' => true,
@@ -156,15 +156,21 @@ it('remaps legacy voucher and payment subtype references before deleting old cat
         ->where('code', VoucherCategoryHelper::financeCode())
         ->value('id');
 
-    expect($officeSubType->refresh()->voucher_category_id)->toBe($operatingId)
-        ->and($generalSubType->refresh()->voucher_category_id)->toBe($financeId)
-        ->and($liabilitySubType->refresh()->voucher_category_id)->toBe($financeId)
+    expect($operatingId)->toBe($office->id)
+        ->and($financeId)->toBe($general->id)
+        ->and($officeSubType->refresh()->voucher_category_id)->toBe($office->id)
+        ->and($generalSubType->refresh()->voucher_category_id)->toBe($general->id)
+        ->and($liabilitySubType->refresh()->voucher_category_id)->toBe($liability->id)
         ->and(DB::table('vouchers')->value('voucher_category_id'))
-        ->toBe($operatingId)
+        ->toBe($office->id)
         ->and(VoucherCategory::query()
-            ->whereIn('id', [$office->id, $general->id, $liability->id])
-            ->exists())
-        ->toBeFalse();
+            ->whereKey($liability)
+            ->value('is_system'))
+        ->toBeFalse()
+        ->and(VoucherCategory::query()
+            ->whereKey($liability)
+            ->value('code'))
+        ->toBe('VC006');
 });
 
 it('keeps voucher category codes immutable while allowing editable fields', function () {

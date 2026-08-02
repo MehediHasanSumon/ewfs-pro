@@ -5,9 +5,9 @@ namespace Database\Seeders;
 use App\Helpers\VoucherCategoryHelper;
 use App\Models\VoucherCategory;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 class SystemVoucherCategorySeeder extends Seeder
 {
@@ -16,45 +16,18 @@ class SystemVoucherCategorySeeder extends Seeder
         DB::transaction(function (): void {
             $existingCategories = DB::table('voucher_categories')
                 ->lockForUpdate()
-                ->get(['id', 'code', 'name']);
-            $targetCodesByCategoryId = $existingCategories
-                ->mapWithKeys(fn ($category): array => [
-                    (int) $category->id => VoucherCategoryHelper::resolveSystemCode(
-                        $category->code,
-                        $category->name
-                    ),
+                ->get([
+                    'id',
+                    'code',
+                    'name',
+                    'description',
+                    'status',
+                    'sort_order',
                 ]);
-
-            $usedCategoryIds = collect();
-
-            if (Schema::hasTable('vouchers')) {
-                $usedCategoryIds = $usedCategoryIds->merge(
-                    DB::table('vouchers')
-                        ->whereNotNull('voucher_category_id')
-                        ->pluck('voucher_category_id')
-                );
-            }
-
-            if (Schema::hasTable('payment_sub_types')) {
-                $usedCategoryIds = $usedCategoryIds->merge(
-                    DB::table('payment_sub_types')
-                        ->whereNotNull('voucher_category_id')
-                        ->pluck('voucher_category_id')
-                );
-            }
-
-            $unmappedUsedCategories = $existingCategories
-                ->whereIn('id', $usedCategoryIds->map(fn ($id): int => (int) $id))
-                ->filter(fn ($category): bool => ! $targetCodesByCategoryId->get((int) $category->id));
-
-            if ($unmappedUsedCategories->isNotEmpty()) {
-                throw new RuntimeException(
-                    'Used voucher categories cannot be reset because they have no system mapping: '
-                    .$unmappedUsedCategories->pluck('name')->implode(', ')
-                );
-            }
-
-            $this->assertPaymentSubTypesCanBeMerged($targetCodesByCategoryId);
+            $usedCategoryIds = $this->usedCategoryIds();
+            $sourceIdsBySystemCode = $this->systemSourceIds(
+                $existingCategories
+            );
 
             foreach ($existingCategories as $category) {
                 DB::table('voucher_categories')
@@ -62,89 +35,171 @@ class SystemVoucherCategorySeeder extends Seeder
                     ->update([
                         'code' => null,
                         'name' => '__legacy_voucher_category_'.$category->id,
+                        'is_system' => false,
                     ]);
             }
 
-            $newCategoryIdsByCode = collect();
-
-            if (Schema::hasTable('document_sequences')) {
-                DB::table('document_sequences')
-                    ->where('document_type', 'voucher_category')
-                    ->delete();
-            }
+            $systemSourceIds = $sourceIdsBySystemCode
+                ->filter()
+                ->map(fn ($id): int => (int) $id)
+                ->values();
 
             foreach (VoucherCategoryHelper::systemCategories() as $category) {
-                $newCategory = VoucherCategory::query()->create([
+                $sourceId = $sourceIdsBySystemCode->get($category['code']);
+                $values = [
                     'code' => $category['code'],
                     'name' => $category['name'],
                     'description' => $category['description'],
                     'status' => true,
                     'sort_order' => $category['sort_order'],
                     'is_system' => true,
-                ]);
+                    'updated_at' => now(),
+                ];
 
-                $newCategoryIdsByCode->put(
-                    $category['code'],
-                    $newCategory->getKey()
-                );
-            }
+                if ($sourceId) {
+                    DB::table('voucher_categories')
+                        ->where('id', $sourceId)
+                        ->update($values);
 
-            foreach ($targetCodesByCategoryId as $oldCategoryId => $targetCode) {
-                if (! $targetCode) {
                     continue;
                 }
 
-                $newCategoryId = $newCategoryIdsByCode->get($targetCode);
-
-                if (Schema::hasTable('vouchers')) {
-                    DB::table('vouchers')
-                        ->where('voucher_category_id', $oldCategoryId)
-                        ->update(['voucher_category_id' => $newCategoryId]);
-                }
-
-                if (Schema::hasTable('payment_sub_types')) {
-                    DB::table('payment_sub_types')
-                        ->where('voucher_category_id', $oldCategoryId)
-                        ->update(['voucher_category_id' => $newCategoryId]);
-                }
+                VoucherCategory::query()->create($values);
             }
 
-            DB::table('voucher_categories')
-                ->whereIn('id', $existingCategories->pluck('id'))
-                ->delete();
+            $remainingCategories = $existingCategories
+                ->reject(
+                    fn ($category): bool => $systemSourceIds->contains(
+                        (int) $category->id
+                    )
+                )
+                ->sortBy('id')
+                ->values();
+            $usedCodes = collect(
+                VoucherCategoryHelper::getSystemCategoryCodes()
+            )->flip();
+            $nextSequence = VoucherCategoryHelper::minimumCustomSequence();
+
+            foreach ($remainingCategories as $category) {
+                $categoryId = (int) $category->id;
+
+                if (! $usedCategoryIds->contains($categoryId)) {
+                    DB::table('voucher_categories')
+                        ->where('id', $categoryId)
+                        ->delete();
+
+                    continue;
+                }
+
+                $code = $this->availableCustomCode(
+                    $category->code,
+                    $usedCodes,
+                    $nextSequence
+                );
+                $usedCodes->put($code, true);
+                $nextSequence = max(
+                    $nextSequence,
+                    VoucherCategoryHelper::sequenceNumber($code) + 1
+                );
+
+                DB::table('voucher_categories')
+                    ->where('id', $categoryId)
+                    ->update([
+                        'code' => $code,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                        'status' => (bool) $category->status,
+                        'sort_order' => max(
+                            (int) $category->sort_order,
+                            $nextSequence - 1
+                        ),
+                        'is_system' => false,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            if (Schema::hasTable('document_sequences')) {
+                DB::table('document_sequences')
+                    ->where('document_type', 'voucher_category')
+                    ->delete();
+            }
         });
     }
 
-    private function assertPaymentSubTypesCanBeMerged(
-        $targetCodesByCategoryId
-    ): void {
-        if (! Schema::hasTable('payment_sub_types')) {
-            return;
-        }
+    private function usedCategoryIds(): Collection
+    {
+        $ids = collect();
 
-        $seen = [];
-
-        foreach (
-            DB::table('payment_sub_types')
-                ->get(['id', 'name', 'voucher_category_id']) as $subType
-        ) {
-            $targetCode = $targetCodesByCategoryId->get(
-                (int) $subType->voucher_category_id
+        if (Schema::hasTable('vouchers')) {
+            $ids = $ids->merge(
+                DB::table('vouchers')
+                    ->whereNotNull('voucher_category_id')
+                    ->pluck('voucher_category_id')
             );
-
-            if (! $targetCode) {
-                continue;
-            }
-
-            $key = $targetCode.'|'.mb_strtolower(trim($subType->name));
-
-            if (isset($seen[$key])) {
-                throw new RuntimeException(
-                    "Payment sub-type [{$subType->name}] would be duplicated while merging voucher categories."
-                );
-            }
-
-            $seen[$key] = $subType->id;
         }
+
+        if (Schema::hasTable('payment_sub_types')) {
+            $ids = $ids->merge(
+                DB::table('payment_sub_types')
+                    ->whereNotNull('voucher_category_id')
+                    ->pluck('voucher_category_id')
+            );
+        }
+
+        return $ids
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    private function systemSourceIds(Collection $categories): Collection
+    {
+        return collect(VoucherCategoryHelper::systemCategories())
+            ->mapWithKeys(function (array $systemCategory) use ($categories): array {
+                $source = $categories->first(
+                    fn ($category): bool => $category->code === $systemCategory['code']
+                );
+
+                $source ??= $categories->first(
+                    fn ($category): bool => mb_strtolower(trim($category->name))
+                        === mb_strtolower($systemCategory['name'])
+                );
+
+                $source ??= $categories->first(
+                    fn ($category): bool => VoucherCategoryHelper::resolveSystemCode(
+                        $category->code,
+                        $category->name
+                    ) === $systemCategory['code']
+                );
+
+                return [$systemCategory['code'] => $source?->id];
+            });
+    }
+
+    private function availableCustomCode(
+        ?string $preferredCode,
+        Collection $usedCodes,
+        int $nextSequence
+    ): string {
+        if (
+            $preferredCode
+            && ! VoucherCategoryHelper::isSystemCode($preferredCode)
+            && VoucherCategoryHelper::sequenceNumber($preferredCode) > 0
+            && ! $usedCodes->has($preferredCode)
+        ) {
+            return $preferredCode;
+        }
+
+        do {
+            $code = VoucherCategoryHelper::prefix().str_pad(
+                (string) $nextSequence,
+                VoucherCategoryHelper::codePadding(),
+                '0',
+                STR_PAD_LEFT
+            );
+            $nextSequence++;
+        } while ($usedCodes->has($code));
+
+        return $code;
     }
 }
