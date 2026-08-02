@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Dispenser;
+use App\Rules\AllowedDispenserProductCategory;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,7 +21,12 @@ class DispenserRequest extends FormRequest
 
         return [
             'code' => ['nullable', 'string', 'max:64', Rule::unique('dispensers', 'code')->ignore($dispenserId)],
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'product_id' => [
+                'required',
+                'integer',
+                'exists:products,id',
+                new AllowedDispenserProductCategory,
+            ],
             'dispenser_name' => [
                 'required',
                 'string',

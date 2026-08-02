@@ -10,17 +10,59 @@ class ErpHelper
 {
     public static function oilCategoryCode(): string
     {
-        return self::getCategoryCode('oil');
+        return self::getProductCategoryCode('oil');
     }
 
     public static function gasCategoryCode(): string
     {
-        return self::getCategoryCode('gas');
+        return self::getProductCategoryCode('gas');
     }
 
     public static function lubricantCategoryCode(): string
     {
-        return self::getCategoryCode('lubricant');
+        return self::getProductCategoryCode('lubricant');
+    }
+
+    public static function getProductCategoryCode(string $category): string
+    {
+        $categories = config('erp.product_categories');
+        $key = Str::slug($category);
+        $code = is_array($categories) ? ($categories[$key] ?? null) : null;
+
+        if ($code === null) {
+            throw new InvalidArgumentException(
+                "Unknown ERP product category [{$category}]."
+            );
+        }
+
+        return (string) $code;
+    }
+
+    public static function dispenserProductCategoryCodes(): array
+    {
+        $keys = config('erp.dispenser.allowed_product_category_keys');
+
+        if (! is_array($keys) || $keys === []) {
+            throw new RuntimeException(
+                'Dispenser product category configuration is missing.'
+            );
+        }
+
+        return array_values(array_unique(array_map(
+            fn (string $key): string => self::getProductCategoryCode($key),
+            $keys
+        )));
+    }
+
+    public static function isDispenserProductCategoryCode(
+        string|int|null $code
+    ): bool {
+        return $code !== null
+            && in_array(
+                (string) $code,
+                self::dispenserProductCategoryCodes(),
+                true
+            );
     }
 
     public static function getCategoryCode(string $category): string

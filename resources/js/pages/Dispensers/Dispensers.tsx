@@ -20,6 +20,7 @@ interface Dispenser {
     dispenser_name: string;
     product_id: number;
     product_name: string;
+    product_category_allowed: boolean;
     dispenser_item: number;
     item_rate?: number;
     start_reading?: number;
@@ -96,6 +97,14 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (
+            editingDispenser &&
+            !editingDispenser.product_category_allowed &&
+            data.product_id === editingDispenser.product_id.toString()
+        ) {
+            return;
+        }
+
         if (editingDispenser) {
             put(`/dispensers/${editingDispenser.id}`, {
                 onSuccess: () => {
@@ -559,7 +568,24 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                     processing={processing}
                     submitText="Update"
                     errors={errors}
+                    submitDisabled={Boolean(
+                        editingDispenser &&
+                        !editingDispenser.product_category_allowed &&
+                        data.product_id ===
+                            editingDispenser.product_id.toString(),
+                    )}
                 >
+                    {editingDispenser &&
+                        !editingDispenser.product_category_allowed && (
+                            <div
+                                role="alert"
+                                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                            >
+                                This dispenser has an existing product
+                                assignment that is not allowed. Select an
+                                allowed product before saving.
+                            </div>
+                        )}
                     <div>
                         <Label htmlFor="edit-dispenser_name" className="dark:text-gray-200">Dispenser Name</Label>
                         <Input

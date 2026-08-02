@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Dispenser;
+use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -11,6 +12,7 @@ class DispenserService
     public function create(array $attributes): Dispenser
     {
         return DB::transaction(function () use ($attributes): Dispenser {
+            $this->assertAllowedProduct((int) $attributes['product_id']);
             $attributes['dispenser_item'] = $attributes['product_id'];
             $attributes['opening_reading'] = $attributes['opening_reading'] ?? 0;
 
@@ -22,6 +24,7 @@ class DispenserService
     {
         return DB::transaction(function () use ($dispenser, $attributes): Dispenser {
             $lockedDispenser = Dispenser::query()->lockForUpdate()->findOrFail($dispenser->getKey());
+            $this->assertAllowedProduct((int) $attributes['product_id']);
             $hasReadings = $lockedDispenser->readings()->exists();
 
             if ($hasReadings && (int) $attributes['product_id'] !== (int) $lockedDispenser->product_id) {
@@ -76,5 +79,18 @@ class DispenserService
 
             return $count;
         });
+    }
+
+    private function assertAllowedProduct(int $productId): void
+    {
+        if (! Product::query()
+            ->whereKey($productId)
+            ->allowedForDispenser()
+            ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'product_id' => 'The selected product category is not allowed for dispenser assignment.',
+            ]);
+        }
     }
 }

@@ -15,6 +15,7 @@ use App\Models\ShiftClosing;
 use App\Models\Vehicle;
 use App\Models\VoucherCategory;
 use App\Models\VoucherTransactionType;
+use App\Rules\AllowedDispenserProductCategory;
 use App\Services\ShiftClosingService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -40,6 +41,10 @@ class DispenserReadingController extends Controller implements HasMiddleware
         $dispenserReading = Dispenser::query()
             ->with(['product.activeRate', 'latestReading'])
             ->where('status', true)
+            ->whereHas(
+                'product',
+                fn ($product) => $product->allowedForDispenser()
+            )
             ->orderBy('id')
             ->get()
             ->map(function (Dispenser $dispenser) {
@@ -64,6 +69,7 @@ class DispenserReadingController extends Controller implements HasMiddleware
         $products = Product::query()
             ->with(['unit', 'stock', 'activeRate'])
             ->active()
+            ->allowedForDispenser()
             ->get()
             ->each(fn (Product $product) => $product->setAttribute(
                 'sales_price',
@@ -152,7 +158,11 @@ class DispenserReadingController extends Controller implements HasMiddleware
             'shift_id' => ['required', 'exists:shifts,id'],
             'dispenser_readings' => ['required', 'array', 'min:1'],
             'dispenser_readings.*.dispenser_id' => ['required', 'exists:dispensers,id'],
-            'dispenser_readings.*.product_id' => ['required', 'exists:products,id'],
+            'dispenser_readings.*.product_id' => [
+                'required',
+                'exists:products,id',
+                new AllowedDispenserProductCategory,
+            ],
             'dispenser_readings.*.start_reading' => ['required', 'numeric', 'min:0'],
             'dispenser_readings.*.end_reading' => ['required', 'numeric', 'gte:dispenser_readings.*.start_reading'],
             'dispenser_readings.*.meter_test' => ['nullable', 'numeric', 'min:0'],

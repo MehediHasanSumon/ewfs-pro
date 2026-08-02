@@ -35,7 +35,8 @@ class DispenserController extends Controller implements HasMiddleware
         $perPage = max(1, min($request->integer('per_page', 10), 100));
         $dispensers = $this->filteredQuery($request)
             ->with([
-                'product:id,product_name',
+                'product:id,category_id,product_name',
+                'product.category:id,code,name',
                 'product.activeRate',
                 'latestReading' => fn ($query) => $query->select([
                     'dispenser_readings.id',
@@ -56,6 +57,9 @@ class DispenserController extends Controller implements HasMiddleware
                     'dispenser_name' => $dispenser->dispenser_name,
                     'product_id' => $dispenser->product_id,
                     'product_name' => $dispenser->product?->product_name ?? '',
+                    'product_category_allowed' => ErpHelper::isDispenserProductCategoryCode(
+                        $dispenser->product?->category?->code
+                    ),
                     'dispenser_item' => $dispenser->dispenser_item,
                     'item_rate' => $dispenser->product?->activeRate !== null
                         ? (float) $dispenser->product->activeRate->sales_price
@@ -74,11 +78,7 @@ class DispenserController extends Controller implements HasMiddleware
         $products = Product::query()
             ->select(['id', 'product_name'])
             ->active()
-            ->whereHas(
-                'category',
-                fn (Builder $query) => $query
-                    ->where('code', ErpHelper::oilCategoryCode())
-            )
+            ->allowedForDispenser()
             ->orderBy('product_name')
             ->get();
 

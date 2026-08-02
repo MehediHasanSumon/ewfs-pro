@@ -1,5 +1,11 @@
 <?php
 
+$productCategoryCodes = [
+    'oil' => 1001,
+    'gas' => 1002,
+    'lubricant' => 1003,
+];
+
 $voucherCategories = [
     'prefix' => 'VC',
     'padding' => 3,
@@ -88,9 +94,15 @@ return [
     |
     */
     'categories' => [
-        1001 => 'Oil',
-        1002 => 'Gas',
-        1003 => 'Lubricant & Accessories',
+        $productCategoryCodes['oil'] => 'Oil',
+        $productCategoryCodes['gas'] => 'Gas',
+        $productCategoryCodes['lubricant'] => 'Lubricant & Accessories',
+    ],
+
+    'product_categories' => $productCategoryCodes,
+
+    'dispenser' => [
+        'allowed_product_category_keys' => ['oil', 'gas'],
     ],
 
     /*

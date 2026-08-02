@@ -23,6 +23,7 @@ interface FormModalProps {
     description?: string;
     wide?: boolean;
     errors?: Record<string, string | undefined>;
+    submitDisabled?: boolean;
 }
 
 export function FormModal({
@@ -37,6 +38,7 @@ export function FormModal({
     description,
     wide = false,
     errors = {},
+    submitDisabled = false,
 }: FormModalProps) {
     const formRef = useRef<HTMLFormElement>(null);
     const pageErrors = usePage().props.errors as Record<
@@ -98,7 +100,10 @@ export function FormModal({
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={processing}>
+                        <Button
+                            type="submit"
+                            disabled={processing || submitDisabled}
+                        >
                             {processing && (
                                 <LoaderCircle
                                     className="h-4 w-4 animate-spin"
