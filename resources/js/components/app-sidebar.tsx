@@ -196,6 +196,12 @@ const mainNavItems = [
                 permission: 'view-voucher',
             },
             {
+                title: 'Voucher Category Management',
+                href: '/voucher-categories',
+                icon: FileText,
+                permission: 'voucher-category-view',
+            },
+            {
                 title: 'Office Payment',
                 href: '/office-payments',
                 icon: CreditCard,

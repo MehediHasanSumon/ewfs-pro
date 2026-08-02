@@ -17,6 +17,53 @@ return [
         1003 => 'Lubricant & Accessories',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Voucher Categories
+    |--------------------------------------------------------------------------
+    |
+    | System voucher categories use permanent codes. Their display names may
+    | change in the database, but their codes remain stable across vouchers,
+    | reports, ledgers, and integrations.
+    |
+    */
+    'voucher_categories' => [
+        'prefix' => 'VC',
+        'padding' => 3,
+        'system' => [
+            'customer' => [
+                'code' => 'VC001',
+                'name' => 'Customer',
+                'description' => 'Customer related payments and receipts.',
+                'sort_order' => 1,
+            ],
+            'employee' => [
+                'code' => 'VC002',
+                'name' => 'Employee',
+                'description' => 'Employee related payments and receipts.',
+                'sort_order' => 2,
+            ],
+            'supplier' => [
+                'code' => 'VC003',
+                'name' => 'Supplier',
+                'description' => 'Supplier related payments and receipts.',
+                'sort_order' => 3,
+            ],
+            'operating' => [
+                'code' => 'VC004',
+                'name' => 'Operating',
+                'description' => 'Operating payments and receipts.',
+                'sort_order' => 4,
+            ],
+            'finance' => [
+                'code' => 'VC005',
+                'name' => 'Finance',
+                'description' => 'Finance related payments and receipts.',
+                'sort_order' => 5,
+            ],
+        ],
+    ],
+
     'sales' => [
         'max_items' => (int) env('SALE_MAX_ITEMS', 100),
         'currency_scale' => (int) env('SALE_CURRENCY_SCALE', 2),

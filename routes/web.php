@@ -48,6 +48,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehicleController;
+use App\Http\Controllers\VoucherCategoryController;
 use App\Http\Controllers\WhiteSaleController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -385,6 +386,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('payment-sub-types/{paymentSubType}', [PaymentSubTypeController::class, 'destroy'])->name('payment-sub-types.destroy');
     Route::delete('payment-sub-types/bulk/delete', [PaymentSubTypeController::class, 'bulkDelete'])->name('payment-sub-types.bulk.delete');
     Route::get('payment-sub-types/download-pdf', [PaymentSubTypeController::class, 'downloadPdf'])->name('payment-sub-types.download.pdf');
+
+    // Voucher Category Management routes
+    Route::get('voucher-categories', [VoucherCategoryController::class, 'index'])->name('voucher-categories.index');
+    Route::get('voucher-categories/download-pdf', [VoucherCategoryController::class, 'downloadPdf'])->name('voucher-categories.download.pdf');
+    Route::delete('voucher-categories/bulk/delete', [VoucherCategoryController::class, 'bulkDelete'])->name('voucher-categories.bulk.delete');
+    Route::post('voucher-categories', [VoucherCategoryController::class, 'store'])->name('voucher-categories.store');
+    Route::put('voucher-categories/{voucherCategory}', [VoucherCategoryController::class, 'update'])->name('voucher-categories.update');
+    Route::delete('voucher-categories/{voucherCategory}', [VoucherCategoryController::class, 'destroy'])->name('voucher-categories.destroy');
 
     // Loan routes
     Route::get('loans', [LoanController::class, 'index'])->name('loans.index');

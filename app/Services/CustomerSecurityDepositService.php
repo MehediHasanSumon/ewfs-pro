@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherCategoryHelper;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\PaymentSubType;
@@ -15,11 +16,18 @@ class CustomerSecurityDepositService
 
     public function isRefundSubType(PaymentSubType $subType): bool
     {
-        $subType->loadMissing('voucherCategory:id,name');
+        $subType->loadMissing('voucherCategory:id,code,name');
 
         return $subType->code === PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE
             && in_array($subType->type, ['payment', 'both'], true)
-            && $subType->voucherCategory?->name === 'Customer';
+            && (
+                $subType->voucherCategory?->code === VoucherCategoryHelper::customerCode()
+                || (
+                    $subType->voucherCategory?->code === null
+                    && $subType->voucherCategory?->name
+                        === VoucherCategoryHelper::getCategoryDefaultName('customer')
+                )
+            );
     }
 
     public function balancesByAccountIds(

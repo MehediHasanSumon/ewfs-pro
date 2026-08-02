@@ -116,7 +116,7 @@ class VoucherPostingService
         }
 
         $subType = PaymentSubType::query()
-            ->with('voucherCategory:id,name')
+            ->with('voucherCategory:id,code,name')
             ->findOrFail($lineData['payment_sub_type_id']);
 
         if (
