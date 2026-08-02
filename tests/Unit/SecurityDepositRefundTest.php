@@ -1,9 +1,9 @@
 <?php
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\JournalEntry;
-use App\Models\PaymentSubType;
 use App\Models\Voucher;
 use App\Services\AccountingService;
 use App\Services\CustomerSecurityDepositService;
@@ -93,12 +93,12 @@ beforeEach(function () {
         $table->boolean('status')->default(true);
     });
 
-    Schema::create('payment_sub_types', function (Blueprint $table) {
+    Schema::create('voucher_transaction_types', function (Blueprint $table) {
         $table->id();
         $table->string('code');
         $table->string('name');
         $table->foreignId('voucher_category_id');
-        $table->string('type');
+        $table->string('voucher_type');
         $table->boolean('status')->default(true);
     });
 
@@ -110,7 +110,7 @@ beforeEach(function () {
         $table->time('voucher_time')->nullable();
         $table->unsignedBigInteger('shift_id')->nullable();
         $table->foreignId('voucher_category_id')->nullable();
-        $table->foreignId('payment_sub_type_id')->nullable();
+        $table->foreignId('voucher_transaction_type_id')->nullable();
         $table->unsignedBigInteger('journal_entry_id')->nullable();
         $table->string('status')->default('draft');
         $table->string('external_reference')->nullable();
@@ -181,11 +181,11 @@ function makeRefundFixture(): array
         'name' => 'Customer',
         'status' => true,
     ]);
-    $subTypeId = DB::table('payment_sub_types')->insertGetId([
-        'code' => PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE,
+    $transactionTypeId = DB::table('voucher_transaction_types')->insertGetId([
+        'code' => VoucherTransactionTypeHelper::customerSecurityDepositRefundCode(),
         'name' => 'Refund Given',
         'voucher_category_id' => $categoryId,
-        'type' => 'payment',
+        'voucher_type' => 'payment',
         'status' => true,
     ]);
 
@@ -333,7 +333,7 @@ function makeRefundFixture(): array
         'customer',
         'customerAccount',
         'categoryId',
-        'subTypeId'
+        'transactionTypeId'
     );
 }
 
@@ -344,7 +344,7 @@ function refundPayload(array $fixture, float $amount): array
         'shift_id' => null,
         'vouchers' => [[
             'voucher_category_id' => $fixture['categoryId'],
-            'payment_sub_type_id' => $fixture['subTypeId'],
+            'voucher_transaction_type_id' => $fixture['transactionTypeId'],
             'from_account_id' => $fixture['cash']->id,
             'to_account_id' => $fixture['customerAccount']->id,
             'amount' => $amount,
@@ -358,7 +358,7 @@ function refundPayload(array $fixture, float $amount): array
 it('posts a security deposit refund through the payment voucher workflow', function () {
     $fixture = makeRefundFixture();
     $categoryCount = DB::table('voucher_categories')->count();
-    $subTypeCount = DB::table('payment_sub_types')->count();
+    $transactionTypeCount = DB::table('voucher_transaction_types')->count();
 
     $voucher = $fixture['service']->createMany(
         'payment',
@@ -383,7 +383,8 @@ it('posts a security deposit refund through the payment voucher workflow', funct
     );
 
     expect($voucher->status)->toBe('posted')
-        ->and($voucher->payment_sub_type_id)->toBe($fixture['subTypeId'])
+        ->and($voucher->voucher_transaction_type_id)
+        ->toBe($fixture['transactionTypeId'])
         ->and($voucher->journalEntry?->event_type)
         ->toBe(CustomerSecurityDepositService::REFUND_EVENT_TYPE)
         ->and($voucher->journalEntry?->lines->where('account_id', $fixture['customerAccount']->id)->first()->debit_amount)
@@ -413,7 +414,8 @@ it('posts a security deposit refund through the payment voucher workflow', funct
         ->and($position['due'])->toBe(0.0)
         ->and($position['advance'])->toBe(0.0)
         ->and($categoryCount)->toBe(DB::table('voucher_categories')->count())
-        ->and($subTypeCount)->toBe(DB::table('payment_sub_types')->count());
+        ->and($transactionTypeCount)
+        ->toBe(DB::table('voucher_transaction_types')->count());
 });
 
 it('rejects a refund above the available security deposit and rolls back', function () {

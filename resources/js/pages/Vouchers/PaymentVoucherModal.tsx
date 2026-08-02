@@ -22,7 +22,7 @@ export interface PaymentVoucher {
     shift?: { id: number; name: string };
     transaction?: { amount: number; payment_type: string };
     voucher_category?: { id: number; name: string };
-    payment_sub_type?: { id: number; name: string };
+    voucher_transaction_type?: { id: number; name: string };
     description?: string;
     remarks: string;
     created_at: string;
@@ -33,7 +33,7 @@ interface VoucherCategory {
     name: string;
 }
 
-interface PaymentSubType {
+interface VoucherTransactionType {
     id: number;
     name: string;
     voucher_category_id: number;
@@ -60,14 +60,14 @@ interface PaymentVoucherModalProps {
     shifts: Shift[];
     closedShifts: Array<{close_date: string; shift_id: number}>;
     voucherCategories: VoucherCategory[];
-    paymentSubTypes: PaymentSubType[];
+    voucherTransactionTypes: VoucherTransactionType[];
     initialDate?: string;
     initialShiftId?: string;
 }
 
 const buildEmptyVoucher = () => ({
     voucher_category_id: '',
-    payment_sub_type_id: '',
+    voucher_transaction_type_id: '',
     from_account_id: '',
     to_account_id: '',
     amount: '',
@@ -94,7 +94,7 @@ export function PaymentVoucherModal({
     shifts,
     closedShifts,
     voucherCategories,
-    paymentSubTypes,
+    voucherTransactionTypes,
     initialDate,
     initialShiftId,
 }: PaymentVoucherModalProps) {
@@ -113,8 +113,9 @@ export function PaymentVoucherModal({
                 {
                     voucher_category_id:
                         editingVoucher.voucher_category?.id?.toString() || '',
-                    payment_sub_type_id:
-                        editingVoucher.payment_sub_type?.id?.toString() || '',
+                    voucher_transaction_type_id:
+                        editingVoucher.voucher_transaction_type?.id?.toString() ||
+                        '',
                     from_account_id:
                         editingVoucher.from_account?.id?.toString() || '',
                     to_account_id:
@@ -195,7 +196,7 @@ export function PaymentVoucherModal({
         const firstVoucher = data.vouchers[0];
         if (
             !firstVoucher.voucher_category_id ||
-            !firstVoucher.payment_sub_type_id ||
+            !firstVoucher.voucher_transaction_type_id ||
             !firstVoucher.from_account_id ||
             !firstVoucher.to_account_id ||
             !firstVoucher.amount
@@ -249,7 +250,7 @@ export function PaymentVoucherModal({
         const validVouchers = data.vouchers.filter(
             (v) =>
                 v.voucher_category_id &&
-                v.payment_sub_type_id &&
+                v.voucher_transaction_type_id &&
                 v.from_account_id &&
                 v.to_account_id &&
                 v.amount,
@@ -344,7 +345,11 @@ export function PaymentVoucherModal({
                         value={currentVoucher.voucher_category_id}
                         onValueChange={(value) => {
                             updateVoucher(0, 'voucher_category_id', value);
-                            updateVoucher(0, 'payment_sub_type_id', '');
+                            updateVoucher(
+                                0,
+                                'voucher_transaction_type_id',
+                                '',
+                            );
                         }}
                     >
                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -363,19 +368,28 @@ export function PaymentVoucherModal({
                     )}
                 </div>
                 <div>
-                    <Label htmlFor="payment_sub_type_id" className="dark:text-gray-200">
-                        Payment Sub Type
+                    <Label
+                        htmlFor="voucher_transaction_type_id"
+                        className="dark:text-gray-200"
+                    >
+                        Transaction Type
                     </Label>
                     <Select
-                        value={currentVoucher.payment_sub_type_id}
-                        onValueChange={(value) => updateVoucher(0, 'payment_sub_type_id', value)}
+                        value={currentVoucher.voucher_transaction_type_id}
+                        onValueChange={(value) =>
+                            updateVoucher(
+                                0,
+                                'voucher_transaction_type_id',
+                                value,
+                            )
+                        }
                         disabled={!currentVoucher.voucher_category_id}
                     >
                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                             <SelectValue placeholder="Choose sub type" />
                         </SelectTrigger>
                         <SelectContent>
-                            {paymentSubTypes
+                            {voucherTransactionTypes
                                 .filter(
                                     (subType) =>
                                         subType.voucher_category_id.toString() ===
@@ -388,8 +402,14 @@ export function PaymentVoucherModal({
                                 ))}
                         </SelectContent>
                     </Select>
-                    {errors['vouchers.0.payment_sub_type_id'] && (
-                        <span className="text-sm text-red-500">{errors['vouchers.0.payment_sub_type_id']}</span>
+                    {errors['vouchers.0.voucher_transaction_type_id'] && (
+                        <span className="text-sm text-red-500">
+                            {
+                                errors[
+                                    'vouchers.0.voucher_transaction_type_id'
+                                ]
+                            }
+                        </span>
                     )}
                 </div>
             </div>

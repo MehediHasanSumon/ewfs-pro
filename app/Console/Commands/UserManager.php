@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -493,6 +494,7 @@ class UserManager extends Command
                 'can-s-m-s-template-filter',
                 'can-s-m-s-template-download',
                 ...VoucherCategoryHelper::permissionNames(),
+                ...VoucherTransactionTypeHelper::permissionNames(),
             ];
 
             foreach ($extraPermissions as $permissionName) {

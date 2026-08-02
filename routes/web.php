@@ -27,7 +27,6 @@ use App\Http\Controllers\LiabilityAssetsController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\MonthlyDispenserReportController;
 use App\Http\Controllers\OfficePaymentController;
-use App\Http\Controllers\PaymentSubTypeController;
 use App\Http\Controllers\PaymentVoucherController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProductController;
@@ -49,6 +48,7 @@ use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\VoucherCategoryController;
+use App\Http\Controllers\VoucherTransactionTypeController;
 use App\Http\Controllers\WhiteSaleController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -378,14 +378,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('general-ledger', [GeneralLedgerController::class, 'index'])->name('general-ledger.index');
     Route::get('general-ledger/download-pdf', [GeneralLedgerController::class, 'downloadPdf'])->name('general-ledger.download.pdf');
 
-    // Payment Sub Type routes
-    Route::get('payment-sub-types', [PaymentSubTypeController::class, 'index'])->name('payment-sub-types.index');
-    Route::get('payment-sub-types/{paymentSubType}/edit', [PaymentSubTypeController::class, 'edit'])->name('payment-sub-types.edit');
-    Route::post('payment-sub-types', [PaymentSubTypeController::class, 'store'])->name('payment-sub-types.store');
-    Route::put('payment-sub-types/{paymentSubType}', [PaymentSubTypeController::class, 'update'])->name('payment-sub-types.update');
-    Route::delete('payment-sub-types/{paymentSubType}', [PaymentSubTypeController::class, 'destroy'])->name('payment-sub-types.destroy');
-    Route::delete('payment-sub-types/bulk/delete', [PaymentSubTypeController::class, 'bulkDelete'])->name('payment-sub-types.bulk.delete');
-    Route::get('payment-sub-types/download-pdf', [PaymentSubTypeController::class, 'downloadPdf'])->name('payment-sub-types.download.pdf');
+    // Voucher Transaction Type routes
+    Route::get('voucher-transaction-types', [VoucherTransactionTypeController::class, 'index'])->name('voucher-transaction-types.index');
+    Route::get('voucher-transaction-types/download-pdf', [VoucherTransactionTypeController::class, 'downloadPdf'])->name('voucher-transaction-types.download.pdf');
+    Route::delete('voucher-transaction-types/bulk/delete', [VoucherTransactionTypeController::class, 'bulkDelete'])->name('voucher-transaction-types.bulk.delete');
+    Route::post('voucher-transaction-types', [VoucherTransactionTypeController::class, 'store'])->name('voucher-transaction-types.store');
+    Route::get('voucher-transaction-types/{voucherTransactionType}/edit', [VoucherTransactionTypeController::class, 'edit'])->name('voucher-transaction-types.edit');
+    Route::put('voucher-transaction-types/{voucherTransactionType}', [VoucherTransactionTypeController::class, 'update'])->name('voucher-transaction-types.update');
+    Route::delete('voucher-transaction-types/{voucherTransactionType}', [VoucherTransactionTypeController::class, 'destroy'])->name('voucher-transaction-types.destroy');
+    Route::redirect('payment-sub-types', '/voucher-transaction-types')->name('payment-sub-types.index');
+    Route::get('payment-sub-types/download-pdf', [VoucherTransactionTypeController::class, 'downloadPdf'])->name('payment-sub-types.download.pdf');
+    Route::delete('payment-sub-types/bulk/delete', [VoucherTransactionTypeController::class, 'bulkDelete'])->name('payment-sub-types.bulk.delete');
+    Route::post('payment-sub-types', [VoucherTransactionTypeController::class, 'store'])->name('payment-sub-types.store');
+    Route::get('payment-sub-types/{voucherTransactionType}/edit', [VoucherTransactionTypeController::class, 'edit'])->name('payment-sub-types.edit');
+    Route::put('payment-sub-types/{voucherTransactionType}', [VoucherTransactionTypeController::class, 'update'])->name('payment-sub-types.update');
+    Route::delete('payment-sub-types/{voucherTransactionType}', [VoucherTransactionTypeController::class, 'destroy'])->name('payment-sub-types.destroy');
 
     // Voucher Category Management routes
     Route::get('voucher-categories', [VoucherCategoryController::class, 'index'])->name('voucher-categories.index');

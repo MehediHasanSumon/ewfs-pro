@@ -138,7 +138,13 @@ class SystemVoucherCategorySeeder extends Seeder
             );
         }
 
-        if (Schema::hasTable('payment_sub_types')) {
+        if (Schema::hasTable('voucher_transaction_types')) {
+            $ids = $ids->merge(
+                DB::table('voucher_transaction_types')
+                    ->whereNotNull('voucher_category_id')
+                    ->pluck('voucher_category_id')
+            );
+        } elseif (Schema::hasTable('payment_sub_types')) {
             $ids = $ids->merge(
                 DB::table('payment_sub_types')
                     ->whereNotNull('voucher_category_id')

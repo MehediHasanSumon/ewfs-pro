@@ -59,6 +59,11 @@ class VoucherCategory extends Model
 
     public function paymentSubTypes(): HasMany
     {
-        return $this->hasMany(PaymentSubType::class);
+        return $this->voucherTransactionTypes();
+    }
+
+    public function voucherTransactionTypes(): HasMany
+    {
+        return $this->hasMany(VoucherTransactionType::class);
     }
 }

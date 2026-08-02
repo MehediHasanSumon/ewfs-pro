@@ -35,7 +35,7 @@ interface VoucherCategory {
     name: string;
 }
 
-interface PaymentSubType {
+interface VoucherTransactionType {
     id: number;
     name: string;
     voucher_category_id: number;
@@ -77,7 +77,7 @@ interface PaymentVoucherProps {
     shifts: Shift[];
     closedShifts: Array<{close_date: string; shift_id: number}>;
     voucherCategories: VoucherCategory[];
-    paymentSubTypes: PaymentSubType[];
+    voucherTransactionTypes: VoucherTransactionType[];
     filters: {
         search?: string;
         payment_method?: string;
@@ -89,7 +89,7 @@ interface PaymentVoucherProps {
     };
 }
 
-export default function PaymentVoucher({ vouchers, accounts = [], groupedAccounts = {}, shifts = [], closedShifts = [], voucherCategories = [], paymentSubTypes = [], filters }: PaymentVoucherProps) {
+export default function PaymentVoucher({ vouchers, accounts = [], groupedAccounts = {}, shifts = [], closedShifts = [], voucherCategories = [], voucherTransactionTypes = [], filters }: PaymentVoucherProps) {
     const { can } = usePermission();
     const hasActionPermission = can('update-voucher') || can('delete-voucher');
     const canFilter = can('can-voucher-filter');
@@ -406,7 +406,7 @@ export default function PaymentVoucher({ vouchers, accounts = [], groupedAccount
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{voucher.to_account?.name || 'N/A'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{voucher.transaction?.amount ? Number(voucher.transaction.amount).toLocaleString() : '0'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{voucher.voucher_category?.name || 'N/A'}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{voucher.payment_sub_type?.name || 'N/A'}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">{voucher.voucher_transaction_type?.name || 'N/A'}</td>
                                                 <td className="p-4">
                                                     <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                                         {voucher.transaction?.payment_type || 'N/A'}
@@ -480,7 +480,7 @@ export default function PaymentVoucher({ vouchers, accounts = [], groupedAccount
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    paymentSubTypes={paymentSubTypes}
+                    voucherTransactionTypes={voucherTransactionTypes}
                 />
 
                 <DeleteModal

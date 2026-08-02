@@ -3,9 +3,10 @@
 namespace App\Services;
 
 use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
-use App\Models\PaymentSubType;
+use App\Models\VoucherTransactionType;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,17 +15,21 @@ class CustomerSecurityDepositService
 {
     public const REFUND_EVENT_TYPE = 'customer_security_deposit_refund';
 
-    public function isRefundSubType(PaymentSubType $subType): bool
+    public function isRefundSubType(VoucherTransactionType $transactionType): bool
     {
-        $subType->loadMissing('voucherCategory:id,code,name');
+        $transactionType->loadMissing('voucherCategory:id,code,name');
 
-        return $subType->code === PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE
-            && in_array($subType->type, ['payment', 'both'], true)
+        return $transactionType->code
+                === VoucherTransactionTypeHelper::customerSecurityDepositRefundCode()
+            && in_array($transactionType->voucher_type, [
+                VoucherTransactionTypeHelper::paymentVoucherType(),
+                VoucherTransactionTypeHelper::bothVoucherType(),
+            ], true)
             && (
-                $subType->voucherCategory?->code === VoucherCategoryHelper::customerCode()
+                $transactionType->voucherCategory?->code === VoucherCategoryHelper::customerCode()
                 || (
-                    $subType->voucherCategory?->code === null
-                    && $subType->voucherCategory?->name
+                    $transactionType->voucherCategory?->code === null
+                    && $transactionType->voucherCategory?->name
                         === VoucherCategoryHelper::getCategoryDefaultName('customer')
                 )
             );

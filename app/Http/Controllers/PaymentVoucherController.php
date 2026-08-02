@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\PaymentVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\PaymentSubType;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
+use App\Models\VoucherTransactionType;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -50,10 +51,14 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             'shifts' => Shift::query()->where('status', true)->get(['id', 'name']),
             'closedShifts' => $this->closedShifts(),
             'voucherCategories' => VoucherCategory::query()->where('status', true)->get(),
-            'paymentSubTypes' => PaymentSubType::query()
+            'voucherTransactionTypes' => VoucherTransactionType::query()
                 ->with('voucherCategory')
                 ->where('status', true)
-                ->whereIn('type', ['payment', 'both'])
+                ->whereIn('voucher_type', [
+                    VoucherTransactionTypeHelper::paymentVoucherType(),
+                    VoucherTransactionTypeHelper::bothVoucherType(),
+                ])
+                ->orderBy('sort_order')
                 ->get(),
             'filters' => $request->only([
                 'search', 'payment_method', 'start_date', 'end_date',
@@ -118,7 +123,7 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 'toAccount',
                 'shift',
                 'voucherCategory',
-                'paymentSubType',
+                'voucherTransactionType',
                 'lines.paymentDetail',
                 'transaction',
             ])

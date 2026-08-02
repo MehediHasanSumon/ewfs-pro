@@ -36,7 +36,7 @@ interface VoucherCategory {
     name: string;
 }
 
-interface PaymentSubType {
+interface VoucherTransactionType {
     id: number;
     name: string;
     voucher_category_id: number;
@@ -79,7 +79,7 @@ interface ReceivedVoucherProps {
     shifts?: Shift[];
     closedShifts?: Array<{close_date: string; shift_id: number}>;
     voucherCategories?: VoucherCategory[];
-    paymentSubTypes?: PaymentSubType[];
+    voucherTransactionTypes?: VoucherTransactionType[];
     filters?: {
         search?: string;
         shift?: string;
@@ -106,7 +106,7 @@ export default function ReceivedVoucher({
     groupedAccounts = {},
     shifts = [], closedShifts = [],
     voucherCategories = [],
-    paymentSubTypes = [],
+    voucherTransactionTypes = [],
     filters = {},
 }: ReceivedVoucherProps) {
     const { can } = usePermission();
@@ -510,7 +510,7 @@ export default function ReceivedVoucher({
                                                     {voucher.voucher_category?.name || 'N/A'}
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {voucher.payment_sub_type?.name || 'N/A'}
+                                                    {voucher.voucher_transaction_type?.name || 'N/A'}
                                                 </td>
                                                 <td className="p-4">
                                                     <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800 dark:bg-green-900 dark:text-green-200">
@@ -596,7 +596,7 @@ export default function ReceivedVoucher({
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    paymentSubTypes={paymentSubTypes}
+                    voucherTransactionTypes={voucherTransactionTypes}
                 />
 
                 <DeleteModal
@@ -618,4 +618,3 @@ export default function ReceivedVoucher({
         </AppLayout>
     );
 }
-

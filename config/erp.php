@@ -1,5 +1,82 @@
 <?php
 
+$voucherCategories = [
+    'prefix' => 'VC',
+    'padding' => 3,
+    'system' => [
+        'customer' => [
+            'code' => 'VC001',
+            'name' => 'Customer',
+            'legacy_names' => ['Customer'],
+            'description' => 'Customer related payments and receipts.',
+            'sort_order' => 1,
+        ],
+        'employee' => [
+            'code' => 'VC002',
+            'name' => 'Employee',
+            'legacy_names' => ['Employee'],
+            'description' => 'Employee related payments and receipts.',
+            'sort_order' => 2,
+        ],
+        'supplier' => [
+            'code' => 'VC003',
+            'name' => 'Supplier',
+            'legacy_names' => ['Supplier'],
+            'description' => 'Supplier related payments and receipts.',
+            'sort_order' => 3,
+        ],
+        'operating' => [
+            'code' => 'VC004',
+            'name' => 'Operating',
+            'legacy_names' => ['Operating', 'Office'],
+            'description' => 'Operating payments and receipts.',
+            'sort_order' => 4,
+        ],
+        'finance' => [
+            'code' => 'VC005',
+            'name' => 'Finance',
+            'legacy_names' => ['Finance', 'General', 'Liability'],
+            'description' => 'Finance related payments and receipts.',
+            'sort_order' => 5,
+        ],
+    ],
+];
+
+$voucherTransactionTypes = [
+    'employee' => [
+        'monthly_salary' => ['code' => '1001', 'name' => 'Monthly Salary', 'voucher_type' => 'payment'],
+        'salary_advance' => ['code' => '1002', 'name' => 'Salary Advance', 'voucher_type' => 'payment'],
+        'personal_loan' => ['code' => '1003', 'name' => 'Personal Loan', 'voucher_type' => 'payment'],
+        'advance_return' => ['code' => '1008', 'name' => 'Advance Return', 'voucher_type' => 'receipt'],
+        'loan_recovery' => ['code' => '1009', 'name' => 'Loan Recovery', 'voucher_type' => 'receipt'],
+    ],
+    'supplier' => [
+        'cash_purchase' => ['code' => '1017', 'name' => 'Cash Purchase', 'voucher_type' => 'payment'],
+        'credit_payment' => ['code' => '1018', 'name' => 'Credit Payment', 'voucher_type' => 'payment'],
+        'advance_payment' => ['code' => '1019', 'name' => 'Advance Payment', 'voucher_type' => 'payment'],
+        'security_deposit' => ['code' => '1020', 'name' => 'Security Deposit', 'voucher_type' => 'payment'],
+    ],
+    'customer' => [
+        'advance_return' => ['code' => '1019', 'name' => 'Advance Return', 'voucher_type' => 'payment'],
+        'security_deposit_receipt' => ['code' => '1020', 'name' => 'Security Deposit Receipt', 'voucher_type' => 'payment'],
+        'security_deposit_refund' => [
+            'code' => '1028',
+            'name' => 'Security Deposit Refund',
+            'voucher_type' => 'payment',
+            'description' => 'Compatibility identifier used by the customer security deposit refund workflow.',
+        ],
+        'security_deposit' => ['code' => '1031', 'name' => 'Security Deposit', 'voucher_type' => 'receipt'],
+        'due_paid' => ['code' => '1032', 'name' => 'Due Paid', 'voucher_type' => 'receipt'],
+        'advance_payment' => ['code' => '1033', 'name' => 'Advance Payment', 'voucher_type' => 'receipt'],
+    ],
+    'finance' => [
+        'owner_withdrawal' => ['code' => '1071', 'name' => 'Owner Withdrawal', 'voucher_type' => 'payment'],
+        'opening_balance' => ['code' => '1072', 'name' => 'Opening Balance', 'voucher_type' => 'receipt'],
+        'investment' => ['code' => '1073', 'name' => 'Investment', 'voucher_type' => 'receipt'],
+        'capital_withdraw' => ['code' => '1074', 'name' => 'Capital Withdraw', 'voucher_type' => 'payment'],
+    ],
+];
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -27,47 +104,27 @@ return [
     | reports, ledgers, and integrations.
     |
     */
-    'voucher_categories' => [
-        'prefix' => 'VC',
-        'padding' => 3,
-        'system' => [
-            'customer' => [
-                'code' => 'VC001',
-                'name' => 'Customer',
-                'legacy_names' => ['Customer'],
-                'description' => 'Customer related payments and receipts.',
-                'sort_order' => 1,
-            ],
-            'employee' => [
-                'code' => 'VC002',
-                'name' => 'Employee',
-                'legacy_names' => ['Employee'],
-                'description' => 'Employee related payments and receipts.',
-                'sort_order' => 2,
-            ],
-            'supplier' => [
-                'code' => 'VC003',
-                'name' => 'Supplier',
-                'legacy_names' => ['Supplier'],
-                'description' => 'Supplier related payments and receipts.',
-                'sort_order' => 3,
-            ],
-            'operating' => [
-                'code' => 'VC004',
-                'name' => 'Operating',
-                'legacy_names' => ['Operating', 'Office'],
-                'description' => 'Operating payments and receipts.',
-                'sort_order' => 4,
-            ],
-            'finance' => [
-                'code' => 'VC005',
-                'name' => 'Finance',
-                'legacy_names' => ['Finance', 'General', 'Liability'],
-                'description' => 'Finance related payments and receipts.',
-                'sort_order' => 5,
-            ],
+    'voucher' => [
+        'types' => [
+            'payment' => 'payment',
+            'receipt' => 'receipt',
+            'both' => 'both',
+        ],
+        'statuses' => [
+            'draft' => 'draft',
+            'posted' => 'posted',
+            'reversed' => 'reversed',
+            'void' => 'void',
+        ],
+        'categories' => $voucherCategories,
+        'transaction_types' => [
+            'code_padding' => 4,
+            'system' => $voucherTransactionTypes,
         ],
     ],
+
+    // Backward-compatible alias for existing voucher category integrations.
+    'voucher_categories' => $voucherCategories,
 
     'sales' => [
         'max_items' => (int) env('SALE_MAX_ITEMS', 100),

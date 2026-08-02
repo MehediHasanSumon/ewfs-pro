@@ -340,7 +340,7 @@ class EmployeeController extends Controller implements HasMiddleware
         return $this->partyLedger
             ->vouchers('employee_id', $employee->id, $type, $startDate, $endDate)
             ->when($subTypeCodes, fn (Builder $query) => $query
-                ->whereHas('paymentSubType', fn (Builder $subType) => $subType
+                ->whereHas('voucherTransactionType', fn (Builder $subType) => $subType
                     ->whereIn('code', $subTypeCodes)));
     }
 
@@ -351,7 +351,12 @@ class EmployeeController extends Controller implements HasMiddleware
     ): float {
         return (float) DB::table('voucher_lines as vl')
             ->join('vouchers as v', 'v.id', '=', 'vl.voucher_id')
-            ->leftJoin('payment_sub_types as pst', 'pst.id', '=', 'v.payment_sub_type_id')
+            ->leftJoin(
+                'voucher_transaction_types as pst',
+                'pst.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
             ->where('vl.employee_id', $employee->id)
             ->where('v.voucher_type', $type)
             ->where('v.status', 'posted')

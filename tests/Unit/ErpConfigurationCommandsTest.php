@@ -2,8 +2,10 @@
 
 use App\Helpers\ErpHelper;
 use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Category;
 use App\Models\VoucherCategory;
+use App\Models\VoucherTransactionType;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
@@ -33,6 +35,22 @@ beforeEach(function () {
         $table->unsignedSmallInteger('sort_order')->default(0);
         $table->boolean('is_system')->default(false);
         $table->timestamps();
+    });
+
+    Schema::create('voucher_transaction_types', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('voucher_category_id');
+        $table->string('code', 64);
+        $table->string('name', 150);
+        $table->string('voucher_type', 20);
+        $table->string('report_bucket_code', 100)->nullable();
+        $table->text('description')->nullable();
+        $table->unsignedSmallInteger('sort_order')->default(0);
+        $table->boolean('status')->default(true);
+        $table->boolean('is_system')->default(false);
+        $table->timestamps();
+        $table->unique(['voucher_category_id', 'code']);
+        $table->unique(['voucher_category_id', 'name']);
     });
 
     Schema::create('permissions', function (Blueprint $table) {
@@ -79,9 +97,15 @@ it('synchronizes config-backed ERP master data', function () {
                 ->where('is_system', true)
                 ->count()
         )->toBe(count(VoucherCategoryHelper::getSystemCategoryCodes()));
+
+    expect(
+        VoucherTransactionType::query()
+            ->where('is_system', true)
+            ->count()
+    )->toBe(count(VoucherTransactionTypeHelper::flattenedSystemTypes()));
 });
 
-it('creates voucher category permissions through user manager setup', function () {
+it('creates voucher master permissions through user manager setup', function () {
     $this->artisan('user:manage', ['action' => 'setup'])
         ->assertSuccessful();
 
@@ -95,5 +119,9 @@ it('creates voucher category permissions through user manager setup', function (
     expect($permissions)
         ->toHaveCount(count(VoucherCategoryHelper::permissionNames()))
         ->and($superAdmin->hasAllPermissions(VoucherCategoryHelper::permissionNames()))
+        ->toBeTrue()
+        ->and($superAdmin->hasAllPermissions(
+            VoucherTransactionTypeHelper::permissionNames()
+        ))
         ->toBeTrue();
 });

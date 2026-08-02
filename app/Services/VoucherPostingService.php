@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
-use App\Models\PaymentSubType;
 use App\Models\Voucher;
+use App\Models\VoucherTransactionType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -43,7 +44,7 @@ class VoucherPostingService
 
             return $this->createDocument('office_payment', $data, [
                 'voucher_category_id' => $data['voucher_category_id'] ?? null,
-                'payment_sub_type_id' => $data['payment_sub_type_id'] ?? null,
+                'voucher_transaction_type_id' => $this->transactionTypeId($data),
                 'from_account_id' => $fundingAccount->id,
                 'to_account_id' => $expenseAccount->id,
                 'amount' => $data['amount'],
@@ -115,24 +116,28 @@ class VoucherPostingService
             ]);
         }
 
-        $subType = PaymentSubType::query()
+        $transactionType = VoucherTransactionType::query()
             ->with('voucherCategory:id,code,name')
-            ->findOrFail($lineData['payment_sub_type_id']);
+            ->findOrFail($this->transactionTypeId($lineData));
 
         if (
-            (int) $subType->voucher_category_id
+            (int) $transactionType->voucher_category_id
                 !== (int) $lineData['voucher_category_id']
-            || ! in_array($subType->type, [$type, 'both'], true)
+            || ! in_array($transactionType->voucher_type, [
+                $type,
+                VoucherTransactionTypeHelper::bothVoucherType(),
+            ], true)
         ) {
             throw ValidationException::withMessages([
-                $errorPrefix.'payment_sub_type_id' => 'The selected payment subtype does not belong to this category.',
+                $errorPrefix.'voucher_transaction_type_id' => 'The selected voucher transaction type does not belong to this category.',
             ]);
         }
 
         $amount = (float) $lineData['amount'];
         $paymentMethod = $this->normalizePaymentMethod($lineData);
-        $isSecurityDepositRefund = $type === 'payment'
-            && $this->securityDeposits->isRefundSubType($subType);
+        $isSecurityDepositRefund = $type
+                === VoucherTransactionTypeHelper::paymentVoucherType()
+            && $this->securityDeposits->isRefundSubType($transactionType);
 
         if ($isSecurityDepositRefund) {
             $this->securityDeposits->assertRefundAllowed(
@@ -154,7 +159,7 @@ class VoucherPostingService
             'voucher_time' => now()->format('H:i:s'),
             'shift_id' => $headerData['shift_id'] ?? null,
             'voucher_category_id' => $lineData['voucher_category_id'] ?? null,
-            'payment_sub_type_id' => $lineData['payment_sub_type_id'] ?? null,
+            'voucher_transaction_type_id' => $this->transactionTypeId($lineData),
             'status' => 'draft',
             'description' => $description,
             'remarks' => $lineData['remarks'] ?? null,
@@ -265,5 +270,14 @@ class VoucherPostingService
         }
 
         return strtolower($method) === 'online' ? 'online' : 'cash';
+    }
+
+    private function transactionTypeId(array $data): ?int
+    {
+        $id = $data['voucher_transaction_type_id']
+            ?? $data['payment_sub_type_id']
+            ?? null;
+
+        return $id === null ? null : (int) $id;
     }
 }

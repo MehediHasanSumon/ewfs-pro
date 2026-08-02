@@ -84,7 +84,7 @@ beforeEach(function () {
         $table->string('voucher_type');
         $table->date('voucher_date');
         $table->unsignedBigInteger('journal_entry_id')->nullable();
-        $table->foreignId('payment_sub_type_id')->nullable();
+        $table->foreignId('voucher_transaction_type_id')->nullable();
         $table->foreignId('voucher_category_id')->nullable();
         $table->string('status')->default('posted');
         $table->string('external_reference')->nullable();
@@ -110,12 +110,12 @@ beforeEach(function () {
         $table->string('payment_method');
     });
 
-    Schema::create('payment_sub_types', function (Blueprint $table) {
+    Schema::create('voucher_transaction_types', function (Blueprint $table) {
         $table->id();
         $table->string('code')->nullable();
         $table->string('name');
         $table->foreignId('voucher_category_id')->nullable();
-        $table->string('type')->default('payment');
+        $table->string('voucher_type')->default('payment');
         $table->boolean('status')->default(true);
     });
 

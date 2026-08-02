@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\VoucherTransactionTypeHelper;
+use App\Http\Requests\ReceivedVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\PaymentSubType;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
+use App\Models\VoucherTransactionType;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -20,8 +22,7 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly VoucherPostingService $vouchers
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -56,10 +57,14 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
                     'shift_id' => $closing->shift_id,
                 ]),
             'voucherCategories' => VoucherCategory::query()->where('status', true)->get(),
-            'paymentSubTypes' => PaymentSubType::query()
+            'voucherTransactionTypes' => VoucherTransactionType::query()
                 ->with('voucherCategory')
                 ->where('status', true)
-                ->whereIn('type', ['receipt', 'both'])
+                ->whereIn('voucher_type', [
+                    VoucherTransactionTypeHelper::receiptVoucherType(),
+                    VoucherTransactionTypeHelper::bothVoucherType(),
+                ])
+                ->orderBy('sort_order')
                 ->get(),
             'filters' => $request->only([
                 'search', 'shift', 'payment_method', 'start_date', 'end_date',
@@ -68,19 +73,17 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(ReceivedVoucherRequest $request)
     {
-        $validated = $request->validate($this->batchRules());
-        $this->vouchers->createMany('receipt', $validated);
+        $this->vouchers->createMany('receipt', $request->validated());
 
         return back()->with('success', 'Received voucher created successfully.');
     }
 
-    public function update(Request $request, Voucher $voucher)
+    public function update(ReceivedVoucherRequest $request, Voucher $voucher)
     {
         abort_unless($voucher->voucher_type === 'receipt', 404);
-        $validated = $request->validate($this->singleRules());
-        $this->vouchers->replace($voucher, $validated);
+        $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Received voucher updated successfully.');
     }
@@ -126,7 +129,7 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
                 'toAccount',
                 'shift',
                 'voucherCategory',
-                'paymentSubType',
+                'voucherTransactionType',
                 'lines.paymentDetail',
                 'transaction',
             ])
@@ -162,49 +165,6 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
             : 'created_at';
 
         return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
-    }
-
-    private function batchRules(): array
-    {
-        $rules = [
-            'date' => ['required', 'date'],
-            'shift_id' => ['nullable', 'exists:shifts,id'],
-            'vouchers' => ['required', 'array', 'min:1'],
-        ];
-
-        foreach ($this->lineRules() as $field => $rule) {
-            $rules['vouchers.*.'.$field] = $rule;
-        }
-
-        return $rules;
-    }
-
-    private function singleRules(): array
-    {
-        return ['date' => ['required', 'date'], 'shift_id' => ['nullable', 'exists:shifts,id']]
-            + $this->lineRules();
-    }
-
-    private function lineRules(): array
-    {
-        return [
-            'voucher_category_id' => ['required', 'exists:voucher_categories,id'],
-            'payment_sub_type_id' => ['required', 'exists:payment_sub_types,id'],
-            'from_account_id' => ['required', 'different:to_account_id', 'exists:accounts,id'],
-            'to_account_id' => ['required', 'exists:accounts,id'],
-            'amount' => ['required', 'numeric', 'gt:0'],
-            'payment_method' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'description' => ['nullable', 'string'],
-            'remarks' => ['nullable', 'string'],
-            'bank_name' => ['nullable', 'string'],
-            'branch_name' => ['nullable', 'string'],
-            'account_no' => ['nullable', 'string'],
-            'bank_type' => ['nullable', 'string'],
-            'cheque_no' => ['nullable', 'string'],
-            'cheque_date' => ['nullable', 'date'],
-            'mobile_bank' => ['nullable', 'string'],
-            'mobile_number' => ['nullable', 'string'],
-        ];
     }
 
     private function perPage(Request $request): int

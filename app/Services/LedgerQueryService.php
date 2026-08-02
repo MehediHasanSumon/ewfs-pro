@@ -8,7 +8,6 @@ use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -163,7 +162,7 @@ class LedgerQueryService
             ->whereIn('id', $voucherIds)
             ->with([
                 'voucherCategory:id,name',
-                'paymentSubType:id,name',
+                'voucherTransactionType:id,name',
             ])
             ->get()
             ->keyBy('id');
@@ -210,7 +209,7 @@ class LedgerQueryService
                         'description' => $line->description ?? $entry->description,
                         'payment_type' => $line->payment_method,
                         'category_name' => $voucher?->voucherCategory?->name
-                            ?? $voucher?->paymentSubType?->name
+                            ?? $voucher?->voucherTransactionType?->name
                             ?? str($entry->event_type)->headline()->toString(),
                         'from_account_name' => $creditNames ?: '-',
                         'to_account_name' => $debitNames ?: '-',

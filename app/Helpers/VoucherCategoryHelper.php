@@ -56,7 +56,10 @@ class VoucherCategoryHelper
 
     public static function systemCategories(): array
     {
-        $categories = config('erp.voucher_categories.system');
+        $categories = config(
+            'app.erp.voucher.categories.system',
+            config('erp.voucher_categories.system')
+        );
 
         if (! is_array($categories) || $categories === []) {
             throw new RuntimeException('Voucher category ERP configuration is missing.');
@@ -107,12 +110,18 @@ class VoucherCategoryHelper
 
     public static function prefix(): string
     {
-        return (string) config('erp.voucher_categories.prefix', 'VC');
+        return (string) config(
+            'app.erp.voucher.categories.prefix',
+            config('erp.voucher_categories.prefix', 'VC')
+        );
     }
 
     public static function codePadding(): int
     {
-        return (int) config('erp.voucher_categories.padding', 3);
+        return (int) config(
+            'app.erp.voucher.categories.padding',
+            config('erp.voucher_categories.padding', 3)
+        );
     }
 
     public static function minimumCustomSequence(): int

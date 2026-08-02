@@ -81,7 +81,7 @@ class VoucherCategoryService
 
                 if (
                     $category->vouchers()->exists()
-                    || $category->paymentSubTypes()->exists()
+                    || $category->voucherTransactionTypes()->exists()
                 ) {
                     throw ValidationException::withMessages([
                         'ids' => 'The selected voucher category is already used and cannot be deleted.',

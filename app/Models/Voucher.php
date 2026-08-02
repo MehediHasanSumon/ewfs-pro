@@ -26,6 +26,7 @@ class Voucher extends Model
         'voucher_time',
         'shift_id',
         'voucher_category_id',
+        'voucher_transaction_type_id',
         'payment_sub_type_id',
         'journal_entry_id',
         'status',
@@ -63,7 +64,27 @@ class Voucher extends Model
 
     public function paymentSubType(): BelongsTo
     {
-        return $this->belongsTo(PaymentSubType::class);
+        return $this->voucherTransactionType();
+    }
+
+    public function voucherTransactionType(): BelongsTo
+    {
+        return $this->belongsTo(
+            VoucherTransactionType::class,
+            'voucher_transaction_type_id'
+        );
+    }
+
+    public function getPaymentSubTypeIdAttribute(): ?int
+    {
+        $id = $this->attributes['voucher_transaction_type_id'] ?? null;
+
+        return $id === null ? null : (int) $id;
+    }
+
+    public function setPaymentSubTypeIdAttribute(int|string|null $value): void
+    {
+        $this->attributes['voucher_transaction_type_id'] = $value;
     }
 
     public function shift(): BelongsTo

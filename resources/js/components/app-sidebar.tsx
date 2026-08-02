@@ -202,6 +202,12 @@ const mainNavItems = [
                 permission: 'voucher-category-view',
             },
             {
+                title: 'Voucher Transaction Types',
+                href: '/voucher-transaction-types',
+                icon: FileText,
+                permission: 'voucher-transaction-type-view',
+            },
+            {
                 title: 'Office Payment',
                 href: '/office-payments',
                 icon: CreditCard,

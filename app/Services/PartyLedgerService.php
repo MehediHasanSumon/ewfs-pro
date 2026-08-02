@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
-use App\Models\PaymentSubType;
 use App\Models\Supplier;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder;
@@ -278,7 +278,7 @@ class PartyLedgerService
             ->with([
                 'lines.account:id,name',
                 'lines.paymentDetail',
-                'paymentSubType:id,name,code',
+                'voucherTransactionType:id,name,code',
                 'voucherCategory:id,name',
             ])
             ->when($startDate, fn (Builder $query) => $query
@@ -296,8 +296,8 @@ class PartyLedgerService
             'amount' => (float) $voucher->amount,
             'payment_type' => $voucher->payment_method,
             'type' => $voucher->payment_method,
-            'sub_type' => $voucher->paymentSubType?->name,
-            'sub_type_name' => $voucher->paymentSubType?->name,
+            'sub_type' => $voucher->voucherTransactionType?->name,
+            'sub_type_name' => $voucher->voucherTransactionType?->name,
             'description' => $voucher->description,
             'remarks' => $voucher->remarks,
             'status' => $status,
@@ -418,7 +418,12 @@ class PartyLedgerService
                 '=',
                 'payment_line.id'
             )
-            ->leftJoin('payment_sub_types as subtype', 'subtype.id', '=', 'v.payment_sub_type_id')
+            ->leftJoin(
+                'voucher_transaction_types as subtype',
+                'subtype.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
             ->leftJoin('voucher_categories as category', 'category.id', '=', 'v.voucher_category_id')
             ->where('v.voucher_type', 'receipt')
             ->where('v.status', 'posted')
@@ -478,11 +483,11 @@ class PartyLedgerService
     ): QueryBuilder {
         return DB::table('vouchers as v')
             ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
-            ->join('payment_sub_types as subtype', function ($join) {
-                $join->on('subtype.id', '=', 'v.payment_sub_type_id')
+            ->join('voucher_transaction_types as subtype', function ($join) {
+                $join->on('subtype.id', '=', 'v.voucher_transaction_type_id')
                     ->where(
                         'subtype.code',
-                        PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE
+                        VoucherTransactionTypeHelper::customerSecurityDepositRefundCode()
                     );
             })
             ->join('voucher_lines as customer_line', function ($join) use ($customerId) {

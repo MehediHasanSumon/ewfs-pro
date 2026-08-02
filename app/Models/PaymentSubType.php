@@ -2,32 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Helpers\VoucherTransactionTypeHelper;
 
-class PaymentSubType extends Model
+/**
+ * @deprecated Use VoucherTransactionType.
+ */
+class PaymentSubType extends VoucherTransactionType
 {
-    public const CUSTOMER_REFUND_GIVEN_CODE = '1028';
+    protected $table = 'voucher_transaction_types';
 
-    protected $fillable = [
-        'code',
-        'name',
-        'voucher_category_id',
-        'type',
-        'report_bucket_code',
-        'status',
-    ];
-
-    protected $casts = [
-        'status' => 'boolean',
-    ];
-
-    public function voucherCategory()
+    public static function customerRefundGivenCode(): string
     {
-        return $this->belongsTo(VoucherCategory::class);
-    }
-
-    public function vouchers()
-    {
-        return $this->hasMany(Voucher::class);
+        return VoucherTransactionTypeHelper::customerSecurityDepositRefundCode();
     }
 }

@@ -4,17 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\CreditSaleCustomer;
+use App\Models\Customer;
 use App\Models\Dispenser;
 use App\Models\DispenserReading;
 use App\Models\Employee;
-use App\Models\PaymentSubType;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Vehicle;
 use App\Models\VoucherCategory;
-use App\Models\Customer;
+use App\Models\VoucherTransactionType;
 use App\Services\ShiftClosingService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -25,8 +25,7 @@ class DispenserReadingController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly ShiftClosingService $closings
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -118,9 +117,10 @@ class DispenserReadingController extends Controller implements HasMiddleware
                 ->unique()
                 ->values(),
             'voucherCategories' => VoucherCategory::query()->where('status', true)->get(),
-            'paymentSubTypes' => PaymentSubType::query()
+            'voucherTransactionTypes' => VoucherTransactionType::query()
                 ->with('voucherCategory')
                 ->where('status', true)
+                ->orderBy('sort_order')
                 ->get(),
         ]);
     }

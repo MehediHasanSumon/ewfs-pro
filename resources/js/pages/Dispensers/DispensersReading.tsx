@@ -109,7 +109,7 @@ interface VoucherCategory {
     name: string;
 }
 
-interface PaymentSubType {
+interface VoucherTransactionType {
     id: number;
     name: string;
     voucher_category_id: number;
@@ -127,7 +127,7 @@ interface DispenserReadingProps {
     groupedAccounts?: Record<string, Account[]>;
     employees?: Employee[];
     voucherCategories?: VoucherCategory[];
-    paymentSubTypes?: PaymentSubType[];
+    voucherTransactionTypes?: VoucherTransactionType[];
 }
 
 export default function DispenserReading({
@@ -142,7 +142,7 @@ export default function DispenserReading({
     groupedAccounts = {},
     employees = [],
     voucherCategories = [],
-    paymentSubTypes = [],
+    voucherTransactionTypes = [],
 }: DispenserReadingProps) {
     const { can } = usePermission();
     const canCreateCreditSales = can('create-credit-sale');
@@ -1417,7 +1417,7 @@ export default function DispenserReading({
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    paymentSubTypes={paymentSubTypes}
+                    voucherTransactionTypes={voucherTransactionTypes}
                     initialDate={data.transaction_date}
                     initialShiftId={data.shift_id}
                 />
@@ -1440,7 +1440,7 @@ export default function DispenserReading({
                         shifts={shifts}
                         closedShifts={closedShifts}
                         voucherCategories={voucherCategories}
-                        paymentSubTypes={paymentSubTypes}
+                        voucherTransactionTypes={voucherTransactionTypes}
                         initialDate={data.transaction_date}
                         initialShiftId={data.shift_id}
                     />

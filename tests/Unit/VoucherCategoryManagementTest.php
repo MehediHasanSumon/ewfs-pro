@@ -1,8 +1,9 @@
 <?php
 
 use App\Helpers\VoucherCategoryHelper;
-use App\Models\PaymentSubType;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\VoucherCategory;
+use App\Models\VoucherTransactionType;
 use App\Services\CustomerSecurityDepositService;
 use App\Services\VoucherCategoryService;
 use Database\Seeders\SystemVoucherCategorySeeder;
@@ -38,15 +39,19 @@ beforeEach(function () {
         $table->unique(['document_type', 'fiscal_year']);
     });
 
-    Schema::create('payment_sub_types', function (Blueprint $table) {
+    Schema::create('voucher_transaction_types', function (Blueprint $table) {
         $table->id();
-        $table->string('code', 64)->unique();
+        $table->string('code', 64);
         $table->string('name', 150);
         $table->foreignId('voucher_category_id');
-        $table->string('type', 20);
+        $table->string('voucher_type', 20);
         $table->string('report_bucket_code', 100)->nullable();
+        $table->text('description')->nullable();
+        $table->unsignedSmallInteger('sort_order')->default(0);
         $table->boolean('status')->default(true);
+        $table->boolean('is_system')->default(false);
         $table->timestamps();
+        $table->unique(['voucher_category_id', 'code']);
     });
 
     Schema::create('vouchers', function (Blueprint $table) {
@@ -120,25 +125,25 @@ it('reuses category ids so posted voucher references remain immutable', function
         'status' => true,
     ]);
 
-    $officeSubType = PaymentSubType::query()->create([
+    $officeSubType = VoucherTransactionType::query()->create([
         'code' => '1033',
         'name' => 'Utility Bills',
         'voucher_category_id' => $office->id,
-        'type' => 'payment',
+        'voucher_type' => 'payment',
         'status' => true,
     ]);
-    $generalSubType = PaymentSubType::query()->create([
+    $generalSubType = VoucherTransactionType::query()->create([
         'code' => '1071',
         'name' => 'Account Transfer',
         'voucher_category_id' => $general->id,
-        'type' => 'both',
+        'voucher_type' => 'both',
         'status' => true,
     ]);
-    $liabilitySubType = PaymentSubType::query()->create([
+    $liabilitySubType = VoucherTransactionType::query()->create([
         'code' => '1074',
         'name' => 'Loan Payment',
         'voucher_category_id' => $liability->id,
-        'type' => 'payment',
+        'voucher_type' => 'payment',
         'status' => true,
     ]);
     DB::table('vouchers')->insert([
@@ -247,11 +252,11 @@ it('identifies customer security deposit refunds by immutable category code', fu
         'sort_order' => 1,
         'is_system' => true,
     ]);
-    $subType = PaymentSubType::query()->create([
-        'code' => PaymentSubType::CUSTOMER_REFUND_GIVEN_CODE,
+    $subType = VoucherTransactionType::query()->create([
+        'code' => VoucherTransactionTypeHelper::customerSecurityDepositRefundCode(),
         'name' => 'Refund Given',
         'voucher_category_id' => $customerCategory->id,
-        'type' => 'payment',
+        'voucher_type' => 'payment',
         'status' => true,
     ]);
 

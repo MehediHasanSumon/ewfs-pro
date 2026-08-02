@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\SystemVoucherCategorySeeder;
+use Database\Seeders\SystemVoucherTransactionTypeSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
 use Throwable;
@@ -20,6 +21,7 @@ class AppConfig extends Command
     private array $seeders = [
         CategorySeeder::class,
         SystemVoucherCategorySeeder::class,
+        SystemVoucherTransactionTypeSeeder::class,
     ];
 
     public function handle(): int

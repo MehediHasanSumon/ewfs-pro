@@ -107,6 +107,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | ERP Business Configuration
+    |--------------------------------------------------------------------------
+    |
+    | ERP constants are maintained in config/erp.php and exposed here as a
+    | dedicated application configuration section for future master data.
+    |
+    */
+    'erp' => require __DIR__.'/erp.php',
+
+    /*
+    |--------------------------------------------------------------------------
     | Maintenance Mode Driver
     |--------------------------------------------------------------------------
     |
