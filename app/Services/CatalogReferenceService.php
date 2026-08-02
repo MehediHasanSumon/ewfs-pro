@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\ErpHelper;
 use App\Models\Category;
 use App\Models\Unit;
 use Illuminate\Database\Eloquent\Model;
@@ -52,6 +53,15 @@ class CatalogReferenceService
             $records = $modelClass::query()->whereKey($ids)->lockForUpdate()->get();
 
             foreach ($records as $record) {
+                if (
+                    $record instanceof Category
+                    && ErpHelper::isReservedCategoryCode($record->code)
+                ) {
+                    throw ValidationException::withMessages([
+                        'ids' => 'Reserved ERP categories cannot be deleted.',
+                    ]);
+                }
+
                 foreach ($blockingRelations as $relation) {
                     if ($record->{$relation}()->exists()) {
                         throw ValidationException::withMessages([

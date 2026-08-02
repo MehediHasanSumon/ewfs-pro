@@ -1,6 +1,22 @@
 <?php
 
 return [
+    /*
+    |--------------------------------------------------------------------------
+    | Reserved ERP Categories
+    |--------------------------------------------------------------------------
+    |
+    | These codes are permanent business identifiers. Database category names
+    | may be edited, but the configured codes must never be changed, reused,
+    | or deleted.
+    |
+    */
+    'categories' => [
+        1001 => 'Oil',
+        1002 => 'Gas',
+        1003 => 'Lubricant & Accessories',
+    ],
+
     'sales' => [
         'max_items' => (int) env('SALE_MAX_ITEMS', 100),
         'currency_scale' => (int) env('SALE_CURRENCY_SCALE', 2),

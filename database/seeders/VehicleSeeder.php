@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Helpers\ErpHelper;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Vehicle;
@@ -13,11 +14,11 @@ class VehicleSeeder extends Seeder
     {
         $customers = Customer::all();
         $oilProducts = Product::whereHas('category', function ($query) {
-            $query->where('code', '1001');
+            $query->where('code', ErpHelper::oilCategoryCode());
         })->pluck('id')->toArray();
 
         $otherProducts = Product::whereHas('category', function ($query) {
-            $query->where('code', '1002');
+            $query->where('code', ErpHelper::lubricantCategoryCode());
         })->pluck('id')->toArray();
 
         $vehicleTypes = ['Car', 'Truck', 'Bus', 'Motorcycle', 'Pickup', 'Van', 'SUV', 'Microbus'];

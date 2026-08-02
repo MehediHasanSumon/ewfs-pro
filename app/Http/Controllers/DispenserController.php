@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\ErpHelper;
 use App\Http\Requests\DispenserRequest;
 use App\Models\CompanySetting;
 use App\Models\Dispenser;
@@ -73,7 +74,11 @@ class DispenserController extends Controller implements HasMiddleware
         $products = Product::query()
             ->select(['id', 'product_name'])
             ->active()
-            ->whereHas('category', fn (Builder $query) => $query->where('code', '1001'))
+            ->whereHas(
+                'category',
+                fn (Builder $query) => $query
+                    ->where('code', ErpHelper::oilCategoryCode())
+            )
             ->orderBy('product_name')
             ->get();
 

@@ -2,28 +2,23 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
+use App\Helpers\ErpHelper;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductRate;
-use App\Models\Category;
 use App\Models\Unit;
+use Illuminate\Database\Seeder;
 
 class ProductSeeder extends Seeder
 {
     public function run(): void
     {
-        // Create Categories
-        $oilCategory = Category::create([
-            'name' => 'Oil',
-            'code' => '1001',
-            'status' => true
-        ]);
-
-        $othersCategory = Category::create([
-            'name' => 'Others',
-            'code' => '1002',
-            'status' => true
-        ]);
+        $oilCategory = Category::query()
+            ->where('code', ErpHelper::oilCategoryCode())
+            ->firstOrFail();
+        $lubricantCategory = Category::query()
+            ->where('code', ErpHelper::lubricantCategoryCode())
+            ->firstOrFail();
 
         // Create Units
         $units = [
@@ -78,7 +73,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 102.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $literUnit->id,
                 'product_code' => 'PC05',
                 'product_name' => 'Engine Oil',
@@ -87,7 +82,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 500.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $literUnit->id,
                 'product_code' => 'PC06',
                 'product_name' => 'Brake Oil',
@@ -96,7 +91,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 200.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $literUnit->id,
                 'product_code' => 'PC07',
                 'product_name' => 'Gear Oil',
@@ -105,7 +100,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 250.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $literUnit->id,
                 'product_code' => 'PC08',
                 'product_name' => 'Coolant',
@@ -114,7 +109,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 170.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $pcsUnit->id,
                 'product_code' => 'PC09',
                 'product_name' => 'Air Filter',
@@ -123,7 +118,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 400.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $pcsUnit->id,
                 'product_code' => 'PC10',
                 'product_name' => 'Oil Filter',
@@ -132,7 +127,7 @@ class ProductSeeder extends Seeder
                 'sales_price' => 320.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $pcsUnit->id,
                 'product_code' => 'PC11',
                 'product_name' => 'Spark Plug',
@@ -141,14 +136,14 @@ class ProductSeeder extends Seeder
                 'sales_price' => 150.00,
             ],
             [
-                'category_id' => $othersCategory->id,
+                'category_id' => $lubricantCategory->id,
                 'unit_id' => $pcsUnit->id,
                 'product_code' => 'PC12',
                 'product_name' => 'Battery',
                 'status' => 1,
                 'purchase_price' => 4500.00,
                 'sales_price' => 5000.00,
-            ]
+            ],
         ];
 
         foreach ($products as $productData) {
@@ -163,7 +158,7 @@ class ProductSeeder extends Seeder
                 'purchase_price' => $purchasePrice,
                 'sales_price' => $salesPrice,
                 'effective_date' => now(),
-                'status' => true
+                'status' => true,
             ]);
         }
     }
