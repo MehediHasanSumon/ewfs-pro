@@ -51,6 +51,22 @@ class Category extends Model
         return $query->where('status', true);
     }
 
+    public function scopeAllowedForDispenser(Builder $query): Builder
+    {
+        return $query->whereIn(
+            'code',
+            ErpHelper::dispenserProductCategoryCodes()
+        );
+    }
+
+    public function scopeOtherForDispenser(Builder $query): Builder
+    {
+        return $query->whereNotIn(
+            'code',
+            ErpHelper::dispenserProductCategoryCodes()
+        );
+    }
+
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);

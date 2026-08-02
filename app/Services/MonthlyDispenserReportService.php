@@ -42,7 +42,6 @@ class MonthlyDispenserReportService
     {
         return Product::query()
             ->active()
-            ->allowedForDispenser()
             ->orderBy('product_name')
             ->get(['id', 'product_name']);
     }

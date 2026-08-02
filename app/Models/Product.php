@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Helpers\ErpHelper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,10 +41,15 @@ class Product extends Model
     {
         return $query->whereHas(
             'category',
-            fn (Builder $category) => $category->whereIn(
-                'code',
-                ErpHelper::dispenserProductCategoryCodes()
-            )
+            fn (Builder $category) => $category->allowedForDispenser()
+        );
+    }
+
+    public function scopeOtherForDispenser(Builder $query): Builder
+    {
+        return $query->whereHas(
+            'category',
+            fn (Builder $category) => $category->otherForDispenser()
         );
     }
 

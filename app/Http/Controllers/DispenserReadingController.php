@@ -15,7 +15,9 @@ use App\Models\ShiftClosing;
 use App\Models\Vehicle;
 use App\Models\VoucherCategory;
 use App\Models\VoucherTransactionType;
-use App\Rules\AllowedDispenserProductCategory;
+use App\Http\Requests\DispenserCalculationRequest;
+use App\Http\Requests\ShiftClosingRequest;
+use App\Services\DispenserCalculationService;
 use App\Services\ShiftClosingService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -25,13 +27,19 @@ use Inertia\Inertia;
 class DispenserReadingController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly ShiftClosingService $closings
+        private readonly ShiftClosingService $closings,
+        private readonly DispenserCalculationService $calculations
     ) {}
 
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:view-dispenser', only: ['index', 'getShiftsByDate', 'getShiftClosingData']),
+            new Middleware('permission:view-dispenser', only: [
+                'index',
+                'getShiftsByDate',
+                'getShiftClosingData',
+                'calculateOtherProducts',
+            ]),
             new Middleware('permission:create-dispenser', only: ['store']),
         ];
     }
@@ -75,15 +83,6 @@ class DispenserReadingController extends Controller implements HasMiddleware
                 'sales_price',
                 (float) ($product->activeRate?->sales_price ?? 0)
             ));
-        $otherProducts = Product::query()
-            ->with(['unit', 'stock', 'activeRate', 'category'])
-            ->active()
-            ->whereHas('category', fn ($category) => $category->where('inventory_class', '!=', 'fuel'))
-            ->get()
-            ->each(fn (Product $product) => $product->setAttribute(
-                'sales_price',
-                (float) ($product->activeRate?->sales_price ?? 0)
-            ));
         $accounts = Account::query()
             ->with('group:id,name')
             ->active()
@@ -100,7 +99,7 @@ class DispenserReadingController extends Controller implements HasMiddleware
                     'shift_id' => $closing->shift_id,
                 ]),
             'products' => $products,
-            'otherProducts' => $otherProducts,
+            'otherProducts' => [],
             'customers' => Customer::query()->active()->get(['id', 'name']),
             'vehicles' => Vehicle::query()
                 ->with(['customer:id,name', 'products:id,product_name'])
@@ -148,46 +147,39 @@ class DispenserReadingController extends Controller implements HasMiddleware
 
     public function getShiftClosingData(string $date, int $shift)
     {
-        return response()->json($this->closings->operationalSummary($date, $shift));
+        $operational = $this->closings->operationalSummary($date, $shift);
+        $summary = $operational['getTotalSummeryReport'][0];
+        $calculation = $this->calculations->calculate(
+            [],
+            (float) $summary['total_credit_sales_other_amount'],
+            (float) $summary['total_bank_sales_other_amount']
+        );
+
+        return response()->json($operational + [
+            'otherProducts' => $calculation['products'],
+            'otherProductsSummary' => $calculation['summary'],
+        ]);
     }
 
-    public function store(Request $request)
+    public function calculateOtherProducts(DispenserCalculationRequest $request)
     {
-        $validated = $request->validate([
-            'transaction_date' => ['required', 'date'],
-            'shift_id' => ['required', 'exists:shifts,id'],
-            'dispenser_readings' => ['required', 'array', 'min:1'],
-            'dispenser_readings.*.dispenser_id' => ['required', 'exists:dispensers,id'],
-            'dispenser_readings.*.product_id' => [
-                'required',
-                'exists:products,id',
-                new AllowedDispenserProductCategory,
-            ],
-            'dispenser_readings.*.start_reading' => ['required', 'numeric', 'min:0'],
-            'dispenser_readings.*.end_reading' => ['required', 'numeric', 'gte:dispenser_readings.*.start_reading'],
-            'dispenser_readings.*.meter_test' => ['nullable', 'numeric', 'min:0'],
-            'dispenser_readings.*.item_rate' => ['required', 'numeric', 'min:0'],
-            'dispenser_readings.*.reading_by' => ['nullable', 'exists:employees,id'],
-            'other_product_sales' => ['nullable', 'array'],
-            'other_product_sales.*.product_id' => ['required', 'exists:products,id'],
-            'other_product_sales.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'other_product_sales.*.unit_price' => ['required', 'numeric', 'min:0'],
-            'other_product_sales.*.employee_id' => ['required', 'exists:employees,id'],
-            'credit_sales' => ['required', 'numeric', 'min:0'],
-            'bank_sales' => ['required', 'numeric', 'min:0'],
-            'cash_sales' => ['required', 'numeric', 'min:0'],
-            'credit_sales_other' => ['required', 'numeric', 'min:0'],
-            'bank_sales_other' => ['required', 'numeric', 'min:0'],
-            'cash_sales_other' => ['required', 'numeric', 'min:0'],
-            'cash_receive' => ['required', 'numeric', 'min:0'],
-            'bank_receive' => ['nullable', 'numeric', 'min:0'],
-            'total_cash' => ['required', 'numeric', 'min:0'],
-            'cash_payment' => ['required', 'numeric', 'min:0'],
-            'bank_payment' => ['nullable', 'numeric', 'min:0'],
-            'office_payment' => ['required', 'numeric', 'min:0'],
-            'final_due_amount' => ['required', 'numeric'],
-            'remarks' => ['nullable', 'string'],
-        ]);
+        $validated = $request->validated();
+        $operational = $this->closings->operationalSummary(
+            $validated['transaction_date'],
+            (int) $validated['shift_id']
+        );
+        $summary = $operational['getTotalSummeryReport'][0];
+
+        return response()->json($this->calculations->calculate(
+            $validated['other_product_sales'] ?? [],
+            (float) $summary['total_credit_sales_other_amount'],
+            (float) $summary['total_bank_sales_other_amount']
+        ));
+    }
+
+    public function store(ShiftClosingRequest $request)
+    {
+        $validated = $request->validated();
 
         $this->closings->close($validated);
 

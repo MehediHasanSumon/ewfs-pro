@@ -190,6 +190,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('product/dispensers-reading', [DispenserReadingController::class, 'index'])->name('dispensers-reading.index');
     Route::get('product/dispensers-reading/shifts/{date}', [DispenserReadingController::class, 'getShiftsByDate']);
     Route::get('product/get-shift-closing-data/{date}/{shift}', [DispenserReadingController::class, 'getShiftClosingData']);
+    Route::post('product/calculate-other-product-sales', [DispenserReadingController::class, 'calculateOtherProducts'])->name('dispensers-reading.calculate-other-products');
     Route::post('product/dispensers-reading', [DispenserReadingController::class, 'store'])->name('dispensers-reading.store');
 
     // Shift Closed List routes

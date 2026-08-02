@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\CreditSaleItem;
 use App\Models\Dispenser;
-use App\Models\Product;
 use App\Models\SaleItem;
 use App\Models\ShiftClosing;
 use App\Models\VoucherLine;
@@ -16,7 +15,8 @@ class ShiftClosingService
     public function __construct(
         private readonly AccountingService $accounting,
         private readonly InventoryService $inventory,
-        private readonly SystemAccountService $systemAccounts
+        private readonly SystemAccountService $systemAccounts,
+        private readonly DispenserCalculationService $calculations
     ) {
     }
 
@@ -35,12 +35,54 @@ class ShiftClosingService
                 ]);
             }
 
+            $operational = $this->operationalSummary(
+                $data['transaction_date'],
+                (int) $data['shift_id']
+            )['getTotalSummeryReport'][0];
+            $creditFuel = (float) $operational['total_credit_sales_amount'];
+            $bankFuel = (float) $operational['total_bank_sale_amount'];
+            $creditOther = (float) $operational['total_credit_sales_other_amount'];
+            $bankOther = (float) $operational['total_bank_sales_other_amount'];
+            $cashReceipts = (float) $operational['total_cash_receive_amount'];
+            $cashPayments = (float) $operational['total_cash_payment_amount'];
+            $officePayments = (float) $operational['total_office_payment_amount'];
+            $otherProductLines = $this->calculations->resolveForClosing(
+                $data['other_product_sales'] ?? []
+            );
+            $otherProductSales = round(
+                (float) $otherProductLines->sum('line_total'),
+                4
+            );
+
+            if ($creditOther + $bankOther > $otherProductSales) {
+                throw ValidationException::withMessages([
+                    'other_product_sales' => 'Other product credit and bank sales cannot exceed total other product sales.',
+                ]);
+            }
+
+            $dispenserIds = collect($data['dispenser_readings'])
+                ->pluck('dispenser_id')
+                ->map(fn ($id) => (int) $id);
+            $dispensers = Dispenser::query()
+                ->with(['product.activeRate'])
+                ->whereIn('id', $dispenserIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($dispensers->count() !== $dispenserIds->unique()->count()) {
+                throw ValidationException::withMessages([
+                    'dispenser_readings' => 'One or more selected dispensers are unavailable.',
+                ]);
+            }
+
+            $fuelSales = 0.0;
             $closing = ShiftClosing::query()->create([
                 'business_date' => $data['transaction_date'],
                 'shift_id' => $data['shift_id'],
                 'status' => 'draft',
-                'expected_cash' => max(0, (float) $data['total_cash']),
-                'actual_cash' => max(0, (float) $data['final_due_amount']),
+                'expected_cash' => 0,
+                'actual_cash' => 0,
                 'variance_amount' => 0,
                 'created_by' => auth()->id(),
                 'remarks' => $data['remarks'] ?? null,
@@ -49,9 +91,9 @@ class ShiftClosingService
             $cogsTotal = 0.0;
 
             foreach ($data['dispenser_readings'] as $readingData) {
-                $dispenser = Dispenser::query()
-                    ->with(['product.activeRate'])
-                    ->findOrFail($readingData['dispenser_id']);
+                $dispenser = $dispensers->get(
+                    (int) $readingData['dispenser_id']
+                );
 
                 if ((int) $dispenser->product_id !== (int) $readingData['product_id']) {
                     throw ValidationException::withMessages([
@@ -65,10 +107,13 @@ class ShiftClosingService
                     - (float) $readingData['start_reading']
                     - (float) ($readingData['meter_test'] ?? 0)
                 );
-                $unitPrice = (float) $readingData['item_rate'];
+                $unitPrice = (float) (
+                    $dispenser->product->activeRate?->sales_price ?? 0
+                );
                 $grossAmount = round($netQuantity * $unitPrice, 4);
                 $unitCost = (float) ($dispenser->product->activeRate?->purchase_price ?? 0);
                 $totalCost = round($netQuantity * $unitCost, 4);
+                $fuelSales += $grossAmount;
 
                 $reading = $closing->dispenserReadings()->create([
                     'dispenser_id' => $dispenser->id,
@@ -102,29 +147,18 @@ class ShiftClosingService
                 }
             }
 
-            foreach ($data['other_product_sales'] ?? [] as $itemData) {
-                $quantity = (float) ($itemData['quantity'] ?? 0);
-                if ($quantity <= 0) {
-                    continue;
-                }
-
-                $product = Product::query()
-                    ->with(['unit', 'activeRate'])
-                    ->findOrFail($itemData['product_id']);
-                $unitPrice = (float) $itemData['unit_price'];
-                $lineTotal = round($quantity * $unitPrice, 4);
-                $unitCost = (float) ($product->activeRate?->purchase_price ?? 0);
-                $totalCost = round($quantity * $unitCost, 4);
+            foreach ($otherProductLines as $line) {
+                $product = $line['product'];
 
                 $item = $closing->productItems()->create([
                     'product_id' => $product->id,
                     'unit_id' => $product->unit_id,
-                    'employee_id' => $itemData['employee_id'],
+                    'employee_id' => $line['employee_id'],
                     'product_name_snapshot' => $product->product_name,
                     'unit_name_snapshot' => $product->unit->name,
-                    'unit_price' => $unitPrice,
-                    'quantity' => $quantity,
-                    'line_total' => $lineTotal,
+                    'unit_price' => $line['unit_price'],
+                    'quantity' => $line['quantity'],
+                    'line_total' => $line['line_total'],
                 ]);
 
                 if ($product->is_inventory_item) {
@@ -133,9 +167,9 @@ class ShiftClosingService
                         'shift_id' => $closing->shift_id,
                         'business_date' => $closing->business_date,
                         'movement_type' => 'shift_other_product_sale',
-                        'quantity_out' => $quantity,
-                        'unit_cost' => $unitCost,
-                        'total_cost' => $totalCost,
+                        'quantity_out' => $line['quantity'],
+                        'unit_cost' => $line['unit_cost'],
+                        'total_cost' => $line['total_cost'],
                         'source_type' => ShiftClosing::class,
                         'source_id' => $closing->id,
                         'source_line_id' => $item->id,
@@ -143,13 +177,31 @@ class ShiftClosingService
                     ]);
 
                     $item->update(['inventory_movement_id' => $movement->id]);
-                    $cogsTotal += $totalCost;
+                    $cogsTotal += $line['total_cost'];
                 }
             }
 
-            $cashRevenue = round(
-                (float) $data['cash_sales'] + (float) $data['cash_sales_other'],
+            $fuelSales = round($fuelSales, 4);
+
+            if ($creditFuel + $bankFuel > $fuelSales) {
+                throw ValidationException::withMessages([
+                    'dispenser_readings' => 'Fuel credit and bank sales cannot exceed total dispenser sales.',
+                ]);
+            }
+
+            $cashFuel = round($fuelSales - $creditFuel - $bankFuel, 4);
+            $cashOther = round(
+                $otherProductSales - $creditOther - $bankOther,
                 4
+            );
+            $cashRevenue = round($cashFuel + $cashOther, 4);
+            $expectedCash = round($cashRevenue + $cashReceipts, 4);
+            $actualCash = max(
+                0,
+                round(
+                    $expectedCash - $cashPayments - $officePayments,
+                    4
+                )
             );
             $journalLines = [];
 
@@ -202,19 +254,22 @@ class ShiftClosingService
                 ], $journalLines);
             }
 
+            $closing->update([
+                'expected_cash' => $expectedCash,
+                'actual_cash' => $actualCash,
+            ]);
+
             $closing->summary()->create([
-                'fuel_sales' => collect($data['dispenser_readings'])->sum('total_sale'),
-                'other_product_sales' => collect($data['other_product_sales'] ?? [])->sum(
-                    fn (array $item) => (float) $item['quantity'] * (float) $item['unit_price']
-                ),
-                'credit_sales' => (float) $data['credit_sales'] + (float) $data['credit_sales_other'],
-                'bank_sales' => (float) $data['bank_sales'] + (float) $data['bank_sales_other'],
-                'cash_sales' => (float) $data['cash_sales'] + (float) $data['cash_sales_other'],
-                'cash_receipts' => $data['cash_receive'],
-                'bank_receipts' => $data['bank_receive'] ?? 0,
-                'cash_payments' => $data['cash_payment'],
-                'bank_payments' => $data['bank_payment'] ?? 0,
-                'office_payments' => $data['office_payment'],
+                'fuel_sales' => $fuelSales,
+                'other_product_sales' => $otherProductSales,
+                'credit_sales' => $creditFuel + $creditOther,
+                'bank_sales' => $bankFuel + $bankOther,
+                'cash_sales' => $cashRevenue,
+                'cash_receipts' => $cashReceipts,
+                'bank_receipts' => 0,
+                'cash_payments' => $cashPayments,
+                'bank_payments' => 0,
+                'office_payments' => $officePayments,
                 'expected_cash' => $closing->expected_cash,
                 'actual_cash' => $closing->actual_cash,
                 'variance_amount' => (float) $closing->expected_cash - (float) $closing->actual_cash,
@@ -247,7 +302,8 @@ class ShiftClosingService
                 ->whereDate('sale_date', $date)
                 ->where('shift_id', $shiftId))
             ->whereHas('customerAllocation.journalEntry', fn ($entry) => $entry->posted())
-            ->whereHas('category', fn ($category) => $category->where('inventory_class', 'fuel'))
+            ->whereHas('category', fn ($category) => $category
+                ->allowedForDispenser())
             ->sum('line_total');
 
         $creditOther = (float) CreditSaleItem::query()
@@ -255,7 +311,8 @@ class ShiftClosingService
                 ->whereDate('sale_date', $date)
                 ->where('shift_id', $shiftId))
             ->whereHas('customerAllocation.journalEntry', fn ($entry) => $entry->posted())
-            ->whereHas('category', fn ($category) => $category->where('inventory_class', '!=', 'fuel'))
+            ->whereHas('category', fn ($category) => $category
+                ->otherForDispenser())
             ->sum('line_total');
 
         $bankFuel = $this->bankSales($date, $shiftId, true);
@@ -299,8 +356,12 @@ class ShiftClosingService
                 ->whereHas('journalEntry', fn ($entry) => $entry->posted())
                 ->whereHas('transaction', fn ($line) => $line
                     ->whereIn('payment_method', ['bank', 'mobile_bank', 'cheque', 'online'])))
-            ->whereHas('category', fn ($category) => $category
-                ->where('inventory_class', $fuel ? '=' : '!=', 'fuel'))
+            ->whereHas(
+                'category',
+                fn ($category) => $fuel
+                    ? $category->allowedForDispenser()
+                    : $category->otherForDispenser()
+            )
             ->sum('line_total');
     }
 

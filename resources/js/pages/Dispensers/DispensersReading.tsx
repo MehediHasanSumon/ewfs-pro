@@ -69,8 +69,37 @@ interface Product {
     product_name: string;
     product_code: string;
     sales_price: number;
-    unit?: { name: string };
+    unit?: {
+        name: string;
+        quantity_scale?: number;
+    };
     stock?: { current_stock: number };
+    sell_quantity?: number;
+    remaining_stock?: number;
+    total_sales?: number;
+    credit_sales?: number;
+    bank_sales?: number;
+    cash_sales?: number;
+}
+
+interface OtherProductSaleState {
+    product_id: number;
+    sell_quantity: number;
+    sell_by: string;
+    total_sales: number;
+    remaining_stock: number;
+    credit_sales: number;
+    bank_sales: number;
+    cash_sales: number;
+}
+
+interface OtherProductsSummary {
+    total_sales: number;
+    credit_sales: number;
+    bank_sales: number;
+    cash_sales: number;
+    is_balanced: boolean;
+    validation_message: string | null;
 }
 
 interface Customer {
@@ -169,14 +198,38 @@ export default function DispenserReading({
     });
     const [officePaymentProcessing, setOfficePaymentProcessing] =
         useState(false);
-    const [otherProductsSales, setOtherProductsSales] = useState(
+    const [loadedOtherProducts, setLoadedOtherProducts] =
+        useState<Product[]>(otherProducts);
+    const [otherProductsSales, setOtherProductsSales] =
+        useState<OtherProductSaleState[]>(
         otherProducts.map((product) => ({
             product_id: product.id,
             sell_quantity: 0,
             sell_by: '',
             total_sales: 0,
+            remaining_stock: Number(product.stock?.current_stock) || 0,
+            credit_sales: 0,
+            bank_sales: 0,
+            cash_sales: 0,
         }))
     );
+    const [otherProductsSummary, setOtherProductsSummary] =
+        useState<OtherProductsSummary>({
+            total_sales: 0,
+            credit_sales: 0,
+            bank_sales: 0,
+            cash_sales: 0,
+            is_balanced: true,
+            validation_message: null,
+        });
+    const [isOtherProductsLoading, setIsOtherProductsLoading] =
+        useState(false);
+    const [otherProductsError, setOtherProductsError] = useState('');
+    const [otherProductsRefreshKey, setOtherProductsRefreshKey] =
+        useState(0);
+    const [salesProductMode, setSalesProductMode] = useState<
+        'dispenser' | 'other'
+    >('dispenser');
     const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
@@ -215,13 +268,9 @@ export default function DispenserReading({
 
     const calculateOtherProductSale = (index: number, sellQuantity: number) => {
         const newSales = [...otherProductsSales];
-        const product = otherProducts[index];
-        const salesPrice = Number(product?.sales_price) || 0;
-        const totalSales = sellQuantity * salesPrice;
         newSales[index] = {
             ...newSales[index],
             sell_quantity: sellQuantity,
-            total_sales: totalSales,
         };
         setOtherProductsSales(newSales);
     };
@@ -332,12 +381,22 @@ export default function DispenserReading({
 
     const fetchShiftData = async (shiftDate: string, shiftId: string) => {
         if (!shiftDate || !shiftId) return;
+        setIsOtherProductsLoading(true);
+        setOtherProductsError('');
+
         try {
             const response = await fetch(
                 `/product/get-shift-closing-data/${shiftDate}/${shiftId}`,
             );
+
+            if (!response.ok) {
+                throw new Error('Unable to load shift calculation data.');
+            }
+
             const result = await response.json();
             const summaryData = result?.getTotalSummeryReport?.[0] || {};
+            const fetchedOtherProducts: Product[] =
+                result?.otherProducts || [];
             const productWiseCreditSalesData =
                 result?.getCreditSalesDetailsReport || [];
             const creditSalesByProduct: { [key: number]: number } = {};
@@ -366,6 +425,42 @@ export default function DispenserReading({
                 });
                 return updated;
             });
+            setLoadedOtherProducts(fetchedOtherProducts);
+            setOtherProductsSales((previous) =>
+                fetchedOtherProducts.map((product) => {
+                    const existing = previous.find(
+                        (sale) => sale.product_id === product.id,
+                    );
+
+                    return {
+                        product_id: product.id,
+                        sell_quantity: existing?.sell_quantity || 0,
+                        sell_by: existing?.sell_by || '',
+                        total_sales: Number(product.total_sales) || 0,
+                        remaining_stock:
+                            product.remaining_stock !== undefined
+                                ? Number(product.remaining_stock)
+                                : Number(product.stock?.current_stock) || 0,
+                        credit_sales: Number(product.credit_sales) || 0,
+                        bank_sales: Number(product.bank_sales) || 0,
+                        cash_sales: Number(product.cash_sales) || 0,
+                    };
+                }),
+            );
+            setOtherProductsSummary(
+                result?.otherProductsSummary || {
+                    total_sales: 0,
+                    credit_sales: Number(
+                        summaryData.total_credit_sales_other_amount,
+                    ) || 0,
+                    bank_sales: Number(
+                        summaryData.total_bank_sales_other_amount,
+                    ) || 0,
+                    cash_sales: 0,
+                    is_balanced: true,
+                    validation_message: null,
+                },
+            );
 
             setData((prev) => {
                 const newData = {
@@ -405,6 +500,16 @@ export default function DispenserReading({
             });
         } catch (error) {
             console.error('Error fetching shift data:', error);
+            setLoadedOtherProducts([]);
+            setOtherProductsSales([]);
+            setOtherProductsError(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to load other products.',
+            );
+        } finally {
+            setOtherProductsRefreshKey((current) => current + 1);
+            setIsOtherProductsLoading(false);
         }
     };
 
@@ -418,6 +523,26 @@ export default function DispenserReading({
         }
         if (!data.shift_id) {
             setValidationError('Shift selection is required');
+            setIsValidationModalOpen(true);
+            return;
+        }
+        if (otherProductsError || !otherProductsSummary.is_balanced) {
+            setValidationError(
+                otherProductsError ||
+                    otherProductsSummary.validation_message ||
+                    'Other product sales are not balanced.',
+            );
+            setIsValidationModalOpen(true);
+            return;
+        }
+        if (
+            otherProductsSales.some(
+                (sale) => sale.sell_quantity > 0 && !sale.sell_by,
+            )
+        ) {
+            setValidationError(
+                'Sold By is required for every other product with a sell quantity.',
+            );
             setIsValidationModalOpen(true);
             return;
         }
@@ -495,19 +620,13 @@ export default function DispenserReading({
             .map(sale => ({
                 product_id: sale.product_id,
                 quantity: sale.sell_quantity,
-                unit_price: otherProducts.find(p => p.id === sale.product_id)?.sales_price || 0,
                 employee_id: sale.sell_by,
                 remarks: null
             }));
 
-        const totalOtherProductsSales = otherProductsSales.reduce((sum, sale) => sum + (sale.total_sales || 0), 0);
-        const creditSalesOther = parseFloat(data.credit_sales_other) || 0;
-        const bankSalesOther = parseFloat(data.bank_sales_other) || 0;
-        const cashSalesOther = totalOtherProductsSales - creditSalesOther - bankSalesOther;
-
         const submitData = {
             ...data,
-            cash_sales_other: cashSalesOther.toFixed(2),
+            cash_sales_other: otherProductsSummary.cash_sales.toFixed(2),
             other_product_sales: otherProductSalesData
         };
 
@@ -535,6 +654,17 @@ export default function DispenserReading({
     const handleDateChange = async (date: string) => {
         setData('transaction_date', date);
         setData('shift_id', '');
+        setLoadedOtherProducts([]);
+        setOtherProductsSales([]);
+        setOtherProductsError('');
+        setOtherProductsSummary({
+            total_sales: 0,
+            credit_sales: 0,
+            bank_sales: 0,
+            cash_sales: 0,
+            is_balanced: true,
+            validation_message: null,
+        });
         if (date) {
             setAvailableShifts(getAvailableShifts(date));
         } else {
@@ -542,43 +672,153 @@ export default function DispenserReading({
         }
     };
 
-    const updateOtherProductsCashSales = () => {
-        const totalOtherProductsSales = otherProductsSales.reduce((sum, sale) => sum + (sale.total_sales || 0), 0);
-        const creditSalesOther = parseFloat(data.credit_sales_other) || 0;
-        const bankSalesOther = parseFloat(data.bank_sales_other) || 0;
-        const cashSalesOther = totalOtherProductsSales - creditSalesOther - bankSalesOther;
-
-        const creditSales = parseFloat(data.credit_sales) || 0;
-        const bankSales = parseFloat(data.bank_sales) || 0;
-        const totalSales = data.dispenser_readings.reduce((sum, reading) => sum + (reading.total_sale || 0), 0);
-        const cashSales = totalSales - creditSales - bankSales;
-        const cashReceive = parseFloat(data.cash_receive) || 0;
-        const totalCash = cashSales + cashSalesOther + cashReceive;
-        const cashPayment = parseFloat(data.cash_payment) || 0;
-        const officePayment = parseFloat(data.office_payment) || 0;
-        const finalDueAmount = totalCash - cashPayment - officePayment;
-
-        setData(prev => ({
-            ...prev,
-            cash_sales_other: cashSalesOther.toFixed(2),
-            total_cash: totalCash.toFixed(2),
-            final_due_amount: finalDueAmount.toFixed(2),
-        }));
-    };
-
     useEffect(() => {
         updateTotals();
     }, []);
-
-    useEffect(() => {
-        updateOtherProductsCashSales();
-    }, [otherProductsSales, data.credit_sales_other, data.bank_sales_other]);
 
     useEffect(() => {
         if (data.transaction_date && data.shift_id) {
             fetchShiftData(data.transaction_date, data.shift_id);
         }
     }, [data.transaction_date, data.shift_id]);
+
+    const otherProductQuantitySignature = otherProductsSales
+        .map((sale) => `${sale.product_id}:${sale.sell_quantity}`)
+        .join('|');
+
+    useEffect(() => {
+        if (!data.transaction_date || !data.shift_id) {
+            return;
+        }
+
+        const abortController = new AbortController();
+        const timeout = window.setTimeout(async () => {
+            setIsOtherProductsLoading(true);
+            setOtherProductsError('');
+
+            try {
+                const csrfToken = document
+                    .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+                    ?.content;
+                const response = await fetch(
+                    '/product/calculate-other-product-sales',
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        signal: abortController.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            ...(csrfToken
+                                ? { 'X-CSRF-TOKEN': csrfToken }
+                                : {}),
+                        },
+                        body: JSON.stringify({
+                            transaction_date: data.transaction_date,
+                            shift_id: data.shift_id,
+                            other_product_sales: otherProductsSales.map(
+                                (sale) => ({
+                                    product_id: sale.product_id,
+                                    quantity: sale.sell_quantity,
+                                }),
+                            ),
+                        }),
+                    },
+                );
+                const result = await response.json();
+
+                if (!response.ok) {
+                    const firstError = Object.values(
+                        result?.errors || {},
+                    ).flat()[0];
+
+                    throw new Error(
+                        typeof firstError === 'string'
+                            ? firstError
+                            : 'Unable to calculate other product sales.',
+                    );
+                }
+
+                const calculatedProducts: Product[] =
+                    result?.products || [];
+                const calculatedSummary: OtherProductsSummary =
+                    result?.summary;
+
+                setLoadedOtherProducts(calculatedProducts);
+                setOtherProductsSales((previous) =>
+                    calculatedProducts.map((product) => {
+                        const existing = previous.find(
+                            (sale) => sale.product_id === product.id,
+                        );
+
+                        return {
+                            product_id: product.id,
+                            sell_quantity:
+                                Number(product.sell_quantity) || 0,
+                            sell_by: existing?.sell_by || '',
+                            total_sales:
+                                Number(product.total_sales) || 0,
+                            remaining_stock:
+                                Number(product.remaining_stock) || 0,
+                            credit_sales:
+                                Number(product.credit_sales) || 0,
+                            bank_sales: Number(product.bank_sales) || 0,
+                            cash_sales: Number(product.cash_sales) || 0,
+                        };
+                    }),
+                );
+                setOtherProductsSummary(calculatedSummary);
+                setOtherProductsError(
+                    calculatedSummary.validation_message || '',
+                );
+                setData((previous) => {
+                    const cashSalesOther =
+                        Number(calculatedSummary.cash_sales) || 0;
+                    const totalCash =
+                        (parseFloat(previous.cash_sales) || 0) +
+                        cashSalesOther +
+                        (parseFloat(previous.cash_receive) || 0);
+                    const finalDueAmount =
+                        totalCash -
+                        (parseFloat(previous.cash_payment) || 0) -
+                        (parseFloat(previous.office_payment) || 0);
+
+                    return {
+                        ...previous,
+                        cash_sales_other: cashSalesOther.toFixed(2),
+                        total_cash: totalCash.toFixed(2),
+                        final_due_amount: finalDueAmount.toFixed(2),
+                    };
+                });
+            } catch (error) {
+                if (error instanceof DOMException && error.name === 'AbortError') {
+                    return;
+                }
+
+                setOtherProductsError(
+                    error instanceof Error
+                        ? error.message
+                        : 'Unable to calculate other product sales.',
+                );
+            } finally {
+                if (!abortController.signal.aborted) {
+                    setIsOtherProductsLoading(false);
+                }
+            }
+        }, 250);
+
+        return () => {
+            window.clearTimeout(timeout);
+            abortController.abort();
+        };
+    }, [
+        data.transaction_date,
+        data.shift_id,
+        data.credit_sales_other,
+        data.bank_sales_other,
+        otherProductQuantitySignature,
+        otherProductsRefreshKey,
+    ]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -654,6 +894,9 @@ export default function DispenserReading({
                                                 size="sm"
                                                 className="absolute top-1/2 right-0.5 h-7 w-7 -translate-y-1/2 p-0"
                                                 onClick={() => {
+                                                    setSalesProductMode(
+                                                        'dispenser',
+                                                    );
                                                     setIsCreditSalesOpen(true);
                                                 }}
                                             >
@@ -679,6 +922,9 @@ export default function DispenserReading({
                                                 size="sm"
                                                 className="absolute top-1/2 right-0.5 h-7 w-7 -translate-y-1/2 p-0"
                                                 onClick={() => {
+                                                    setSalesProductMode(
+                                                        'dispenser',
+                                                    );
                                                     setIsBankSalesOpen(true);
                                                 }}
                                             >
@@ -714,6 +960,7 @@ export default function DispenserReading({
                                             size="sm"
                                             className="absolute top-1/2 right-0.5 h-7 w-7 -translate-y-1/2 p-0"
                                             onClick={() => {
+                                                setSalesProductMode('other');
                                                 setIsCreditSalesOpen(true);
                                             }}
                                         >
@@ -737,6 +984,7 @@ export default function DispenserReading({
                                             size="sm"
                                             className="absolute top-1/2 right-0.5 h-7 w-7 -translate-y-1/2 p-0"
                                             onClick={() => {
+                                                setSalesProductMode('other');
                                                 setIsBankSalesOpen(true);
                                             }}
                                         >
@@ -1073,6 +1321,14 @@ export default function DispenserReading({
                                 <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">
                                     Other Products Sales
                                 </h3>
+                                {otherProductsError && (
+                                    <p
+                                        role="alert"
+                                        className="mb-3 text-sm text-red-600 dark:text-red-400"
+                                    >
+                                        {otherProductsError}
+                                    </p>
+                                )}
                                 <div className="overflow-x-auto">
                                     <table className="w-full border-collapse border border-gray-200 dark:border-gray-600">
                                         <thead>
@@ -1110,11 +1366,67 @@ export default function DispenserReading({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {otherProducts.map((product, index) => {
+                                            {isOtherProductsLoading &&
+                                                loadedOtherProducts.length ===
+                                                    0 && (
+                                                    <tr>
+                                                        <td
+                                                            colSpan={10}
+                                                            className="border border-gray-200 px-3 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-300"
+                                                        >
+                                                            Loading products...
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            {!isOtherProductsLoading &&
+                                                (!data.transaction_date ||
+                                                    !data.shift_id) && (
+                                                    <tr>
+                                                        <td
+                                                            colSpan={10}
+                                                            className="border border-gray-200 px-3 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-300"
+                                                        >
+                                                            Select date and shift
+                                                            to load products.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            {!isOtherProductsLoading &&
+                                                data.transaction_date &&
+                                                data.shift_id &&
+                                                loadedOtherProducts.length ===
+                                                    0 && (
+                                                    <tr>
+                                                        <td
+                                                            colSpan={10}
+                                                            className="border border-gray-200 px-3 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-300"
+                                                        >
+                                                            No other products
+                                                            available.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            {loadedOtherProducts.map((product, index) => {
                                                 const currentStock = Number(product.stock?.current_stock) || 0;
                                                 const sellQuantity = otherProductsSales[index]?.sell_quantity || 0;
-                                                const newStock = currentStock - sellQuantity;
+                                                const newStock =
+                                                    otherProductsSales[index]
+                                                        ?.remaining_stock ??
+                                                    currentStock;
                                                 const totalSales = otherProductsSales[index]?.total_sales || 0;
+                                                const quantityScale =
+                                                    product.unit
+                                                        ?.quantity_scale ?? 0;
+                                                const quantityStep =
+                                                    quantityScale === 0
+                                                        ? '1'
+                                                        : (
+                                                              1 /
+                                                              10 **
+                                                                  quantityScale
+                                                          ).toFixed(
+                                                              quantityScale,
+                                                          );
                                                 return (
                                                     <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
@@ -1138,12 +1450,22 @@ export default function DispenserReading({
                                                         <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
                                                             <Input
                                                                 type="number"
-                                                                step="1"
+                                                                min="0"
+                                                                max={currentStock}
+                                                                step={quantityStep}
                                                                 value={sellQuantity}
                                                                 onChange={(e) => {
-                                                                    const quantity = parseInt(e.target.value) || 0;
+                                                                    const quantity =
+                                                                        parseFloat(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ) || 0;
                                                                     calculateOtherProductSale(index, quantity);
                                                                 }}
+                                                                disabled={
+                                                                    isOtherProductsLoading
+                                                                }
                                                                 className="h-8 w-20 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                                             />
                                                         </td>
@@ -1193,7 +1515,7 @@ export default function DispenserReading({
                                                     Total Sales:
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                    {otherProductsSales.reduce((sum, sale) => sum + (sale.total_sales || 0), 0).toFixed(2)}
+                                                    {otherProductsSummary.total_sales.toFixed(2)}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -1289,18 +1611,10 @@ export default function DispenserReading({
 
                                             {/* Other Products */}
                                             {otherProductsSales.filter(sale => sale.sell_quantity > 0).map((sale) => {
-                                                const product = otherProducts.find(p => p.id === sale.product_id);
+                                                const product = loadedOtherProducts.find(p => p.id === sale.product_id);
                                                 if (!product) return null;
 
                                                 const totalSale = sale.total_sales || 0;
-                                                const creditSalesOther = parseFloat(data.credit_sales_other) || 0;
-                                                const bankSalesOther = parseFloat(data.bank_sales_other) || 0;
-                                                const totalOtherSales = otherProductsSales.reduce((sum, s) => sum + (s.total_sales || 0), 0);
-
-                                                const proportion = totalOtherSales > 0 ? totalSale / totalOtherSales : 0;
-                                                const productCreditSales = creditSalesOther * proportion;
-                                                const productBankSales = bankSalesOther * proportion;
-                                                const productCashSales = totalSale - productCreditSales - productBankSales;
 
                                                 return (
                                                     <tr key={`other-${product.id}`} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -1320,13 +1634,13 @@ export default function DispenserReading({
                                                             {totalSale.toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productCreditSales.toFixed(2)}
+                                                            {sale.credit_sales.toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productBankSales.toFixed(2)}
+                                                            {sale.bank_sales.toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productCashSales.toFixed(2)}
+                                                            {sale.cash_sales.toFixed(2)}
                                                         </td>
                                                     </tr>
                                                 );
@@ -1345,7 +1659,7 @@ export default function DispenserReading({
                                                         ...Object.entries(productWiseData).filter(([, productData]) => {
                                                             return productData.total_sale > 0 || productData.net_reading > 0;
                                                         }).map(([, productData]) => productData.total_sale || 0),
-                                                        ...otherProductsSales.filter(sale => sale.sell_quantity > 0).map(sale => sale.total_sales || 0)
+                                                        otherProductsSummary.total_sales
                                                     ].reduce((sum, sale) => sum + sale, 0).toFixed(2)}
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
@@ -1366,7 +1680,11 @@ export default function DispenserReading({
                                 {canCreateDispenserReading && (
                                     <Button
                                         type="submit"
-                                        disabled={processing}
+                                        disabled={
+                                            processing ||
+                                            isOtherProductsLoading ||
+                                            Boolean(otherProductsError)
+                                        }
                                         className="rounded-md bg-blue-600 px-6 py-2 font-medium text-white hover:bg-blue-700"
                                     >
                                         {processing
@@ -1392,7 +1710,11 @@ export default function DispenserReading({
                     editingSale={null}
                     accounts={accounts}
                     groupedAccounts={groupedAccounts}
-                    products={products}
+                    products={
+                        salesProductMode === 'other'
+                            ? loadedOtherProducts
+                            : products
+                    }
                     vehicles={vehicles}
                     shifts={shifts}
                     closedShifts={closedShifts}
@@ -1676,7 +1998,11 @@ export default function DispenserReading({
                         }
                     }}
                     editingSale={null}
-                    products={products}
+                    products={
+                        salesProductMode === 'other'
+                            ? loadedOtherProducts
+                            : products
+                    }
                     vehicles={vehicles}
                     customers={customers}
                     shifts={shifts}
