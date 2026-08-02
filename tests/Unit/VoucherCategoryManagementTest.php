@@ -56,49 +56,54 @@ beforeEach(function () {
     });
 });
 
-it('synchronizes the system voucher categories without overwriting display names', function () {
+it('resets existing categories and seeds fresh system voucher categories', function () {
     VoucherCategory::query()->create([
         'code' => VoucherCategoryHelper::customerCode(),
         'name' => 'Client Accounts',
         'status' => false,
         'sort_order' => 9,
     ]);
+    VoucherCategory::query()->create([
+        'code' => 'VC006',
+        'name' => 'Old Custom Category',
+        'status' => true,
+        'sort_order' => 6,
+    ]);
 
     $seeder = new SystemVoucherCategorySeeder;
-    $seeder->run();
     $seeder->run();
 
     expect(VoucherCategory::query()->count())->toBe(5)
         ->and(VoucherCategory::query()
             ->where('code', VoucherCategoryHelper::customerCode())
             ->value('name'))
-        ->toBe('Client Accounts')
+        ->toBe('Customer')
         ->and(VoucherCategory::query()
             ->where('code', VoucherCategoryHelper::financeCode())
             ->exists())
         ->toBeTrue()
+        ->and(VoucherCategory::query()
+            ->where('name', 'Old Custom Category')
+            ->exists())
+        ->toBeFalse()
         ->and(VoucherCategory::query()
             ->where('code', VoucherCategoryHelper::customerCode())
             ->value('is_system'))
         ->toBeTrue();
 });
 
-it('adopts matching legacy categories without creating duplicates', function () {
-    VoucherCategory::query()->create([
-        'name' => 'Customer',
-        'status' => true,
-    ]);
+it('can reset and seed repeatedly without creating duplicates', function () {
+    $seeder = new SystemVoucherCategorySeeder;
+    $seeder->run();
+    $seeder->run();
 
-    (new SystemVoucherCategorySeeder)->run();
-
-    expect(VoucherCategory::query()
-        ->where('code', VoucherCategoryHelper::customerCode())
-        ->count())
-        ->toBe(1)
+    expect(VoucherCategory::query()->count())->toBe(5)
         ->and(VoucherCategory::query()
-            ->where('name', 'Customer')
-            ->count())
-        ->toBe(1);
+            ->pluck('code')
+            ->sort()
+            ->values()
+            ->all())
+        ->toBe(VoucherCategoryHelper::getSystemCategoryCodes());
 });
 
 it('keeps voucher category codes immutable while allowing editable fields', function () {
