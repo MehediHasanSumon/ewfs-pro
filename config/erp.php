@@ -58,7 +58,6 @@ $voucherTransactionTypes = [
     ],
     'customer' => [
         'advance_return' => ['code' => '1019', 'name' => 'Advance Return', 'voucher_type' => 'payment'],
-        'security_deposit_receipt' => ['code' => '1020', 'name' => 'Security Deposit Receipt', 'voucher_type' => 'payment'],
         'security_deposit_refund' => [
             'code' => '1028',
             'name' => 'Security Deposit Refund',

@@ -91,6 +91,48 @@ it('seeds configured system types idempotently with category scoped codes', func
         ->toBeTrue();
 });
 
+it('removes retired system types without breaking referenced vouchers', function () {
+    (new SystemVoucherTransactionTypeSeeder)->run();
+    $customer = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::customerCode())
+        ->firstOrFail();
+
+    $retiredType = VoucherTransactionType::query()->create([
+        'voucher_category_id' => $customer->id,
+        'code' => '1020',
+        'name' => 'Security Deposit Receipt',
+        'voucher_type' => VoucherTransactionTypeHelper::paymentVoucherType(),
+        'sort_order' => 99,
+        'status' => true,
+        'is_system' => true,
+    ]);
+
+    (new SystemVoucherTransactionTypeSeeder)->run();
+
+    expect(VoucherTransactionType::query()->find($retiredType->id))->toBeNull();
+
+    $referencedType = VoucherTransactionType::query()->create([
+        'voucher_category_id' => $customer->id,
+        'code' => '1020',
+        'name' => 'Security Deposit Receipt',
+        'voucher_type' => VoucherTransactionTypeHelper::paymentVoucherType(),
+        'sort_order' => 99,
+        'status' => true,
+        'is_system' => true,
+    ]);
+    DB::table('vouchers')->insert([
+        'voucher_transaction_type_id' => $referencedType->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    (new SystemVoucherTransactionTypeSeeder)->run();
+    $referencedType->refresh();
+
+    expect($referencedType->status)->toBeFalse()
+        ->and($referencedType->is_system)->toBeFalse();
+});
+
 it('preserves editable system names while keeping protected fields immutable', function () {
     (new SystemVoucherTransactionTypeSeeder)->run();
     $type = VoucherTransactionType::query()
