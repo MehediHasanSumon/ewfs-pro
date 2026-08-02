@@ -2,15 +2,16 @@
 
 namespace App\Console\Commands;
 
+use App\Helpers\VoucherCategoryHelper;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Permission;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class UserManager extends Command
 {
@@ -26,7 +27,7 @@ class UserManager extends Command
     {
         $action = $this->argument('action');
 
-        if (!$action) {
+        if (! $action) {
             $action = $this->choice('What would you like to do?', [
                 'list' => 'List all users',
                 'create' => 'Create new user',
@@ -36,7 +37,7 @@ class UserManager extends Command
                 'roles' => 'List all roles',
                 'create-role' => 'Create new role',
                 'create-permission' => 'Create new permission',
-                'setup' => 'Initial setup (roles & permissions)'
+                'setup' => 'Initial setup (roles & permissions)',
             ]);
         }
 
@@ -79,6 +80,7 @@ class UserManager extends Command
 
         if ($users->isEmpty()) {
             $this->warn('No users found.');
+
             return;
         }
 
@@ -98,7 +100,7 @@ class UserManager extends Command
                 $user->email,
                 $user->status ? '✅ Active' : '❌ Inactive',
                 $roles,
-                $permissions
+                $permissions,
             ];
         }
 
@@ -116,6 +118,7 @@ class UserManager extends Command
 
         if ($password !== $confirmPassword) {
             $this->error('Passwords do not match!');
+
             return;
         }
 
@@ -133,6 +136,7 @@ class UserManager extends Command
             foreach ($validator->errors()->all() as $error) {
                 $this->error($error);
             }
+
             return;
         }
 
@@ -156,7 +160,9 @@ class UserManager extends Command
         $userIdentifier = $this->option('user') ?: $this->ask('Enter user ID or email');
         $user = $this->findUser($userIdentifier);
 
-        if (!$user) return;
+        if (! $user) {
+            return;
+        }
 
         $this->assignRoleToUser($user);
     }
@@ -167,15 +173,17 @@ class UserManager extends Command
 
         if (empty($roles)) {
             $this->warn('No roles found. Run setup first.');
+
             return;
         }
 
-        $this->info("Current roles for {$user->name}: " . $user->roles->pluck('name')->join(', '));
+        $this->info("Current roles for {$user->name}: ".$user->roles->pluck('name')->join(', '));
 
         $selectedRole = $this->choice('Select role to assign', $roles);
 
         if ($user->hasRole($selectedRole)) {
             $this->warn("User already has the '{$selectedRole}' role.");
+
             return;
         }
 
@@ -188,12 +196,14 @@ class UserManager extends Command
         $userIdentifier = $this->option('user') ?: $this->ask('Enter user ID or email');
         $user = $this->findUser($userIdentifier);
 
-        if (!$user) return;
+        if (! $user) {
+            return;
+        }
 
         $action = $this->choice('What would you like to do?', [
             'view' => 'View user permissions',
             'assign' => 'Assign permission',
-            'revoke' => 'Revoke permission'
+            'revoke' => 'Revoke permission',
         ]);
 
         switch ($action) {
@@ -243,6 +253,7 @@ class UserManager extends Command
 
         if (empty($permissions)) {
             $this->warn('No permissions found. Run setup first.');
+
             return;
         }
 
@@ -250,6 +261,7 @@ class UserManager extends Command
 
         if ($user->hasPermissionTo($selectedPermission)) {
             $this->warn("User already has the '{$selectedPermission}' permission.");
+
             return;
         }
 
@@ -263,6 +275,7 @@ class UserManager extends Command
 
         if (empty($userPermissions)) {
             $this->warn('User has no direct permissions to revoke.');
+
             return;
         }
 
@@ -294,6 +307,7 @@ class UserManager extends Command
             foreach ($validator->errors()->all() as $error) {
                 $this->error($error);
             }
+
             return;
         }
 
@@ -320,7 +334,7 @@ class UserManager extends Command
             DB::commit();
 
             $this->info("✅ Super Admin created successfully: {$user->email}");
-            $this->info("👑 User has been granted all permissions via super-admin role");
+            $this->info('👑 User has been granted all permissions via super-admin role');
         } catch (\Exception $e) {
             DB::rollBack();
             $this->error("Failed to create super admin: {$e->getMessage()}");
@@ -333,6 +347,7 @@ class UserManager extends Command
 
         if ($roles->isEmpty()) {
             $this->warn('No roles found.');
+
             return;
         }
 
@@ -362,6 +377,7 @@ class UserManager extends Command
 
         if (Role::where('name', $roleName)->exists()) {
             $this->error('Role already exists!');
+
             return;
         }
 
@@ -381,6 +397,7 @@ class UserManager extends Command
 
         if (Permission::where('name', $permissionName)->exists()) {
             $this->error('Permission already exists!');
+
             return;
         }
 
@@ -394,6 +411,7 @@ class UserManager extends Command
 
         if (empty($permissions)) {
             $this->warn('No permissions found.');
+
             return;
         }
 
@@ -426,7 +444,7 @@ class UserManager extends Command
             foreach ($roles as $roleName) {
                 Role::firstOrCreate(['name' => $roleName]);
             }
-            $this->info('✅ Roles created: ' . implode(', ', $roles));
+            $this->info('✅ Roles created: '.implode(', ', $roles));
 
             // Dynamically get model names from app/Models
             $modelPath = app_path('Models');
@@ -439,7 +457,7 @@ class UserManager extends Command
                 }
             }
 
-            $this->info('Models found: ' . implode(', ', $models));
+            $this->info('Models found: '.implode(', ', $models));
 
             // Create permissions for each model
             $actions = ['create', 'update', 'view', 'delete'];
@@ -473,7 +491,8 @@ class UserManager extends Command
                 'delete-s-m-s-template',
                 'view-s-m-s-template',
                 'can-s-m-s-template-filter',
-                'can-s-m-s-template-download'
+                'can-s-m-s-template-download',
+                ...VoucherCategoryHelper::permissionNames(),
             ];
 
             foreach ($extraPermissions as $permissionName) {
@@ -503,8 +522,9 @@ class UserManager extends Command
             ? User::find($identifier)
             : User::where('email', $identifier)->first();
 
-        if (!$user) {
+        if (! $user) {
             $this->error('User not found!');
+
             return null;
         }
 
