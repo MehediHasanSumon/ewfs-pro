@@ -106,6 +106,67 @@ it('can reset and seed repeatedly without creating duplicates', function () {
         ->toBe(VoucherCategoryHelper::getSystemCategoryCodes());
 });
 
+it('remaps legacy voucher and payment subtype references before deleting old categories', function () {
+    $office = VoucherCategory::query()->create([
+        'name' => 'Office',
+        'status' => true,
+    ]);
+    $general = VoucherCategory::query()->create([
+        'name' => 'General',
+        'status' => true,
+    ]);
+    $liability = VoucherCategory::query()->create([
+        'name' => 'Liability',
+        'status' => true,
+    ]);
+
+    $officeSubType = PaymentSubType::query()->create([
+        'code' => '1033',
+        'name' => 'Utility Bills',
+        'voucher_category_id' => $office->id,
+        'type' => 'payment',
+        'status' => true,
+    ]);
+    $generalSubType = PaymentSubType::query()->create([
+        'code' => '1071',
+        'name' => 'Account Transfer',
+        'voucher_category_id' => $general->id,
+        'type' => 'both',
+        'status' => true,
+    ]);
+    $liabilitySubType = PaymentSubType::query()->create([
+        'code' => '1074',
+        'name' => 'Loan Payment',
+        'voucher_category_id' => $liability->id,
+        'type' => 'payment',
+        'status' => true,
+    ]);
+    DB::table('vouchers')->insert([
+        'voucher_category_id' => $office->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    (new SystemVoucherCategorySeeder)->run();
+
+    $operatingId = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::operatingCode())
+        ->value('id');
+    $financeId = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::financeCode())
+        ->value('id');
+
+    expect($officeSubType->refresh()->voucher_category_id)->toBe($operatingId)
+        ->and($generalSubType->refresh()->voucher_category_id)->toBe($financeId)
+        ->and($liabilitySubType->refresh()->voucher_category_id)->toBe($financeId)
+        ->and(DB::table('vouchers')->value('voucher_category_id'))
+        ->toBe($operatingId)
+        ->and(VoucherCategory::query()
+            ->whereIn('id', [$office->id, $general->id, $liability->id])
+            ->exists())
+        ->toBeFalse();
+});
+
 it('keeps voucher category codes immutable while allowing editable fields', function () {
     $category = VoucherCategory::query()->create([
         'code' => 'VC006',

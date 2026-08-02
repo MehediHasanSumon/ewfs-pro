@@ -79,6 +79,32 @@ class VoucherCategoryHelper
             && in_array($code, self::getSystemCategoryCodes(), true);
     }
 
+    public static function resolveSystemCode(
+        ?string $code,
+        ?string $name
+    ): ?string {
+        if (self::isSystemCode($code)) {
+            return $code;
+        }
+
+        $normalizedName = mb_strtolower(trim((string) $name));
+
+        foreach (self::systemCategories() as $category) {
+            $names = array_unique([
+                $category['name'],
+                ...($category['legacy_names'] ?? []),
+            ]);
+
+            foreach ($names as $candidate) {
+                if (mb_strtolower(trim((string) $candidate)) === $normalizedName) {
+                    return $category['code'];
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static function prefix(): string
     {
         return (string) config('erp.voucher_categories.prefix', 'VC');
