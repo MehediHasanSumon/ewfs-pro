@@ -17,8 +17,7 @@ class ShiftClosingService
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
         private readonly DispenserCalculationService $calculations
-    ) {
-    }
+    ) {}
 
     public function close(array $data): ShiftClosing
     {
@@ -35,30 +34,29 @@ class ShiftClosingService
                 ]);
             }
 
-            $operational = $this->operationalSummary(
+            $otherProductLines = $this->calculations->resolveForShiftClosing(
+                $data['transaction_date'],
+                (int) $data['shift_id'],
+                $data['other_product_sales'] ?? []
+            );
+            $otherSummary = $this->calculations->otherProductSalesSummary(
                 $data['transaction_date'],
                 (int) $data['shift_id']
+            );
+            $operational = $this->operationalSummary(
+                $data['transaction_date'],
+                (int) $data['shift_id'],
+                $otherSummary
             )['getTotalSummeryReport'][0];
             $creditFuel = (float) $operational['total_credit_sales_amount'];
             $bankFuel = (float) $operational['total_bank_sale_amount'];
-            $creditOther = (float) $operational['total_credit_sales_other_amount'];
-            $bankOther = (float) $operational['total_bank_sales_other_amount'];
+            $creditOther = (float) $otherSummary['credit_sales'];
+            $bankOther = (float) $otherSummary['bank_sales'];
+            $cashOther = (float) $otherSummary['cash_sales'];
             $cashReceipts = (float) $operational['total_cash_receive_amount'];
             $cashPayments = (float) $operational['total_cash_payment_amount'];
             $officePayments = (float) $operational['total_office_payment_amount'];
-            $otherProductLines = $this->calculations->resolveForClosing(
-                $data['other_product_sales'] ?? []
-            );
-            $otherProductSales = round(
-                (float) $otherProductLines->sum('line_total'),
-                4
-            );
-
-            if ($creditOther + $bankOther > $otherProductSales) {
-                throw ValidationException::withMessages([
-                    'other_product_sales' => 'Other product credit and bank sales cannot exceed total other product sales.',
-                ]);
-            }
+            $otherProductSales = (float) $otherSummary['total_sales'];
 
             $dispenserIds = collect($data['dispenser_readings'])
                 ->pluck('dispenser_id')
@@ -89,6 +87,7 @@ class ShiftClosingService
             ]);
 
             $cogsTotal = 0.0;
+            $inventoryAdjustments = [];
 
             foreach ($data['dispenser_readings'] as $readingData) {
                 $dispenser = $dispensers->get(
@@ -158,26 +157,41 @@ class ShiftClosingService
                     'unit_name_snapshot' => $product->unit->name,
                     'unit_price' => $line['unit_price'],
                     'quantity' => $line['quantity'],
+                    'recorded_quantity' => $line['recorded_quantity'],
+                    'quantity_variance' => $line['quantity_variance'],
                     'line_total' => $line['line_total'],
                 ]);
 
-                if ($product->is_inventory_item) {
-                    $movement = $this->inventory->record([
+                if (
+                    $product->is_inventory_item
+                    && abs($line['quantity_variance']) > 0.0000001
+                ) {
+                    $varianceOut = max(0, $line['quantity_variance']);
+                    $varianceIn = max(0, -$line['quantity_variance']);
+                    $movementData = [
                         'product_id' => $product->id,
                         'shift_id' => $closing->shift_id,
                         'business_date' => $closing->business_date,
-                        'movement_type' => 'shift_other_product_sale',
-                        'quantity_out' => $line['quantity'],
+                        'movement_type' => $varianceOut > 0
+                            ? 'shift_other_product_variance_out'
+                            : 'shift_other_product_variance_in',
+                        'quantity_in' => $varianceIn,
+                        'quantity_out' => $varianceOut,
                         'unit_cost' => $line['unit_cost'],
                         'total_cost' => $line['total_cost'],
                         'source_type' => ShiftClosing::class,
                         'source_id' => $closing->id,
                         'source_line_id' => $item->id,
                         'idempotency_key' => 'shift-closing-product:'.$item->id,
-                    ]);
+                    ];
+                    $movement = $this->inventory->record($movementData);
 
                     $item->update(['inventory_movement_id' => $movement->id]);
-                    $cogsTotal += $line['total_cost'];
+                    $inventoryAdjustments[] = [
+                        'product_id' => $product->id,
+                        'amount' => $line['total_cost'],
+                        'is_stock_loss' => $varianceOut > 0,
+                    ];
                 }
             }
 
@@ -190,12 +204,8 @@ class ShiftClosingService
             }
 
             $cashFuel = round($fuelSales - $creditFuel - $bankFuel, 4);
-            $cashOther = round(
-                $otherProductSales - $creditOther - $bankOther,
-                4
-            );
-            $cashRevenue = round($cashFuel + $cashOther, 4);
-            $expectedCash = round($cashRevenue + $cashReceipts, 4);
+            $cashSales = round($cashFuel + $cashOther, 4);
+            $expectedCash = round($cashSales + $cashReceipts, 4);
             $actualCash = max(
                 0,
                 round(
@@ -205,21 +215,21 @@ class ShiftClosingService
             );
             $journalLines = [];
 
-            if ($cashRevenue > 0) {
+            if ($cashFuel > 0) {
                 $cash = $this->systemAccounts->cashOnHand();
                 $revenue = $this->systemAccounts->salesRevenue();
                 $journalLines[] = [
                     'account_id' => $cash->id,
-                    'debit_amount' => $cashRevenue,
+                    'debit_amount' => $cashFuel,
                     'credit_amount' => 0,
                     'payment_method' => 'cash',
-                    'description' => 'Shift cash sales',
+                    'description' => 'Shift cash fuel sales',
                 ];
                 $journalLines[] = [
                     'account_id' => $revenue->id,
                     'debit_amount' => 0,
-                    'credit_amount' => $cashRevenue,
-                    'description' => 'Shift cash sales',
+                    'credit_amount' => $cashFuel,
+                    'description' => 'Shift cash fuel sales',
                 ];
             }
 
@@ -238,6 +248,53 @@ class ShiftClosingService
                     'credit_amount' => $cogsTotal,
                     'description' => 'Shift inventory cost',
                 ];
+            }
+
+            if ($inventoryAdjustments !== []) {
+                $inventory = $this->systemAccounts->inventoryAsset();
+                $adjustment = $this->systemAccounts->inventoryAdjustment();
+
+                foreach ($inventoryAdjustments as $inventoryAdjustment) {
+                    $amount = (float) $inventoryAdjustment['amount'];
+
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    if ($inventoryAdjustment['is_stock_loss']) {
+                        $journalLines[] = [
+                            'account_id' => $adjustment->id,
+                            'debit_amount' => $amount,
+                            'credit_amount' => 0,
+                            'product_id' => $inventoryAdjustment['product_id'],
+                            'description' => 'Other product physical stock shortage',
+                        ];
+                        $journalLines[] = [
+                            'account_id' => $inventory->id,
+                            'debit_amount' => 0,
+                            'credit_amount' => $amount,
+                            'product_id' => $inventoryAdjustment['product_id'],
+                            'description' => 'Other product physical stock shortage',
+                        ];
+
+                        continue;
+                    }
+
+                    $journalLines[] = [
+                        'account_id' => $inventory->id,
+                        'debit_amount' => $amount,
+                        'credit_amount' => 0,
+                        'product_id' => $inventoryAdjustment['product_id'],
+                        'description' => 'Other product physical stock surplus',
+                    ];
+                    $journalLines[] = [
+                        'account_id' => $adjustment->id,
+                        'debit_amount' => 0,
+                        'credit_amount' => $amount,
+                        'product_id' => $inventoryAdjustment['product_id'],
+                        'description' => 'Other product physical stock surplus',
+                    ];
+                }
             }
 
             $journal = null;
@@ -264,7 +321,7 @@ class ShiftClosingService
                 'other_product_sales' => $otherProductSales,
                 'credit_sales' => $creditFuel + $creditOther,
                 'bank_sales' => $bankFuel + $bankOther,
-                'cash_sales' => $cashRevenue,
+                'cash_sales' => $cashSales,
                 'cash_receipts' => $cashReceipts,
                 'bank_receipts' => 0,
                 'cash_payments' => $cashPayments,
@@ -295,8 +352,13 @@ class ShiftClosingService
         });
     }
 
-    public function operationalSummary(string $date, int $shiftId): array
-    {
+    public function operationalSummary(
+        string $date,
+        int $shiftId,
+        ?array $otherProductSummary = null
+    ): array {
+        $otherProductSummary ??= $this->calculations
+            ->otherProductSalesSummary($date, $shiftId);
         $creditFuel = (float) CreditSaleItem::query()
             ->whereHas('customerAllocation.creditSale', fn ($sale) => $sale
                 ->whereDate('sale_date', $date)
@@ -306,17 +368,7 @@ class ShiftClosingService
                 ->allowedForDispenser())
             ->sum('line_total');
 
-        $creditOther = (float) CreditSaleItem::query()
-            ->whereHas('customerAllocation.creditSale', fn ($sale) => $sale
-                ->whereDate('sale_date', $date)
-                ->where('shift_id', $shiftId))
-            ->whereHas('customerAllocation.journalEntry', fn ($entry) => $entry->posted())
-            ->whereHas('category', fn ($category) => $category
-                ->otherForDispenser())
-            ->sum('line_total');
-
         $bankFuel = $this->bankSales($date, $shiftId, true);
-        $bankOther = $this->bankSales($date, $shiftId, false);
 
         return [
             'getTotalSummeryReport' => [[
@@ -325,8 +377,9 @@ class ShiftClosingService
                 'total_cash_receive_amount' => $this->voucherTotal($date, $shiftId, 'receipt'),
                 'total_cash_payment_amount' => $this->voucherTotal($date, $shiftId, 'payment'),
                 'total_office_payment_amount' => $this->voucherTotal($date, $shiftId, 'office_payment'),
-                'total_credit_sales_other_amount' => $creditOther,
-                'total_bank_sales_other_amount' => $bankOther,
+                'total_credit_sales_other_amount' => $otherProductSummary['credit_sales'],
+                'total_bank_sales_other_amount' => $otherProductSummary['bank_sales'],
+                'total_cash_sales_other_amount' => $otherProductSummary['cash_sales'],
             ]],
             'getCreditSalesDetailsReport' => CreditSaleItem::query()
                 ->whereHas('customerAllocation.creditSale', fn ($sale) => $sale

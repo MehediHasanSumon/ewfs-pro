@@ -70,10 +70,15 @@ class ShiftClosingRequest extends FormRequest
             'other_product_sales.*.quantity' => [
                 'required',
                 'numeric',
-                'gt:0',
+                'min:0',
+            ],
+            'other_product_sales.*.recorded_quantity' => [
+                'nullable',
+                'numeric',
+                'min:0',
             ],
             'other_product_sales.*.employee_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('employees', 'id')->where('status', true),
             ],

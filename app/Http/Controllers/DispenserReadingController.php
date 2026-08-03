@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DispenserCalculationRequest;
+use App\Http\Requests\ShiftClosingRequest;
 use App\Models\Account;
 use App\Models\CreditSaleCustomer;
 use App\Models\Customer;
@@ -15,11 +17,8 @@ use App\Models\ShiftClosing;
 use App\Models\Vehicle;
 use App\Models\VoucherCategory;
 use App\Models\VoucherTransactionType;
-use App\Http\Requests\DispenserCalculationRequest;
-use App\Http\Requests\ShiftClosingRequest;
 use App\Services\DispenserCalculationService;
 use App\Services\ShiftClosingService;
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
@@ -147,12 +146,14 @@ class DispenserReadingController extends Controller implements HasMiddleware
 
     public function getShiftClosingData(string $date, int $shift)
     {
-        $operational = $this->closings->operationalSummary($date, $shift);
-        $summary = $operational['getTotalSummeryReport'][0];
-        $calculation = $this->calculations->calculate(
-            [],
-            (float) $summary['total_credit_sales_other_amount'],
-            (float) $summary['total_bank_sales_other_amount']
+        $calculation = $this->calculations->calculateForShift(
+            $date,
+            $shift
+        );
+        $operational = $this->closings->operationalSummary(
+            $date,
+            $shift,
+            $calculation['summary']
         );
 
         return response()->json($operational + [
@@ -164,16 +165,11 @@ class DispenserReadingController extends Controller implements HasMiddleware
     public function calculateOtherProducts(DispenserCalculationRequest $request)
     {
         $validated = $request->validated();
-        $operational = $this->closings->operationalSummary(
-            $validated['transaction_date'],
-            (int) $validated['shift_id']
-        );
-        $summary = $operational['getTotalSummeryReport'][0];
 
-        return response()->json($this->calculations->calculate(
-            $validated['other_product_sales'] ?? [],
-            (float) $summary['total_credit_sales_other_amount'],
-            (float) $summary['total_bank_sales_other_amount']
+        return response()->json($this->calculations->calculateForShift(
+            $validated['transaction_date'],
+            (int) $validated['shift_id'],
+            $validated['other_product_sales'] ?? []
         ));
     }
 

@@ -84,9 +84,75 @@ beforeEach(function (): void {
         $table->unsignedBigInteger('posted_by')->nullable();
         $table->timestamp('created_at')->nullable();
     });
+
+    Schema::create('journal_entries', function (Blueprint $table): void {
+        $table->id();
+        $table->string('status', 20);
+    });
+
+    Schema::create('journal_lines', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('journal_entry_id');
+        $table->decimal('debit_amount', 24, 4)->default(0);
+        $table->string('payment_method', 30)->nullable();
+    });
+
+    Schema::create('sales', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('shift_id');
+        $table->unsignedBigInteger('journal_entry_id');
+        $table->string('sale_type', 20);
+        $table->date('sale_date');
+    });
+
+    Schema::create('sale_payment_details', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('sale_id');
+        $table->string('payment_method', 30);
+    });
+
+    Schema::create('sale_items', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('sale_id');
+        $table->unsignedBigInteger('product_id');
+        $table->unsignedBigInteger('category_id');
+        $table->unsignedBigInteger('unit_id');
+        $table->decimal('quantity', 24, 6);
+        $table->decimal('line_total', 24, 4);
+    });
+
+    Schema::create('credit_sales', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('shift_id');
+        $table->date('sale_date');
+    });
+
+    Schema::create('credit_sale_customers', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('credit_sale_id');
+        $table->unsignedBigInteger('journal_entry_id');
+    });
+
+    Schema::create('credit_sale_items', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('credit_sale_customer_id');
+        $table->unsignedBigInteger('product_id');
+        $table->unsignedBigInteger('category_id');
+        $table->unsignedBigInteger('unit_id');
+        $table->decimal('quantity', 24, 6);
+        $table->decimal('line_total', 24, 4);
+    });
 });
 
 afterEach(function (): void {
+    Schema::dropIfExists('credit_sale_items');
+    Schema::dropIfExists('credit_sale_customers');
+    Schema::dropIfExists('credit_sales');
+    Schema::dropIfExists('sale_items');
+    Schema::dropIfExists('sale_payment_details');
+    Schema::dropIfExists('sales');
+    Schema::dropIfExists('journal_lines');
+    Schema::dropIfExists('journal_entries');
     Schema::dropIfExists('inventory_movements');
     Schema::dropIfExists('stocks');
     Schema::dropIfExists('product_rates');
@@ -177,6 +243,96 @@ function createOtherProductFixture(): array
     return compact('products');
 }
 
+function createPostedOtherProductSales(array $fixture): void
+{
+    $date = '2026-08-03';
+    $shiftId = 1;
+    $lubricant = $fixture['products']['lubricant'];
+    $oil = $fixture['products']['oil'];
+
+    $createSale = function (
+        Product $product,
+        string $saleType,
+        float $quantity,
+        float $amount,
+        ?string $paymentMethod
+    ) use ($date, $shiftId): void {
+        $journalId = DB::table('journal_entries')->insertGetId([
+            'status' => 'posted',
+        ]);
+        $saleId = DB::table('sales')->insertGetId([
+            'shift_id' => $shiftId,
+            'journal_entry_id' => $journalId,
+            'sale_type' => $saleType,
+            'sale_date' => $date,
+        ]);
+
+        if ($paymentMethod !== null) {
+            DB::table('sale_payment_details')->insert([
+                'sale_id' => $saleId,
+                'payment_method' => $paymentMethod,
+            ]);
+        }
+
+        DB::table('sale_items')->insert([
+            'sale_id' => $saleId,
+            'product_id' => $product->id,
+            'category_id' => $product->category_id,
+            'unit_id' => $product->unit_id,
+            'quantity' => $quantity,
+            'line_total' => $amount,
+        ]);
+    };
+
+    $createSale($lubricant, 'regular', 2, 51, 'cash');
+    $createSale($lubricant, 'regular', 1, 25.5, 'bank');
+    $createSale($lubricant, 'white', 2, 40, null);
+    $createSale($oil, 'regular', 5, 500, 'cash');
+
+    $legacyJournalId = DB::table('journal_entries')->insertGetId([
+        'status' => 'posted',
+    ]);
+    $legacySaleId = DB::table('sales')->insertGetId([
+        'shift_id' => $shiftId,
+        'journal_entry_id' => $legacyJournalId,
+        'sale_type' => 'regular',
+        'sale_date' => $date,
+    ]);
+    DB::table('journal_lines')->insert([
+        'journal_entry_id' => $legacyJournalId,
+        'debit_amount' => 10,
+        'payment_method' => 'bank',
+    ]);
+    DB::table('sale_items')->insert([
+        'sale_id' => $legacySaleId,
+        'product_id' => $lubricant->id,
+        'category_id' => $lubricant->category_id,
+        'unit_id' => $lubricant->unit_id,
+        'quantity' => 1,
+        'line_total' => 10,
+    ]);
+
+    $creditJournalId = DB::table('journal_entries')->insertGetId([
+        'status' => 'posted',
+    ]);
+    $creditSaleId = DB::table('credit_sales')->insertGetId([
+        'shift_id' => $shiftId,
+        'sale_date' => $date,
+    ]);
+    $allocationId = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $creditSaleId,
+        'journal_entry_id' => $creditJournalId,
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $allocationId,
+        'product_id' => $lubricant->id,
+        'category_id' => $lubricant->category_id,
+        'unit_id' => $lubricant->unit_id,
+        'quantity' => 3,
+        'line_total' => 70,
+    ]);
+}
+
 it('loads every active product outside configured Oil and Gas categories', function (): void {
     $fixture = createOtherProductFixture();
     $result = app(DispenserCalculationService::class)->calculate([]);
@@ -190,6 +346,112 @@ it('loads every active product outside configured Oil and Gas categories', funct
             $fixture['products']['oil']->id,
             $fixture['products']['gas']->id
         );
+});
+
+it('loads other products even when stock is zero or no stock row exists', function (): void {
+    $fixture = createOtherProductFixture();
+    $lubricant = $fixture['products']['lubricant'];
+    $future = $fixture['products']['future'];
+
+    DB::table('stocks')
+        ->where('product_id', $lubricant->id)
+        ->update([
+            'current_stock' => 0,
+            'available_stock' => 0,
+        ]);
+    DB::table('stocks')
+        ->where('product_id', $future->id)
+        ->delete();
+
+    $products = collect(
+        app(DispenserCalculationService::class)->calculate([])['products']
+    )->keyBy('id');
+
+    expect($products->keys()->all())
+        ->toContain($lubricant->id, $future->id)
+        ->and($products[$lubricant->id]['stock']['current_stock'])
+        ->toBe(0.0)
+        ->and($products[$future->id]['stock']['current_stock'])
+        ->toBe(0.0);
+});
+
+it('auto-fills regular and credit quantities while keeping white sale manual', function (): void {
+    $fixture = createOtherProductFixture();
+    createPostedOtherProductSales($fixture);
+
+    $result = app(DispenserCalculationService::class)
+        ->calculateForShift('2026-08-03', 1);
+    $row = collect($result['products'])->firstWhere(
+        'id',
+        $fixture['products']['lubricant']->id
+    );
+
+    expect($row['sell_quantity'])->toBe(7.0)
+        ->and($row['auto_fill_quantity'])->toBe(7.0)
+        ->and($row['recorded_quantity'])->toBe(9.0)
+        ->and($row['quantity_variance'])->toBe(-2.0)
+        ->and($row['regular_quantity'])->toBe(4.0)
+        ->and($row['white_quantity'])->toBe(2.0)
+        ->and($row['credit_quantity'])->toBe(3.0)
+        ->and($row['remaining_stock'])->toBe(12.0)
+        ->and($row['credit_sales'])->toBe(70.0)
+        ->and($row['bank_sales'])->toBe(35.5)
+        ->and($row['cash_sales'])->toBe(91.0)
+        ->and($row['total_sales'])->toBe(196.5)
+        ->and($result['summary']['total_sales'])->toBe(196.5)
+        ->and($result['summary']['is_balanced'])->toBeTrue();
+});
+
+it('uses manual quantity only as a physical stock variance', function (): void {
+    $fixture = createOtherProductFixture();
+    createPostedOtherProductSales($fixture);
+    $product = $fixture['products']['lubricant'];
+    $calculations = app(DispenserCalculationService::class);
+
+    $increase = collect($calculations->calculateForShift(
+        '2026-08-03',
+        1,
+        [['product_id' => $product->id, 'quantity' => 11]]
+    )['products'])->firstWhere('id', $product->id);
+    $decrease = collect($calculations->calculateForShift(
+        '2026-08-03',
+        1,
+        [['product_id' => $product->id, 'quantity' => 7]]
+    )['products'])->firstWhere('id', $product->id);
+    $zero = $calculations->resolveForShiftClosing(
+        '2026-08-03',
+        1,
+        [[
+            'product_id' => $product->id,
+            'quantity' => 0,
+            'employee_id' => null,
+        ]]
+    )->first();
+
+    expect($increase['quantity_variance'])->toBe(2.0)
+        ->and($increase['remaining_stock'])->toBe(8.0)
+        ->and($increase['total_sales'])->toBe(196.5)
+        ->and($decrease['quantity_variance'])->toBe(-2.0)
+        ->and($decrease['remaining_stock'])->toBe(12.0)
+        ->and($decrease['total_sales'])->toBe(196.5)
+        ->and($zero['quantity'])->toBe(0.0)
+        ->and($zero['quantity_variance'])->toBe(-9.0)
+        ->and($zero['remaining_stock'])->toBe(19.0)
+        ->and(fn () => $calculations->calculateForShift(
+            '2026-08-03',
+            1,
+            [['product_id' => $product->id, 'quantity' => 20]]
+        ))->toThrow(ValidationException::class)
+        ->and(fn () => $calculations->resolveForShiftClosing(
+            '2026-08-03',
+            1,
+            [[
+                'product_id' => $product->id,
+                'quantity' => 9,
+                'recorded_quantity' => 8,
+                'employee_id' => 99,
+            ]]
+        ))->toThrow(ValidationException::class);
 });
 
 it('calculates remaining stock, totals, and payment summary on the server', function (): void {

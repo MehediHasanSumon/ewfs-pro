@@ -18,6 +18,8 @@ class ShiftClosingProductItem extends Model
         'unit_name_snapshot',
         'unit_price',
         'quantity',
+        'recorded_quantity',
+        'quantity_variance',
         'line_total',
     ];
 
@@ -26,6 +28,8 @@ class ShiftClosingProductItem extends Model
         return [
             'unit_price' => 'decimal:6',
             'quantity' => 'decimal:6',
+            'recorded_quantity' => 'decimal:6',
+            'quantity_variance' => 'decimal:6',
             'line_total' => 'decimal:4',
         ];
     }

@@ -75,6 +75,8 @@ interface Product {
     };
     stock?: { current_stock: number };
     sell_quantity?: number;
+    recorded_quantity?: number;
+    quantity_variance?: number;
     remaining_stock?: number;
     total_sales?: number;
     credit_sales?: number;
@@ -85,6 +87,8 @@ interface Product {
 interface OtherProductSaleState {
     product_id: number;
     sell_quantity: number;
+    recorded_quantity: number;
+    quantity_variance: number;
     sell_by: string;
     total_sales: number;
     remaining_stock: number;
@@ -205,6 +209,8 @@ export default function DispenserReading({
         otherProducts.map((product) => ({
             product_id: product.id,
             sell_quantity: 0,
+            recorded_quantity: 0,
+            quantity_variance: 0,
             sell_by: '',
             total_sales: 0,
             remaining_stock: Number(product.stock?.current_stock) || 0,
@@ -434,7 +440,11 @@ export default function DispenserReading({
 
                     return {
                         product_id: product.id,
-                        sell_quantity: existing?.sell_quantity || 0,
+                        sell_quantity: Number(product.sell_quantity) || 0,
+                        recorded_quantity:
+                            Number(product.recorded_quantity) || 0,
+                        quantity_variance:
+                            Number(product.quantity_variance) || 0,
                         sell_by: existing?.sell_by || '',
                         total_sales: Number(product.total_sales) || 0,
                         remaining_stock:
@@ -616,11 +626,15 @@ export default function DispenserReading({
     const handleConfirmSubmit = () => {
         setIsConfirmModalOpen(false);
         const otherProductSalesData = otherProductsSales
-            .filter(sale => sale.sell_quantity > 0)
+            .filter(
+                (sale) =>
+                    sale.sell_quantity > 0 || sale.recorded_quantity > 0,
+            )
             .map(sale => ({
                 product_id: sale.product_id,
                 quantity: sale.sell_quantity,
-                employee_id: sale.sell_by,
+                recorded_quantity: sale.recorded_quantity,
+                employee_id: sale.sell_by || null,
                 remarks: null
             }));
 
@@ -670,6 +684,21 @@ export default function DispenserReading({
         } else {
             setAvailableShifts([]);
         }
+    };
+
+    const handleShiftChange = (shiftId: string) => {
+        setLoadedOtherProducts([]);
+        setOtherProductsSales([]);
+        setOtherProductsError('');
+        setOtherProductsSummary({
+            total_sales: 0,
+            credit_sales: 0,
+            bank_sales: 0,
+            cash_sales: 0,
+            is_balanced: true,
+            validation_message: null,
+        });
+        setData('shift_id', shiftId);
     };
 
     useEffect(() => {
@@ -755,6 +784,10 @@ export default function DispenserReading({
                             product_id: product.id,
                             sell_quantity:
                                 Number(product.sell_quantity) || 0,
+                            recorded_quantity:
+                                Number(product.recorded_quantity) || 0,
+                            quantity_variance:
+                                Number(product.quantity_variance) || 0,
                             sell_by: existing?.sell_by || '',
                             total_sales:
                                 Number(product.total_sales) || 0,
@@ -859,9 +892,7 @@ export default function DispenserReading({
                                     <SearchableSelect
                                         options={shiftOptions}
                                         value={data.shift_id}
-                                        onValueChange={(value) =>
-                                            setData('shift_id', value)
-                                        }
+                                        onValueChange={handleShiftChange}
                                         placeholder={
                                             data.transaction_date
                                                 ? 'Select shift'
@@ -1411,6 +1442,10 @@ export default function DispenserReading({
                                             {loadedOtherProducts.map((product, index) => {
                                                 const currentStock = Number(product.stock?.current_stock) || 0;
                                                 const sellQuantity = otherProductsSales[index]?.sell_quantity || 0;
+                                                const recordedQuantity =
+                                                    otherProductsSales[index]
+                                                        ?.recorded_quantity ||
+                                                    0;
                                                 const newStock =
                                                     otherProductsSales[index]
                                                         ?.remaining_stock ??
@@ -1455,7 +1490,10 @@ export default function DispenserReading({
                                                             <Input
                                                                 type="number"
                                                                 min="0"
-                                                                max={currentStock}
+                                                                max={
+                                                                    currentStock +
+                                                                    recordedQuantity
+                                                                }
                                                                 step={quantityStep}
                                                                 value={sellQuantity}
                                                                 onChange={(e) => {
@@ -1618,7 +1656,11 @@ export default function DispenserReading({
                                             })}
 
                                             {/* Other Products */}
-                                            {otherProductsSales.filter(sale => sale.sell_quantity > 0).map((sale) => {
+                                            {otherProductsSales.filter(
+                                                (sale) =>
+                                                    sale.sell_quantity > 0 ||
+                                                    sale.total_sales > 0,
+                                            ).map((sale) => {
                                                 const product = loadedOtherProducts.find(p => p.id === sale.product_id);
                                                 if (!product) return null;
 
