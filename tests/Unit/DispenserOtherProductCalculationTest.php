@@ -74,11 +74,14 @@ beforeEach(function (): void {
         $table->string('movement_type', 64);
         $table->decimal('quantity_in', 24, 6)->default(0);
         $table->decimal('quantity_out', 24, 6)->default(0);
+        $table->decimal('before_stock', 24, 6)->nullable();
+        $table->decimal('after_stock', 24, 6)->nullable();
         $table->decimal('unit_cost', 24, 6)->default(0);
         $table->decimal('total_cost', 24, 4)->default(0);
         $table->string('source_type', 100);
         $table->unsignedBigInteger('source_id')->nullable();
         $table->unsignedBigInteger('source_line_id')->nullable();
+        $table->text('remarks')->nullable();
         $table->unsignedBigInteger('reversal_of_id')->nullable();
         $table->string('idempotency_key', 150)->unique();
         $table->unsignedBigInteger('posted_by')->nullable();

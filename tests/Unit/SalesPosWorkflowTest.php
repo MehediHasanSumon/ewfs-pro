@@ -12,6 +12,7 @@ use App\Services\DocumentNumberService;
 use App\Services\InventoryService;
 use App\Services\OperationalReportService;
 use App\Services\PartyLedgerService;
+use App\Services\PaymentAccountService;
 use App\Services\SalePostingService;
 use App\Services\SalesCustomerService;
 use App\Services\SystemAccountService;
@@ -419,6 +420,8 @@ function makeSalesPosFixture(): array
             return $entry->fresh();
         });
     $inventoryService = Mockery::mock(InventoryService::class);
+    $inventoryService->shouldReceive('assertAvailable')->zeroOrMoreTimes();
+    $inventoryService->shouldReceive('recordMany')->zeroOrMoreTimes();
     $inventoryService->shouldReceive('record')->zeroOrMoreTimes();
     $inventoryService->shouldReceive('reverseSource')->zeroOrMoreTimes();
     $systemAccounts = Mockery::mock(SystemAccountService::class);
@@ -437,7 +440,8 @@ function makeSalesPosFixture(): array
         $inventoryService,
         $systemAccounts,
         $numbers,
-        $customers
+        $customers,
+        new PaymentAccountService
     );
 
     return compact(
@@ -448,7 +452,8 @@ function makeSalesPosFixture(): array
         'vehicle',
         'products',
         'cash',
-        'bank'
+        'bank',
+        'inventoryService'
     );
 }
 
@@ -570,6 +575,42 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($metric['total_paid'])->toBe(0.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['current_advance'])->toBe(0.0);
+});
+
+it('issues fuel inventory immediately when a regular cash sale is posted', function () {
+    $fixture = makeSalesPosFixture();
+    DB::table('categories')->update([
+        'inventory_class' => 'fuel',
+    ]);
+    $fixture['products'][0]->update([
+        'is_inventory_item' => true,
+    ]);
+    $payload = regularPosPayload($fixture, [
+        'items' => [[
+            'product_id' => $fixture['products'][0]->id,
+            'quantity' => 2,
+            'discount' => 0,
+        ]],
+    ]);
+
+    $fixture['service']->create($payload);
+
+    $fixture['inventoryService']
+        ->shouldHaveReceived('assertAvailable')
+        ->once()
+        ->with([
+            $fixture['products'][0]->id => 2.0,
+        ]);
+    $fixture['inventoryService']
+        ->shouldHaveReceived('recordMany')
+        ->once()
+        ->with(Mockery::on(
+            fn (array $movements) => count($movements) === 1
+                && $movements[0]['product_id']
+                    === $fixture['products'][0]->id
+                && $movements[0]['movement_type'] === 'regular_sale'
+                && (float) $movements[0]['quantity_out'] === 2.0
+        ));
 });
 
 it('stores walk-in identity as sale snapshots without creating party records', function () {

@@ -2,11 +2,15 @@
 
 namespace App\Services;
 
+use App\Helpers\ErpHelper;
+use App\Models\CreditSale;
 use App\Models\CreditSaleItem;
 use App\Models\Dispenser;
+use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\ShiftClosing;
 use App\Models\VoucherLine;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -75,6 +79,12 @@ class ShiftClosingService
             }
 
             $fuelSales = 0.0;
+            $unrecordedFuelSales = 0.0;
+            $recordedFuelSales = $this->recordedFuelSales(
+                $data['transaction_date'],
+                (int) $data['shift_id']
+            );
+            $fuelReadings = collect();
             $closing = ShiftClosing::query()->create([
                 'business_date' => $data['transaction_date'],
                 'shift_id' => $data['shift_id'],
@@ -110,8 +120,6 @@ class ShiftClosingService
                     $dispenser->product->activeRate?->sales_price ?? 0
                 );
                 $grossAmount = round($netQuantity * $unitPrice, 4);
-                $unitCost = (float) ($dispenser->product->activeRate?->purchase_price ?? 0);
-                $totalCost = round($netQuantity * $unitCost, 4);
                 $fuelSales += $grossAmount;
 
                 $reading = $closing->dispenserReadings()->create([
@@ -126,24 +134,98 @@ class ShiftClosingService
                     'gross_amount' => $grossAmount,
                 ]);
 
-                if ($netQuantity > 0) {
-                    $movement = $this->inventory->record([
-                        'product_id' => $dispenser->product_id,
-                        'shift_id' => $closing->shift_id,
-                        'business_date' => $closing->business_date,
-                        'movement_type' => 'dispenser_reading',
-                        'quantity_out' => $netQuantity,
-                        'unit_cost' => $unitCost,
-                        'total_cost' => $totalCost,
-                        'source_type' => ShiftClosing::class,
-                        'source_id' => $closing->id,
-                        'source_line_id' => $reading->id,
-                        'idempotency_key' => 'shift-closing-reading:'.$reading->id,
-                    ]);
+                $productReading = $fuelReadings->get(
+                    $dispenser->product_id,
+                    [
+                        'product' => $dispenser->product,
+                        'quantity' => 0.0,
+                        'gross_amount' => 0.0,
+                        'reading_ids' => [],
+                    ]
+                );
+                $productReading['quantity'] += $netQuantity;
+                $productReading['gross_amount'] += $grossAmount;
+                $productReading['reading_ids'][] = $reading->id;
+                $fuelReadings->put(
+                    $dispenser->product_id,
+                    $productReading
+                );
+            }
 
-                    $reading->update(['inventory_movement_id' => $movement->id]);
-                    $cogsTotal += $totalCost;
+            foreach ($fuelReadings as $productId => $meterReading) {
+                $recorded = $recordedFuelSales->get($productId, [
+                    'quantity' => 0.0,
+                    'inventory_quantity' => 0.0,
+                    'amount' => 0.0,
+                ]);
+                $meterQuantity = round(
+                    (float) $meterReading['quantity'],
+                    6
+                );
+                $recordedQuantity = round(
+                    (float) $recorded['quantity'],
+                    6
+                );
+                $inventoryQuantity = round(
+                    (float) $recorded['inventory_quantity'],
+                    6
+                );
+
+                if ($recordedQuantity > $meterQuantity + 0.000001) {
+                    throw ValidationException::withMessages([
+                        'dispenser_readings' => 'Dispenser quantity cannot be less than already posted fuel sales.',
+                    ]);
                 }
+
+                $varianceQuantity = round(
+                    $meterQuantity - $inventoryQuantity,
+                    6
+                );
+                $unitCost = (float) (
+                    $meterReading['product']->activeRate?->purchase_price ?? 0
+                );
+                $varianceCost = round(
+                    $varianceQuantity * $unitCost,
+                    4
+                );
+                $unrecordedFuelSales += max(
+                    0,
+                    round(
+                        (float) $meterReading['gross_amount']
+                        - (float) $recorded['amount'],
+                        4
+                    )
+                );
+
+                if ($varianceQuantity <= 0) {
+                    continue;
+                }
+
+                $movement = $this->inventory->record([
+                    'product_id' => $productId,
+                    'shift_id' => $closing->shift_id,
+                    'business_date' => $closing->business_date,
+                    'movement_type' => 'dispenser_reading',
+                    'quantity_out' => $varianceQuantity,
+                    'unit_cost' => $unitCost,
+                    'total_cost' => $varianceCost,
+                    'source_type' => ShiftClosing::class,
+                    'source_id' => $closing->id,
+                    'source_line_id' => $meterReading['reading_ids'][0] ?? null,
+                    'idempotency_key' => 'shift-closing-fuel:'
+                        .$closing->id.':'.$productId,
+                    'remarks' => 'Dispenser meter quantity less inventory already issued by posted fuel sales.',
+                ]);
+
+                if ($meterReading['reading_ids'] !== []) {
+                    $closing->dispenserReadings()
+                        ->whereKey($meterReading['reading_ids'][0])
+                        ->update([
+                            'inventory_movement_id' => $movement->id,
+                        ]);
+                }
+
+                $cogsTotal += $varianceCost;
             }
 
             foreach ($otherProductLines as $line) {
@@ -183,6 +265,7 @@ class ShiftClosingService
                         'source_id' => $closing->id,
                         'source_line_id' => $item->id,
                         'idempotency_key' => 'shift-closing-product:'.$item->id,
+                        'remarks' => 'Other product physical stock variance recorded during shift closing.',
                     ];
                     $movement = $this->inventory->record($movementData);
 
@@ -215,21 +298,21 @@ class ShiftClosingService
             );
             $journalLines = [];
 
-            if ($cashFuel > 0) {
+            if ($unrecordedFuelSales > 0) {
                 $cash = $this->systemAccounts->cashOnHand();
                 $revenue = $this->systemAccounts->salesRevenue();
                 $journalLines[] = [
                     'account_id' => $cash->id,
-                    'debit_amount' => $cashFuel,
+                    'debit_amount' => $unrecordedFuelSales,
                     'credit_amount' => 0,
                     'payment_method' => 'cash',
-                    'description' => 'Shift cash fuel sales',
+                    'description' => 'Unrecorded shift cash fuel sales',
                 ];
                 $journalLines[] = [
                     'account_id' => $revenue->id,
                     'debit_amount' => 0,
-                    'credit_amount' => $cashFuel,
-                    'description' => 'Shift cash fuel sales',
+                    'credit_amount' => $unrecordedFuelSales,
+                    'description' => 'Unrecorded shift cash fuel sales',
                 ];
             }
 
@@ -428,5 +511,69 @@ class ShiftClosingService
                 ->where('shift_id', $shiftId)
                 ->whereHas('journalEntry', fn ($entry) => $entry->posted()))
             ->sum('amount');
+    }
+
+    private function recordedFuelSales(
+        string $date,
+        int $shiftId
+    ): Collection {
+        $categoryCodes = ErpHelper::dispenserProductCategoryCodes();
+        $saleRows = DB::table('sale_items as si')
+            ->join('sales as s', 's.id', '=', 'si.sale_id')
+            ->join('categories as category', 'category.id', '=', 'si.category_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 's.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->leftJoin('inventory_movements as im', function ($join) {
+                $join->on('im.source_line_id', '=', 'si.id')
+                    ->where('im.source_type', Sale::class)
+                    ->whereNull('im.reversal_of_id');
+            })
+            ->whereDate('s.sale_date', $date)
+            ->where('s.shift_id', $shiftId)
+            ->whereIn('category.code', $categoryCodes)
+            ->groupBy('si.product_id')
+            ->selectRaw(
+                'si.product_id,
+                 SUM(si.quantity) AS quantity,
+                 SUM(CASE WHEN im.id IS NOT NULL THEN si.quantity ELSE 0 END) AS inventory_quantity,
+                 SUM(si.line_total) AS amount'
+            )
+            ->get();
+        $creditRows = DB::table('credit_sale_items as csi')
+            ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
+            ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
+            ->join('categories as category', 'category.id', '=', 'csi.category_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'csc.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->leftJoin('inventory_movements as im', function ($join) {
+                $join->on('im.source_line_id', '=', 'csi.id')
+                    ->where('im.source_type', CreditSale::class)
+                    ->whereNull('im.reversal_of_id');
+            })
+            ->whereDate('cs.sale_date', $date)
+            ->where('cs.shift_id', $shiftId)
+            ->whereIn('category.code', $categoryCodes)
+            ->groupBy('csi.product_id')
+            ->selectRaw(
+                'csi.product_id,
+                 SUM(csi.quantity) AS quantity,
+                 SUM(CASE WHEN im.id IS NOT NULL THEN csi.quantity ELSE 0 END) AS inventory_quantity,
+                 SUM(csi.line_total) AS amount'
+            )
+            ->get();
+
+        return $saleRows
+            ->concat($creditRows)
+            ->groupBy('product_id')
+            ->map(fn ($rows) => [
+                'quantity' => (float) $rows->sum('quantity'),
+                'inventory_quantity' => (float) $rows
+                    ->sum('inventory_quantity'),
+                'amount' => (float) $rows->sum('amount'),
+            ]);
     }
 }

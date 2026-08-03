@@ -207,12 +207,17 @@ export default function Purchases({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const validProducts = data.products.filter(
-            (p) =>
-                p.product_id &&
-                p.supplier_id &&
-                p.quantity &&
-                p.unit_price &&
-                p.from_account_id,
+            (p) => {
+                const paidAmount = parseFloat(p.paid_amount) || 0;
+
+                return (
+                    p.product_id &&
+                    p.supplier_id &&
+                    p.quantity &&
+                    p.unit_price &&
+                    (paidAmount <= 0 || p.from_account_id)
+                );
+            },
         );
         if (validProducts.length === 0) {
             alert('Please add at least one product to cart');
@@ -455,7 +460,10 @@ export default function Purchases({
             !firstProduct.supplier_id ||
             !firstProduct.quantity ||
             !firstProduct.unit_price ||
-            !firstProduct.from_account_id
+            (
+                (parseFloat(firstProduct.paid_amount) || 0) > 0
+                && !firstProduct.from_account_id
+            )
         ) {
             alert(
                 'Please fill product, supplier, quantity, unit price and payment account',

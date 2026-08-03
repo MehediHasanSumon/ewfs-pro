@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PurchasePostingService
 {
@@ -13,9 +14,9 @@ class PurchasePostingService
         private readonly AccountingService $accounting,
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
-        private readonly DocumentNumberService $numbers
-    ) {
-    }
+        private readonly DocumentNumberService $numbers,
+        private readonly PaymentAccountService $paymentAccounts
+    ) {}
 
     public function createMany(array $data): array
     {
@@ -51,19 +52,54 @@ class PurchasePostingService
 
     private function createOne(array $headerData, array $productData): Purchase
     {
-        $supplier = Supplier::query()->with('account')->findOrFail($productData['supplier_id']);
+        $supplier = Supplier::query()
+            ->with('account.group')
+            ->active()
+            ->findOrFail($productData['supplier_id']);
         $product = Product::query()
             ->with(['unit', 'activeRate'])
+            ->active()
             ->findOrFail($productData['product_id']);
 
-        $quantity = (float) $productData['quantity'];
-        $unitCost = (float) $productData['unit_price'];
-        $subtotal = (float) $productData['amount'];
-        $discount = (float) ($productData['discount'] ?? 0);
-        $grandTotal = max(0, $subtotal - $discount);
-        $paidAmount = min($grandTotal, (float) $productData['paid_amount']);
+        if (! $supplier->account || ! $supplier->account->status) {
+            throw ValidationException::withMessages([
+                'supplier_id' => 'The selected supplier has no active payable account.',
+            ]);
+        }
+
+        if (! $product->unit) {
+            throw ValidationException::withMessages([
+                'product_id' => 'The selected product has no valid unit.',
+            ]);
+        }
+
+        $quantity = round((float) $productData['quantity'], 6);
+        $unitCost = round((float) $productData['unit_price'], 6);
+        $subtotal = round($quantity * $unitCost, 4);
+        $discount = round((float) ($productData['discount'] ?? 0), 4);
+        $grandTotal = round($subtotal - $discount, 4);
+        $paidAmount = round((float) $productData['paid_amount'], 4);
         $businessDate = $headerData['purchase_date'];
         $paymentMethod = $this->normalizePaymentMethod($productData);
+        $paymentAccount = $paidAmount > 0
+            ? $this->paymentAccounts->resolve(
+                (int) $productData['from_account_id'],
+                $productData['payment_type'],
+                'from_account_id'
+            )
+            : null;
+
+        if ($grandTotal <= 0) {
+            throw ValidationException::withMessages([
+                'discount' => 'Purchase total must be greater than zero.',
+            ]);
+        }
+
+        if ($paidAmount > $grandTotal) {
+            throw ValidationException::withMessages([
+                'paid_amount' => 'Paid amount cannot exceed the purchase total.',
+            ]);
+        }
 
         $purchase = Purchase::query()->create([
             'supplier_id' => $supplier->id,
@@ -127,7 +163,7 @@ class PurchasePostingService
                 'description' => 'Direct payment for '.$purchase->invoice_no,
             ];
             $lines[] = [
-                'account_id' => $productData['from_account_id'],
+                'account_id' => $paymentAccount->id,
                 'debit_amount' => 0,
                 'credit_amount' => $paidAmount,
                 'payment_method' => $paymentMethod,
@@ -160,6 +196,7 @@ class PurchasePostingService
                 'source_id' => $purchase->id,
                 'source_line_id' => $item->id,
                 'idempotency_key' => 'purchase-item:'.$item->id,
+                'remarks' => $purchase->remarks,
             ]);
         }
 

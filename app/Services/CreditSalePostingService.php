@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreditSalePostingService
 {
@@ -22,8 +23,27 @@ class CreditSalePostingService
     public function createMany(array $data): array
     {
         return DB::transaction(function () use ($data) {
+            $products = $this->resolveProducts($data['products']);
+            $this->inventory->assertAvailable(
+                collect($data['products'])
+                    ->filter(fn (array $line) => $products
+                        ->get((int) $line['product_id'])
+                        ->is_inventory_item)
+                    ->groupBy(fn (array $line) => (int) $line['product_id'])
+                    ->map(fn ($lines) => round(
+                        (float) $lines->sum('quantity'),
+                        6
+                    ))
+                    ->all()
+            );
+
             return array_map(
-                fn (array $product) => $this->createOne($data, $product),
+                fn (array $product) => $this->createOne(
+                    $data,
+                    $product,
+                    $products->get((int) $product['product_id']),
+                    false
+                ),
                 $data['products']
             );
         });
@@ -53,26 +73,55 @@ class CreditSalePostingService
         });
     }
 
-    private function createOne(array $headerData, array $productData): CreditSale
-    {
-        $customer = Customer::query()->findOrFail($productData['customer_id']);
-        $vehicle = Vehicle::query()->findOrFail($productData['vehicle_id']);
-        $product = Product::query()
-            ->with(['category', 'unit', 'activeRate'])
-            ->findOrFail($productData['product_id']);
+    private function createOne(
+        array $headerData,
+        array $productData,
+        ?Product $resolvedProduct = null,
+        bool $validateStock = true
+    ): CreditSale {
+        $customer = Customer::query()
+            ->with('account')
+            ->active()
+            ->findOrFail($productData['customer_id']);
+        $vehicle = Vehicle::query()
+            ->where('status', true)
+            ->findOrFail($productData['vehicle_id']);
+        $product = $resolvedProduct
+            ?? Product::query()
+                ->with(['category', 'unit', 'activeRate'])
+                ->active()
+                ->findOrFail($productData['product_id']);
 
         $this->vehicleSalesContext->resolve($vehicle);
         $this->vehicleProducts->assertBelongsToCustomer($vehicle, $customer);
         $this->vehicleProducts->assertAssigned($vehicle, $product->id);
 
-        $quantity = (float) $productData['quantity'];
-        $subtotal = (float) $productData['amount'];
-        $discount = (float) ($productData['discount'] ?? 0);
-        $grandTotal = max(0, $subtotal - $discount);
+        if (! $customer->account || ! $customer->account->status) {
+            throw ValidationException::withMessages([
+                'customer_id' => 'The selected customer has no active receivable account.',
+            ]);
+        }
+
+        $quantity = round((float) $productData['quantity'], 6);
+        $subtotal = round((float) $productData['amount'], 4);
+        $discount = round((float) ($productData['discount'] ?? 0), 4);
+        $grandTotal = round($subtotal - $discount, 4);
         $unitPrice = $quantity > 0 ? $subtotal / $quantity : 0;
         $unitCost = (float) ($product->activeRate?->purchase_price ?? 0);
         $totalCost = round($quantity * $unitCost, 4);
         $businessDate = $headerData['sale_date'];
+
+        if ($grandTotal <= 0) {
+            throw ValidationException::withMessages([
+                'discount' => 'Credit sale total must be greater than zero.',
+            ]);
+        }
+
+        if ($product->is_inventory_item && $validateStock) {
+            $this->inventory->assertAvailable([
+                $product->id => $quantity,
+            ]);
+        }
 
         $sale = CreditSale::query()->create([
             'shift_id' => $headerData['shift_id'],
@@ -138,9 +187,7 @@ class CreditSalePostingService
             ],
         ];
 
-        $movementAtShiftClose = $product->category->inventory_class === 'fuel';
-
-        if ($product->is_inventory_item && ! $movementAtShiftClose && $totalCost > 0) {
+        if ($product->is_inventory_item && $totalCost > 0) {
             $lines[] = [
                 'account_id' => $cogsAccount->id,
                 'debit_amount' => $totalCost,
@@ -170,7 +217,7 @@ class CreditSalePostingService
 
         $allocation->update(['journal_entry_id' => $journal->id]);
 
-        if ($product->is_inventory_item && ! $movementAtShiftClose) {
+        if ($product->is_inventory_item) {
             $this->inventory->record([
                 'product_id' => $product->id,
                 'shift_id' => $sale->shift_id,
@@ -184,6 +231,7 @@ class CreditSalePostingService
                 'source_id' => $sale->id,
                 'source_line_id' => $item->id,
                 'idempotency_key' => 'credit-sale-item:'.$item->id,
+                'remarks' => $sale->remarks,
             ]);
         }
 
@@ -194,5 +242,28 @@ class CreditSalePostingService
         ]);
 
         return $sale->fresh(['customers.customer', 'customers.items.product', 'customers.journalEntry.lines']);
+    }
+
+    private function resolveProducts(array $lines)
+    {
+        $productIds = collect($lines)
+            ->pluck('product_id')
+            ->map(fn ($productId) => (int) $productId)
+            ->unique()
+            ->values();
+        $products = Product::query()
+            ->with(['category', 'unit', 'activeRate'])
+            ->active()
+            ->whereIn('id', $productIds)
+            ->get()
+            ->keyBy('id');
+
+        if ($products->count() !== $productIds->count()) {
+            throw ValidationException::withMessages([
+                'products' => 'One or more selected products are unavailable.',
+            ]);
+        }
+
+        return $products;
     }
 }

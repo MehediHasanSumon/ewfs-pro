@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
@@ -20,7 +19,8 @@ class SalePostingService
         private readonly InventoryService $inventory,
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
-        private readonly SalesCustomerService $customers
+        private readonly SalesCustomerService $customers,
+        private readonly PaymentAccountService $paymentAccounts
     ) {}
 
     public function create(array $data, string $saleType = 'regular'): Sale
@@ -94,6 +94,17 @@ class SalePostingService
 
                 return compact('line', 'product', 'quantity', 'unitPrice', 'lineTotal');
             });
+            $this->inventory->assertAvailable(
+                $resolvedProducts
+                    ->filter(fn (array $resolved) => $resolved['product']
+                        ->is_inventory_item)
+                    ->groupBy(fn (array $resolved) => $resolved['product']->id)
+                    ->map(fn ($lines) => round(
+                        (float) $lines->sum('quantity'),
+                        6
+                    ))
+                    ->all()
+            );
             $grandTotal = round((float) $resolvedProducts->sum('lineTotal'), 4);
 
             $sale = Sale::query()->create([
@@ -158,18 +169,16 @@ class SalePostingService
                     'line_total' => $resolved['lineTotal'],
                 ]);
 
-                $movementAtShiftClose = $product->category->inventory_class === 'fuel';
                 $movementItems[] = compact(
                     'item',
                     'product',
                     'unitCost',
-                    'totalCost',
-                    'movementAtShiftClose'
+                    'totalCost'
                 ) + [
                     'quantity' => $resolved['quantity'],
                 ];
 
-                if ($product->is_inventory_item && ! $movementAtShiftClose && $totalCost > 0) {
+                if ($product->is_inventory_item && $totalCost > 0) {
                     $journalLines[] = [
                         'account_id' => $cogsAccount->id,
                         'debit_amount' => $totalCost,
@@ -198,26 +207,28 @@ class SalePostingService
                 'idempotency_key' => 'white-sale:'.$sale->id,
             ], $journalLines);
 
-            foreach ($movementItems as $movementItem) {
-                if (! $movementItem['product']->is_inventory_item || $movementItem['movementAtShiftClose']) {
-                    continue;
-                }
-
-                $this->inventory->record([
-                    'product_id' => $movementItem['product']->id,
-                    'shift_id' => $sale->shift_id,
-                    'journal_entry_id' => $journal->id,
-                    'business_date' => $sale->sale_date,
-                    'movement_type' => 'white_sale',
-                    'quantity_out' => $movementItem['quantity'],
-                    'unit_cost' => $movementItem['unitCost'],
-                    'total_cost' => $movementItem['totalCost'],
-                    'source_type' => Sale::class,
-                    'source_id' => $sale->id,
-                    'source_line_id' => $movementItem['item']->id,
-                    'idempotency_key' => 'white-sale-item:'.$movementItem['item']->id,
-                ]);
-            }
+            $this->inventory->recordMany(
+                collect($movementItems)
+                    ->filter(fn (array $movementItem) => $movementItem['product']
+                        ->is_inventory_item)
+                    ->map(fn (array $movementItem) => [
+                        'product_id' => $movementItem['product']->id,
+                        'shift_id' => $sale->shift_id,
+                        'journal_entry_id' => $journal->id,
+                        'business_date' => $sale->sale_date,
+                        'movement_type' => 'white_sale',
+                        'quantity_out' => $movementItem['quantity'],
+                        'unit_cost' => $movementItem['unitCost'],
+                        'total_cost' => $movementItem['totalCost'],
+                        'source_type' => Sale::class,
+                        'source_id' => $sale->id,
+                        'source_line_id' => $movementItem['item']->id,
+                        'idempotency_key' => 'white-sale-item:'.$movementItem['item']->id,
+                        'remarks' => $sale->remarks,
+                    ])
+                    ->values()
+                    ->all()
+            );
 
             $sale->update([
                 'journal_entry_id' => $journal->id,
@@ -257,9 +268,20 @@ class SalePostingService
         array $data,
         string $saleType
     ): Sale {
+        $resolvedItems = $this->resolveItems($data['items']);
+        $this->inventory->assertAvailable(
+            collect($resolvedItems)
+                ->filter(fn (array $resolved) => $resolved['product']
+                    ->is_inventory_item)
+                ->groupBy(fn (array $resolved) => $resolved['product']->id)
+                ->map(fn ($lines) => round(
+                    (float) $lines->sum('quantity'),
+                    6
+                ))
+                ->all()
+        );
         $customer = $this->customers->resolve($data);
         $vehicle = $this->resolveVehicle($data, $customer);
-        $resolvedItems = $this->resolveItems($data['items']);
         $currencyScale = $this->currencyScale();
         $subtotal = round(
             (float) collect($resolvedItems)->sum('gross_amount'),
@@ -279,11 +301,11 @@ class SalePostingService
             ]);
         }
 
-        $paymentAccount = Account::query()
-            ->with('group:id,code,name,account_class,status')
-            ->where('status', true)
-            ->findOrFail($data['to_account_id']);
-        $this->assertPaymentAccount($paymentAccount, $data['payment_type']);
+        $paymentAccount = $this->paymentAccounts->resolve(
+            (int) $data['to_account_id'],
+            $data['payment_type'],
+            'to_account_id'
+        );
         $businessDate = $data['sale_date'] ?? now()->toDateString();
         $mobile = $this->customers->normalizeMobile($data['customer_mobile']);
         $vehicleNumber = $vehicle?->vehicle_number
@@ -370,7 +392,6 @@ class SalePostingService
 
             if (
                 $product->is_inventory_item
-                && ! $resolved['movement_at_shift_close']
                 && $resolved['total_cost'] > 0
             ) {
                 $journalLines[] = [
@@ -401,29 +422,39 @@ class SalePostingService
             'idempotency_key' => 'sale:'.$sale->id.':revision:'.Str::uuid(),
         ], $journalLines);
 
-        foreach ($resolvedItems as $index => $resolved) {
-            $product = $resolved['product'];
+        $this->inventory->recordMany(
+            collect($resolvedItems)
+                ->values()
+                ->filter(fn (array $resolved) => $resolved['product']
+                    ->is_inventory_item)
+                ->map(function (array $resolved, int $index) use (
+                    $items,
+                    $journal,
+                    $sale,
+                    $saleType
+                ) {
+                    $item = $items[$index];
 
-            if (! $product->is_inventory_item || $resolved['movement_at_shift_close']) {
-                continue;
-            }
-
-            $item = $items[$index];
-            $this->inventory->record([
-                'product_id' => $product->id,
-                'shift_id' => $sale->shift_id,
-                'journal_entry_id' => $journal->id,
-                'business_date' => $sale->sale_date,
-                'movement_type' => $saleType.'_sale',
-                'quantity_out' => $resolved['quantity'],
-                'unit_cost' => $resolved['unit_cost'],
-                'total_cost' => $resolved['total_cost'],
-                'source_type' => Sale::class,
-                'source_id' => $sale->id,
-                'source_line_id' => $item->id,
-                'idempotency_key' => 'sale-item:'.$item->id.':revision:'.Str::uuid(),
-            ]);
-        }
+                    return [
+                        'product_id' => $resolved['product']->id,
+                        'shift_id' => $sale->shift_id,
+                        'journal_entry_id' => $journal->id,
+                        'business_date' => $sale->sale_date,
+                        'movement_type' => $saleType.'_sale',
+                        'quantity_out' => $resolved['quantity'],
+                        'unit_cost' => $resolved['unit_cost'],
+                        'total_cost' => $resolved['total_cost'],
+                        'source_type' => Sale::class,
+                        'source_id' => $sale->id,
+                        'source_line_id' => $item->id,
+                        'idempotency_key' => 'sale-item:'.$item->id
+                            .':revision:'.Str::uuid(),
+                        'remarks' => $sale->remarks,
+                    ];
+                })
+                ->values()
+                ->all()
+        );
 
         $sale->paymentDetail()->updateOrCreate([], [
             'account_id' => $paymentAccount->id,
@@ -530,7 +561,6 @@ class SalePostingService
                     'discount' => $discount,
                     'line_total' => $lineTotal,
                     'total_cost' => round($quantity * $unitCost, 4),
-                    'movement_at_shift_close' => $product->category->inventory_class === 'fuel',
                     'remarks' => $line['remarks'] ?? null,
                 ];
             })
@@ -580,27 +610,6 @@ class SalePostingService
             'Mobile Bank' => 'mobile_bank',
             default => 'cash',
         };
-    }
-
-    private function assertPaymentAccount(
-        Account $account,
-        string $paymentType
-    ): void {
-        $allowedGroupCodes = config(
-            "erp.sales.payment_groups.{$paymentType}",
-            []
-        );
-
-        if (
-            ! $account->group
-            || ! $account->group->status
-            || $account->group->account_class !== 'asset'
-            || ! in_array($account->group->code, $allowedGroupCodes, true)
-        ) {
-            throw ValidationException::withMessages([
-                'to_account_id' => 'The selected account is not valid for this payment method.',
-            ]);
-        }
     }
 
     private function currencyScale(): int

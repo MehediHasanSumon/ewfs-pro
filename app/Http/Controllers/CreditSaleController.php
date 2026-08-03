@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CreditSaleRequest;
 use App\Models\CompanySetting;
 use App\Models\CreditSale;
 use App\Models\Customer;
@@ -66,10 +67,9 @@ class CreditSaleController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(CreditSaleRequest $request)
     {
-        $validated = $request->validate($this->storeRules());
-        $this->creditSales->createMany($validated);
+        $this->creditSales->createMany($request->validated());
 
         return back()->with('success', 'Credit sale created successfully.');
     }
@@ -88,23 +88,16 @@ class CreditSaleController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function update(Request $request, CreditSale $creditSale)
-    {
-        $validated = $request->validate([
-            'sale_date' => ['required', 'date'],
-            'customer_id' => ['required', 'exists:customers,id'],
-            'vehicle_id' => ['required', 'exists:vehicles,id'],
-            'product_id' => ['required', 'exists:products,id'],
-            'shift_id' => ['required', 'exists:shifts,id'],
-            'memo_no' => ['nullable', 'string', 'max:150'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
-            'amount' => ['required', 'numeric', 'min:0'],
-            'due_amount' => ['required', 'numeric', 'min:0'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'remarks' => ['nullable', 'string'],
-        ]);
-
-        $this->creditSales->replace($creditSale, $validated, $validated);
+    public function update(
+        CreditSaleRequest $request,
+        CreditSale $creditSale
+    ) {
+        $validated = $request->validated();
+        $this->creditSales->replace(
+            $creditSale,
+            $validated,
+            $validated['products'][0]
+        );
 
         return back()->with('success', 'Credit sale updated successfully.');
     }
@@ -188,25 +181,6 @@ class CreditSaleController extends Controller implements HasMiddleware
             : 'created_at';
 
         return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
-    }
-
-    private function storeRules(): array
-    {
-        return [
-            'sale_date' => ['required', 'date'],
-            'shift_id' => ['required', 'exists:shifts,id'],
-            'memo_no' => ['nullable', 'string', 'max:150'],
-            'products' => ['required', 'array', 'min:1'],
-            'products.*.product_id' => ['required', 'exists:products,id'],
-            'products.*.customer_id' => ['required', 'exists:customers,id'],
-            'products.*.vehicle_id' => ['required', 'exists:vehicles,id'],
-            'products.*.memo_no' => ['nullable', 'string', 'max:150'],
-            'products.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'products.*.amount' => ['required', 'numeric', 'min:0'],
-            'products.*.discount' => ['nullable', 'numeric', 'min:0'],
-            'products.*.due_amount' => ['required', 'numeric', 'min:0'],
-            'products.*.remarks' => ['nullable', 'string'],
-        ];
     }
 
     private function perPage(Request $request): int

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PurchaseRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
 use App\Models\Product;
@@ -18,8 +19,7 @@ class PurchaseController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly PurchasePostingService $purchases
-    ) {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -38,15 +38,33 @@ class PurchaseController extends Controller implements HasMiddleware
             ->paginate($this->perPage($request))
             ->withQueryString();
         $accounts = Account::query()
-            ->with('group:id,name')
+            ->with('group:id,code,name')
             ->active()
             ->get(['id', 'name', 'ac_number', 'group_id']);
+        $groupedAccounts = $accounts->groupBy(
+            fn (Account $account) => $account->group?->name ?? 'Other'
+        );
+
+        foreach (
+            config('erp.accounting.payment_groups', []) as $paymentType => $groupCodes
+        ) {
+            $groupedAccounts->put(
+                $paymentType,
+                $accounts
+                    ->filter(fn (Account $account) => in_array(
+                        $account->group?->code,
+                        $groupCodes,
+                        true
+                    ))
+                    ->values()
+            );
+        }
 
         return Inertia::render('Purchases/Index', [
             'purchases' => $purchases,
             'suppliers' => Supplier::query()->active()->get(['id', 'name']),
             'accounts' => $accounts,
-            'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
+            'groupedAccounts' => $groupedAccounts,
             'products' => Product::query()
                 ->with(['stock', 'activeRate'])
                 ->active()
@@ -67,10 +85,9 @@ class PurchaseController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function store(Request $request)
+    public function store(PurchaseRequest $request)
     {
-        $validated = $request->validate($this->storeRules());
-        $this->purchases->createMany($validated);
+        $this->purchases->createMany($request->validated());
 
         return back()->with('success', 'Purchase created successfully.');
     }
@@ -89,35 +106,17 @@ class PurchaseController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function update(Request $request, Purchase $purchase)
+    public function update(PurchaseRequest $request, Purchase $purchase)
     {
-        $validated = $request->validate([
-            'purchase_date' => ['required', 'date'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
-            'product_id' => ['required', 'exists:products,id'],
-            'memo_no' => ['required', 'string', 'max:150'],
-            'from_account_id' => ['required', 'exists:accounts,id'],
-            'payment_type' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'paid_amount' => ['required', 'numeric', 'min:0'],
-            'due_amount' => ['required', 'numeric', 'min:0'],
-            'remarks' => ['nullable', 'string'],
-            'bank_name' => ['nullable', 'string'],
-            'branch_name' => ['nullable', 'string'],
-            'account_no' => ['nullable', 'string'],
-            'bank_type' => ['nullable', 'string'],
-            'cheque_no' => ['nullable', 'string'],
-            'cheque_date' => ['nullable', 'date'],
-            'mobile_bank' => ['nullable', 'string'],
-        ]);
+        $validated = $request->validated();
+        $validated['shift_id'] = $validated['shift_id']
+            ?? $purchase->shift_id;
 
-        $productData = $validated + [
-            'amount' => (float) $validated['unit_price'] * (float) $validated['quantity'],
-        ];
-
-        $this->purchases->replace($purchase, $validated, $productData);
+        $this->purchases->replace(
+            $purchase,
+            $validated,
+            $validated['products'][0]
+        );
 
         return back()->with('success', 'Purchase updated successfully.');
     }
@@ -196,34 +195,6 @@ class PurchaseController extends Controller implements HasMiddleware
             : 'created_at';
 
         return $query->orderBy($sort, $request->sort_order === 'asc' ? 'asc' : 'desc');
-    }
-
-    private function storeRules(): array
-    {
-        return [
-            'purchase_date' => ['required', 'date'],
-            'shift_id' => ['nullable', 'exists:shifts,id'],
-            'memo_no' => ['required', 'string', 'max:150'],
-            'remarks' => ['nullable', 'string'],
-            'products' => ['required', 'array', 'min:1'],
-            'products.*.product_id' => ['required', 'exists:products,id'],
-            'products.*.supplier_id' => ['required', 'exists:suppliers,id'],
-            'products.*.unit_price' => ['required', 'numeric', 'min:0'],
-            'products.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'products.*.amount' => ['required', 'numeric', 'min:0'],
-            'products.*.discount' => ['nullable', 'numeric', 'min:0'],
-            'products.*.payment_type' => ['required', 'in:Cash,Bank,Mobile Bank'],
-            'products.*.from_account_id' => ['required', 'exists:accounts,id'],
-            'products.*.paid_amount' => ['required', 'numeric', 'min:0'],
-            'products.*.due_amount' => ['required', 'numeric', 'min:0'],
-            'products.*.bank_name' => ['nullable', 'string'],
-            'products.*.branch_name' => ['nullable', 'string'],
-            'products.*.account_no' => ['nullable', 'string'],
-            'products.*.bank_type' => ['nullable', 'string'],
-            'products.*.cheque_no' => ['nullable', 'string'],
-            'products.*.cheque_date' => ['nullable', 'date'],
-            'products.*.mobile_bank' => ['nullable', 'string'],
-        ];
     }
 
     private function perPage(Request $request): int
