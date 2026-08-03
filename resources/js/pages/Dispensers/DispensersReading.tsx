@@ -1,22 +1,35 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
+import { CreditSaleModal } from '@/pages/CreditSales/CreditSaleModal';
+import { SaleModal } from '@/pages/Sales/SaleModal';
+import { PaymentVoucherModal } from '@/pages/Vouchers/PaymentVoucherModal';
+import { ReceivedVoucherModal } from '@/pages/Vouchers/ReceivedVoucherModal';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FileText, } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { usePermission } from '@/hooks/usePermission';
-import { CreditSaleModal } from '@/pages/CreditSales/CreditSaleModal';
-import { SaleModal } from '@/pages/Sales/SaleModal';
-import { ReceivedVoucherModal } from '@/pages/Vouchers/ReceivedVoucherModal';
-import { PaymentVoucherModal } from '@/pages/Vouchers/PaymentVoucherModal';
 
 interface DispenserReading {
     id: number;
@@ -204,8 +217,9 @@ export default function DispenserReading({
         useState(false);
     const [loadedOtherProducts, setLoadedOtherProducts] =
         useState<Product[]>(otherProducts);
-    const [otherProductsSales, setOtherProductsSales] =
-        useState<OtherProductSaleState[]>(
+    const [otherProductsSales, setOtherProductsSales] = useState<
+        OtherProductSaleState[]
+    >(
         otherProducts.map((product) => ({
             product_id: product.id,
             sell_quantity: 0,
@@ -217,7 +231,7 @@ export default function DispenserReading({
             credit_sales: 0,
             bank_sales: 0,
             cash_sales: 0,
-        }))
+        })),
     );
     const [otherProductsSummary, setOtherProductsSummary] =
         useState<OtherProductsSummary>({
@@ -228,11 +242,9 @@ export default function DispenserReading({
             is_balanced: true,
             validation_message: null,
         });
-    const [isOtherProductsLoading, setIsOtherProductsLoading] =
-        useState(false);
+    const [isOtherProductsLoading, setIsOtherProductsLoading] = useState(false);
     const [otherProductsError, setOtherProductsError] = useState('');
-    const [otherProductsRefreshKey, setOtherProductsRefreshKey] =
-        useState(0);
+    const [otherProductsRefreshKey, setOtherProductsRefreshKey] = useState(0);
     const [salesProductMode, setSalesProductMode] = useState<
         'dispenser' | 'other'
     >('dispenser');
@@ -288,7 +300,8 @@ export default function DispenserReading({
             [field]: parseFloat(value) || 0,
         };
         const reading = newReadings[index];
-        const netReading = reading.end_reading - reading.start_reading - reading.meter_test;
+        const netReading =
+            reading.end_reading - reading.start_reading - reading.meter_test;
         const totalSale = netReading * reading.item_rate;
         newReadings[index].net_reading = netReading;
         newReadings[index].total_sale = totalSale;
@@ -401,18 +414,22 @@ export default function DispenserReading({
 
             const result = await response.json();
             const summaryData = result?.getTotalSummeryReport?.[0] || {};
-            const fetchedOtherProducts: Product[] =
-                result?.otherProducts || [];
+            const fetchedOtherProducts: Product[] = result?.otherProducts || [];
             const productWiseCreditSalesData =
                 result?.getCreditSalesDetailsReport || [];
             const creditSalesByProduct: { [key: number]: number } = {};
-            productWiseCreditSalesData.forEach((item: { product_id: string; product_wise_credit_sales: string }) => {
-                const productId = parseInt(item.product_id);
-                const creditSales =
-                    parseFloat(item.product_wise_credit_sales) || 0;
-                creditSalesByProduct[productId] =
-                    (creditSalesByProduct[productId] || 0) + creditSales;
-            });
+            productWiseCreditSalesData.forEach(
+                (item: {
+                    product_id: string;
+                    product_wise_credit_sales: string;
+                }) => {
+                    const productId = parseInt(item.product_id);
+                    const creditSales =
+                        parseFloat(item.product_wise_credit_sales) || 0;
+                    creditSalesByProduct[productId] =
+                        (creditSalesByProduct[productId] || 0) + creditSales;
+                },
+            );
             setProductWiseData((prev) => {
                 const updated = { ...prev };
                 Object.keys(creditSalesByProduct).forEach((productIdStr) => {
@@ -460,12 +477,11 @@ export default function DispenserReading({
             setOtherProductsSummary(
                 result?.otherProductsSummary || {
                     total_sales: 0,
-                    credit_sales: Number(
-                        summaryData.total_credit_sales_other_amount,
-                    ) || 0,
-                    bank_sales: Number(
-                        summaryData.total_bank_sales_other_amount,
-                    ) || 0,
+                    credit_sales:
+                        Number(summaryData.total_credit_sales_other_amount) ||
+                        0,
+                    bank_sales:
+                        Number(summaryData.total_bank_sales_other_amount) || 0,
                     cash_sales: 0,
                     is_balanced: true,
                     validation_message: null,
@@ -515,7 +531,7 @@ export default function DispenserReading({
             setOtherProductsError(
                 error instanceof Error
                     ? error.message
-                    : 'Unable to load other products.',
+                    : 'Unable to load Accessories.',
             );
         } finally {
             setOtherProductsRefreshKey((current) => current + 1);
@@ -613,9 +629,17 @@ export default function DispenserReading({
             return;
         }
 
-        const totalSalesAmount = creditSales + bankSales + cashSales + creditSalesOther + bankSalesOther + cashSalesOther;
+        const totalSalesAmount =
+            creditSales +
+            bankSales +
+            cashSales +
+            creditSalesOther +
+            bankSalesOther +
+            cashSalesOther;
         if (totalSalesAmount === 0) {
-            setValidationError('Cannot close shift with zero sales. Please add sales data first.');
+            setValidationError(
+                'Cannot close shift with zero sales. Please add sales data first.',
+            );
             setIsValidationModalOpen(true);
             return;
         }
@@ -627,21 +651,20 @@ export default function DispenserReading({
         setIsConfirmModalOpen(false);
         const otherProductSalesData = otherProductsSales
             .filter(
-                (sale) =>
-                    sale.sell_quantity > 0 || sale.recorded_quantity > 0,
+                (sale) => sale.sell_quantity > 0 || sale.recorded_quantity > 0,
             )
-            .map(sale => ({
+            .map((sale) => ({
                 product_id: sale.product_id,
                 quantity: sale.sell_quantity,
                 recorded_quantity: sale.recorded_quantity,
                 employee_id: sale.sell_by || null,
-                remarks: null
+                remarks: null,
             }));
 
         const submitData = {
             ...data,
             cash_sales_other: otherProductsSummary.cash_sales.toFixed(2),
-            other_product_sales: otherProductSalesData
+            other_product_sales: otherProductSalesData,
         };
 
         router.post('/product/dispensers-reading', submitData, {
@@ -726,9 +749,9 @@ export default function DispenserReading({
             setOtherProductsError('');
 
             try {
-                const csrfToken = document
-                    .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                    ?.content;
+                const csrfToken = document.querySelector<HTMLMetaElement>(
+                    'meta[name="csrf-token"]',
+                )?.content;
                 const response = await fetch(
                     '/product/calculate-other-product-sales',
                     {
@@ -738,9 +761,7 @@ export default function DispenserReading({
                         headers: {
                             'Content-Type': 'application/json',
                             Accept: 'application/json',
-                            ...(csrfToken
-                                ? { 'X-CSRF-TOKEN': csrfToken }
-                                : {}),
+                            ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
                         },
                         body: JSON.stringify({
                             transaction_date: data.transaction_date,
@@ -768,10 +789,8 @@ export default function DispenserReading({
                     );
                 }
 
-                const calculatedProducts: Product[] =
-                    result?.products || [];
-                const calculatedSummary: OtherProductsSummary =
-                    result?.summary;
+                const calculatedProducts: Product[] = result?.products || [];
+                const calculatedSummary: OtherProductsSummary = result?.summary;
 
                 setLoadedOtherProducts(calculatedProducts);
                 setOtherProductsSales((previous) =>
@@ -782,19 +801,16 @@ export default function DispenserReading({
 
                         return {
                             product_id: product.id,
-                            sell_quantity:
-                                Number(product.sell_quantity) || 0,
+                            sell_quantity: Number(product.sell_quantity) || 0,
                             recorded_quantity:
                                 Number(product.recorded_quantity) || 0,
                             quantity_variance:
                                 Number(product.quantity_variance) || 0,
                             sell_by: existing?.sell_by || '',
-                            total_sales:
-                                Number(product.total_sales) || 0,
+                            total_sales: Number(product.total_sales) || 0,
                             remaining_stock:
                                 Number(product.remaining_stock) || 0,
-                            credit_sales:
-                                Number(product.credit_sales) || 0,
+                            credit_sales: Number(product.credit_sales) || 0,
                             bank_sales: Number(product.bank_sales) || 0,
                             cash_sales: Number(product.cash_sales) || 0,
                         };
@@ -824,7 +840,10 @@ export default function DispenserReading({
                     };
                 });
             } catch (error) {
-                if (error instanceof DOMException && error.name === 'AbortError') {
+                if (
+                    error instanceof DOMException &&
+                    error.name === 'AbortError'
+                ) {
                     return;
                 }
 
@@ -907,7 +926,6 @@ export default function DispenserReading({
                                 <div></div>
                             </div>
                             <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-
                                 <div>
                                     <Label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
                                         Credit Sales
@@ -977,7 +995,7 @@ export default function DispenserReading({
 
                                 <div>
                                     <Label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        Credit Sales(Other Products)
+                                        Credit Sales(Accessories)
                                     </Label>
                                     <div className="relative">
                                         <Input
@@ -1001,7 +1019,7 @@ export default function DispenserReading({
                                 </div>
                                 <div>
                                     <Label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        Bank Sales(Other Products)
+                                        Bank Sales(Accessories)
                                     </Label>
                                     <div className="relative">
                                         <Input
@@ -1025,7 +1043,7 @@ export default function DispenserReading({
                                 </div>
                                 <div>
                                     <Label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        Cash Sales(Other Products)
+                                        Cash Sales(Accessories)
                                     </Label>
                                     <Input
                                         value={data.cash_sales_other}
@@ -1128,10 +1146,13 @@ export default function DispenserReading({
                                                         (prev) => ({
                                                             ...prev,
                                                             date: data.transaction_date,
-                                                            shift_id: data.shift_id,
+                                                            shift_id:
+                                                                data.shift_id,
                                                         }),
                                                     );
-                                                    setIsOfficePaymentOpen(true);
+                                                    setIsOfficePaymentOpen(
+                                                        true,
+                                                    );
                                                 }}
                                             >
                                                 <FileText className="h-3.5 w-3.5" />
@@ -1286,7 +1307,7 @@ export default function DispenserReading({
                                                                         index
                                                                     ] = {
                                                                         ...newReadings[
-                                                                        index
+                                                                            index
                                                                         ],
                                                                         reading_by:
                                                                             value,
@@ -1352,7 +1373,7 @@ export default function DispenserReading({
                             </div>
                             <div className="mb-10">
                                 <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">
-                                    Other Products Sales
+                                    Accessories Sales
                                 </h3>
                                 {otherProductsError && (
                                     <p
@@ -1419,8 +1440,9 @@ export default function DispenserReading({
                                                             colSpan={10}
                                                             className="border border-gray-200 px-3 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-300"
                                                         >
-                                                            Select date and shift
-                                                            to load products.
+                                                            Select date and
+                                                            shift to load
+                                                            products.
                                                         </td>
                                                     </tr>
                                                 )}
@@ -1434,121 +1456,187 @@ export default function DispenserReading({
                                                             colSpan={10}
                                                             className="border border-gray-200 px-3 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-300"
                                                         >
-                                                            No other products
+                                                            No Accessories
                                                             available.
                                                         </td>
                                                     </tr>
                                                 )}
-                                            {loadedOtherProducts.map((product, index) => {
-                                                const currentStock = Number(product.stock?.current_stock) || 0;
-                                                const sellQuantity = otherProductsSales[index]?.sell_quantity || 0;
-                                                const recordedQuantity =
-                                                    otherProductsSales[index]
-                                                        ?.recorded_quantity ||
-                                                    0;
-                                                const newStock =
-                                                    otherProductsSales[index]
-                                                        ?.remaining_stock ??
-                                                    currentStock;
-                                                const totalSales = otherProductsSales[index]?.total_sales || 0;
-                                                const quantityScale =
-                                                    product.unit
-                                                        ?.quantity_scale ?? 0;
-                                                const quantityStep =
-                                                    quantityScale === 0
-                                                        ? '1'
-                                                        : (
-                                                              1 /
-                                                              10 **
-                                                                  quantityScale
-                                                          ).toFixed(
-                                                              quantityScale,
-                                                          );
-                                                return (
-                                                    <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {index + 1}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {product.product_name}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {product.product_code}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {product.unit?.name || 'N/A'}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {(Number(product.sales_price) || 0).toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {currentStock.toFixed(
-                                                                2,
-                                                            )}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                max={
-                                                                    currentStock +
-                                                                    recordedQuantity
+                                            {loadedOtherProducts.map(
+                                                (product, index) => {
+                                                    const currentStock =
+                                                        Number(
+                                                            product.stock
+                                                                ?.current_stock,
+                                                        ) || 0;
+                                                    const sellQuantity =
+                                                        otherProductsSales[
+                                                            index
+                                                        ]?.sell_quantity || 0;
+                                                    const recordedQuantity =
+                                                        otherProductsSales[
+                                                            index
+                                                        ]?.recorded_quantity ||
+                                                        0;
+                                                    const newStock =
+                                                        otherProductsSales[
+                                                            index
+                                                        ]?.remaining_stock ??
+                                                        currentStock;
+                                                    const totalSales =
+                                                        otherProductsSales[
+                                                            index
+                                                        ]?.total_sales || 0;
+                                                    const quantityScale =
+                                                        product.unit
+                                                            ?.quantity_scale ??
+                                                        0;
+                                                    const quantityStep =
+                                                        quantityScale === 0
+                                                            ? '1'
+                                                            : (
+                                                                  1 /
+                                                                  10 **
+                                                                      quantityScale
+                                                              ).toFixed(
+                                                                  quantityScale,
+                                                              );
+                                                    return (
+                                                        <tr
+                                                            key={product.id}
+                                                            className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                        >
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {index + 1}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {
+                                                                    product.product_name
                                                                 }
-                                                                step={quantityStep}
-                                                                value={sellQuantity}
-                                                                onChange={(e) => {
-                                                                    const quantity =
-                                                                        parseFloat(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        ) || 0;
-                                                                    calculateOtherProductSale(index, quantity);
-                                                                }}
-                                                                disabled={
-                                                                    isOtherProductsLoading
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {
+                                                                    product.product_code
                                                                 }
-                                                                className="h-8 w-20 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                                            />
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {Number(
-                                                                newStock,
-                                                            ).toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
-                                                            <Select
-                                                                value={otherProductsSales[index]?.sell_by || ''}
-                                                                onValueChange={(value) => {
-                                                                    const newSales = [...otherProductsSales];
-                                                                    newSales[index] = {
-                                                                        ...newSales[index],
-                                                                        sell_by: value,
-                                                                    };
-                                                                    setOtherProductsSales(newSales);
-                                                                }}
-                                                            >
-                                                                <SelectTrigger className="h-8 w-32 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                                                    <SelectValue placeholder="Select" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    {employees.map((emp) => (
-                                                                        <SelectItem
-                                                                            key={emp.id}
-                                                                            value={emp.id.toString()}
-                                                                        >
-                                                                            {emp.employee_name}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {totalSales.toFixed(2)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {product.unit
+                                                                    ?.name ||
+                                                                    'N/A'}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {(
+                                                                    Number(
+                                                                        product.sales_price,
+                                                                    ) || 0
+                                                                ).toFixed(2)}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {currentStock.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max={
+                                                                        currentStock +
+                                                                        recordedQuantity
+                                                                    }
+                                                                    step={
+                                                                        quantityStep
+                                                                    }
+                                                                    value={
+                                                                        sellQuantity
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) => {
+                                                                        const quantity =
+                                                                            parseFloat(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ) ||
+                                                                            0;
+                                                                        calculateOtherProductSale(
+                                                                            index,
+                                                                            quantity,
+                                                                        );
+                                                                    }}
+                                                                    disabled={
+                                                                        isOtherProductsLoading
+                                                                    }
+                                                                    className="h-8 w-20 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                                />
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {Number(
+                                                                    newStock,
+                                                                ).toFixed(2)}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
+                                                                <Select
+                                                                    value={
+                                                                        otherProductsSales[
+                                                                            index
+                                                                        ]
+                                                                            ?.sell_by ||
+                                                                        ''
+                                                                    }
+                                                                    onValueChange={(
+                                                                        value,
+                                                                    ) => {
+                                                                        const newSales =
+                                                                            [
+                                                                                ...otherProductsSales,
+                                                                            ];
+                                                                        newSales[
+                                                                            index
+                                                                        ] = {
+                                                                            ...newSales[
+                                                                                index
+                                                                            ],
+                                                                            sell_by:
+                                                                                value,
+                                                                        };
+                                                                        setOtherProductsSales(
+                                                                            newSales,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger className="h-8 w-32 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                                                        <SelectValue placeholder="Select" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {employees.map(
+                                                                            (
+                                                                                emp,
+                                                                            ) => (
+                                                                                <SelectItem
+                                                                                    key={
+                                                                                        emp.id
+                                                                                    }
+                                                                                    value={emp.id.toString()}
+                                                                                >
+                                                                                    {
+                                                                                        emp.employee_name
+                                                                                    }
+                                                                                </SelectItem>
+                                                                            ),
+                                                                        )}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {totalSales.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                },
+                                            )}
                                         </tbody>
                                         <tfoot>
                                             <tr className="bg-gray-50 font-semibold dark:bg-gray-700">
@@ -1559,7 +1647,9 @@ export default function DispenserReading({
                                                     Total Sales:
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                    {otherProductsSummary.total_sales.toFixed(2)}
+                                                    {otherProductsSummary.total_sales.toFixed(
+                                                        2,
+                                                    )}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -1601,102 +1691,199 @@ export default function DispenserReading({
                                             </tr>
                                         </thead>
                                         <tbody>
+                                            {Object.entries(productWiseData)
+                                                .filter(([, productData]) => {
+                                                    return (
+                                                        productData.total_sale >
+                                                            0 ||
+                                                        productData.net_reading >
+                                                            0
+                                                    );
+                                                })
+                                                .map(
+                                                    ([
+                                                        productId,
+                                                        productData,
+                                                    ]) => {
+                                                        const productInfo =
+                                                            dispenserReading.find(
+                                                                (d) =>
+                                                                    d.product_id?.toString() ===
+                                                                    productId,
+                                                            );
+                                                        const product =
+                                                            products?.find(
+                                                                (p) =>
+                                                                    p.id.toString() ===
+                                                                    productId,
+                                                            );
+                                                        const name =
+                                                            product?.product_name ??
+                                                            productInfo?.product
+                                                                ?.product_name ??
+                                                            'No Product Assigned';
+                                                        const productCode =
+                                                            product?.product_code ??
+                                                            productId;
+                                                        const rate =
+                                                            product?.sales_price ??
+                                                            productInfo?.product
+                                                                ?.sales_price ??
+                                                            0;
+                                                        const creditSales =
+                                                            productData.credit_sales ||
+                                                            0;
+                                                        const totalSale =
+                                                            productData.total_sale ||
+                                                            0;
 
-                                            {Object.entries(productWiseData).filter(([, productData]) => {
-                                                return productData.total_sale > 0 || productData.net_reading > 0;
-                                            }).map(([productId, productData]) => {
-                                                const productInfo = dispenserReading.find(
-                                                    (d) => d.product_id?.toString() === productId,
-                                                );
-                                                const product = products?.find(
-                                                    (p) => p.id.toString() === productId,
-                                                );
-                                                const name = product?.product_name ?? productInfo?.product?.product_name ?? 'No Product Assigned';
-                                                const productCode = product?.product_code ?? productId;
-                                                const rate = product?.sales_price ?? productInfo?.product?.sales_price ?? 0;
-                                                const creditSales = productData.credit_sales || 0;
-                                                const totalSale = productData.total_sale || 0;
+                                                        const totalAllOilSales =
+                                                            Object.values(
+                                                                productWiseData,
+                                                            ).reduce(
+                                                                (sum, data) =>
+                                                                    sum +
+                                                                    (data.total_sale ||
+                                                                        0),
+                                                                0,
+                                                            );
+                                                        const bankSalesTotal =
+                                                            parseFloat(
+                                                                data.bank_sales,
+                                                            ) || 0;
+                                                        const proportion =
+                                                            totalAllOilSales > 0
+                                                                ? totalSale /
+                                                                  totalAllOilSales
+                                                                : 0;
+                                                        const productBankSales =
+                                                            bankSalesTotal *
+                                                            proportion;
+                                                        const cashSales =
+                                                            totalSale -
+                                                            creditSales -
+                                                            productBankSales;
 
-                                                const totalAllOilSales = Object.values(productWiseData).reduce((sum, data) => sum + (data.total_sale || 0), 0);
-                                                const bankSalesTotal = parseFloat(data.bank_sales) || 0;
-                                                const proportion = totalAllOilSales > 0 ? totalSale / totalAllOilSales : 0;
-                                                const productBankSales = bankSalesTotal * proportion;
-                                                const cashSales = totalSale - creditSales - productBankSales;
-
-                                                return (
-                                                    <tr key={productId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productCode}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {name}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {Number(
-                                                                rate,
-                                                            ).toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productData.net_reading.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {totalSale.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {creditSales.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {productBankSales.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {cashSales.toFixed(2)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                        return (
+                                                            <tr
+                                                                key={productId}
+                                                                className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                            >
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {
+                                                                        productCode
+                                                                    }
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {name}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {Number(
+                                                                        rate,
+                                                                    ).toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {productData.net_reading.toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {totalSale.toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {creditSales.toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {productBankSales.toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                    {cashSales.toFixed(
+                                                                        2,
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    },
+                                                )}
 
                                             {/* Other Products */}
-                                            {otherProductsSales.filter(
-                                                (sale) =>
-                                                    sale.sell_quantity > 0 ||
-                                                    sale.total_sales > 0,
-                                            ).map((sale) => {
-                                                const product = loadedOtherProducts.find(p => p.id === sale.product_id);
-                                                if (!product) return null;
+                                            {otherProductsSales
+                                                .filter(
+                                                    (sale) =>
+                                                        sale.sell_quantity >
+                                                            0 ||
+                                                        sale.total_sales > 0,
+                                                )
+                                                .map((sale) => {
+                                                    const product =
+                                                        loadedOtherProducts.find(
+                                                            (p) =>
+                                                                p.id ===
+                                                                sale.product_id,
+                                                        );
+                                                    if (!product) return null;
 
-                                                const totalSale = sale.total_sales || 0;
+                                                    const totalSale =
+                                                        sale.total_sales || 0;
 
-                                                return (
-                                                    <tr key={`other-${product.id}`} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {product.product_code}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {product.product_name}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {(Number(product.sales_price) || 0).toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {Number(
-                                                                sale.sell_quantity,
-                                                            ).toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {totalSale.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {sale.credit_sales.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {sale.bank_sales.toFixed(2)}
-                                                        </td>
-                                                        <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {sale.cash_sales.toFixed(2)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                    return (
+                                                        <tr
+                                                            key={`other-${product.id}`}
+                                                            className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                        >
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {
+                                                                    product.product_code
+                                                                }
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {
+                                                                    product.product_name
+                                                                }
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {(
+                                                                    Number(
+                                                                        product.sales_price,
+                                                                    ) || 0
+                                                                ).toFixed(2)}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {Number(
+                                                                    sale.sell_quantity,
+                                                                ).toFixed(2)}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {totalSale.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {sale.credit_sales.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {sale.bank_sales.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                            <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
+                                                                {sale.cash_sales.toFixed(
+                                                                    2,
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                         </tbody>
                                         <tfoot>
                                             <tr className="bg-gray-50 font-semibold dark:bg-gray-700">
@@ -1708,20 +1895,68 @@ export default function DispenserReading({
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
                                                     {[
-                                                        ...Object.entries(productWiseData).filter(([, productData]) => {
-                                                            return productData.total_sale > 0 || productData.net_reading > 0;
-                                                        }).map(([, productData]) => productData.total_sale || 0),
-                                                        otherProductsSummary.total_sales
-                                                    ].reduce((sum, sale) => sum + sale, 0).toFixed(2)}
+                                                        ...Object.entries(
+                                                            productWiseData,
+                                                        )
+                                                            .filter(
+                                                                ([
+                                                                    ,
+                                                                    productData,
+                                                                ]) => {
+                                                                    return (
+                                                                        productData.total_sale >
+                                                                            0 ||
+                                                                        productData.net_reading >
+                                                                            0
+                                                                    );
+                                                                },
+                                                            )
+                                                            .map(
+                                                                ([
+                                                                    ,
+                                                                    productData,
+                                                                ]) =>
+                                                                    productData.total_sale ||
+                                                                    0,
+                                                            ),
+                                                        otherProductsSummary.total_sales,
+                                                    ]
+                                                        .reduce(
+                                                            (sum, sale) =>
+                                                                sum + sale,
+                                                            0,
+                                                        )
+                                                        .toFixed(2)}
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                    {(parseFloat(data.credit_sales) + parseFloat(data.credit_sales_other)).toFixed(2)}
+                                                    {(
+                                                        parseFloat(
+                                                            data.credit_sales,
+                                                        ) +
+                                                        parseFloat(
+                                                            data.credit_sales_other,
+                                                        )
+                                                    ).toFixed(2)}
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                    {(parseFloat(data.bank_sales) + parseFloat(data.bank_sales_other)).toFixed(2)}
+                                                    {(
+                                                        parseFloat(
+                                                            data.bank_sales,
+                                                        ) +
+                                                        parseFloat(
+                                                            data.bank_sales_other,
+                                                        )
+                                                    ).toFixed(2)}
                                                 </td>
                                                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                    {(parseFloat(data.cash_sales) + parseFloat(data.cash_sales_other)).toFixed(2)}
+                                                    {(
+                                                        parseFloat(
+                                                            data.cash_sales,
+                                                        ) +
+                                                        parseFloat(
+                                                            data.cash_sales_other,
+                                                        )
+                                                    ).toFixed(2)}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -1797,27 +2032,27 @@ export default function DispenserReading({
                 />
 
                 <PaymentVoucherModal
-                        key={`payment-${isCashPaymentOpen}-${data.transaction_date}-${data.shift_id}`}
-                        isOpen={isCashPaymentOpen}
-                        onClose={() => setIsCashPaymentOpen(false)}
-                        onSuccess={() => {
-                            if (data.transaction_date && data.shift_id) {
-                                fetchShiftData(
-                                    data.transaction_date,
-                                    data.shift_id,
-                                );
-                            }
-                        }}
-                        editingVoucher={null}
-                        accounts={accounts}
-                        groupedAccounts={groupedAccounts}
-                        shifts={shifts}
-                        closedShifts={closedShifts}
-                        voucherCategories={voucherCategories}
-                        voucherTransactionTypes={voucherTransactionTypes}
-                        initialDate={data.transaction_date}
-                        initialShiftId={data.shift_id}
-                    />
+                    key={`payment-${isCashPaymentOpen}-${data.transaction_date}-${data.shift_id}`}
+                    isOpen={isCashPaymentOpen}
+                    onClose={() => setIsCashPaymentOpen(false)}
+                    onSuccess={() => {
+                        if (data.transaction_date && data.shift_id) {
+                            fetchShiftData(
+                                data.transaction_date,
+                                data.shift_id,
+                            );
+                        }
+                    }}
+                    editingVoucher={null}
+                    accounts={accounts}
+                    groupedAccounts={groupedAccounts}
+                    shifts={shifts}
+                    closedShifts={closedShifts}
+                    voucherCategories={voucherCategories}
+                    voucherTransactionTypes={voucherTransactionTypes}
+                    initialDate={data.transaction_date}
+                    initialShiftId={data.shift_id}
+                />
 
                 <FormModal
                     isOpen={isOfficePaymentOpen}
@@ -1978,17 +2213,17 @@ export default function DispenserReading({
                             <SelectContent>
                                 {(officePaymentData.payment_type === 'Cash'
                                     ? groupedAccounts['Cash in hand'] ||
-                                    groupedAccounts['Cash'] ||
-                                    []
+                                      groupedAccounts['Cash'] ||
+                                      []
                                     : officePaymentData.payment_type ===
                                         'Bank Account'
-                                        ? groupedAccounts['Bank Account'] ||
+                                      ? groupedAccounts['Bank Account'] ||
                                         groupedAccounts['Bank'] ||
                                         []
-                                        : officePaymentData.payment_type ===
-                                            'Mobile Bank'
-                                            ? groupedAccounts['Mobile Bank'] || []
-                                            : []
+                                      : officePaymentData.payment_type ===
+                                          'Mobile Bank'
+                                        ? groupedAccounts['Mobile Bank'] || []
+                                        : []
                                 ).map((account) => (
                                     <SelectItem
                                         key={account.id}
@@ -2063,41 +2298,70 @@ export default function DispenserReading({
                     initialShiftId={data.shift_id}
                 />
 
-                <Dialog open={isValidationModalOpen} onOpenChange={setIsValidationModalOpen}>
+                <Dialog
+                    open={isValidationModalOpen}
+                    onOpenChange={setIsValidationModalOpen}
+                >
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Validation Error</DialogTitle>
-                            <DialogDescription>{validationError}</DialogDescription>
+                            <DialogDescription>
+                                {validationError}
+                            </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button onClick={() => setIsValidationModalOpen(false)}>OK</Button>
+                            <Button
+                                onClick={() => setIsValidationModalOpen(false)}
+                            >
+                                OK
+                            </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
 
-                <Dialog open={isConfirmModalOpen} onOpenChange={setIsConfirmModalOpen}>
+                <Dialog
+                    open={isConfirmModalOpen}
+                    onOpenChange={setIsConfirmModalOpen}
+                >
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Confirm Shift Close</DialogTitle>
-                            <DialogDescription>Are you sure you want to close this shift?</DialogDescription>
+                            <DialogDescription>
+                                Are you sure you want to close this shift?
+                            </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsConfirmModalOpen(false)}>Cancel</Button>
-                            <Button onClick={handleConfirmSubmit} disabled={processing}>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsConfirmModalOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleConfirmSubmit}
+                                disabled={processing}
+                            >
                                 {processing ? 'Processing...' : 'Confirm'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
 
-                <Dialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
+                <Dialog
+                    open={isSuccessModalOpen}
+                    onOpenChange={setIsSuccessModalOpen}
+                >
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Success</DialogTitle>
-                            <DialogDescription>Shift closed successfully.</DialogDescription>
+                            <DialogDescription>
+                                Shift closed successfully.
+                            </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button onClick={() => window.location.reload()}>OK</Button>
+                            <Button onClick={() => window.location.reload()}>
+                                OK
+                            </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
