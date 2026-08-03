@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\VoucherTransactionTypeHelper;
+use App\Http\Requests\VoucherTransactionTypeOptionsRequest;
 use App\Http\Requests\VoucherTransactionTypeRequest;
 use App\Http\Resources\VoucherTransactionTypeResource;
 use App\Models\CompanySetting;
@@ -26,6 +27,10 @@ class VoucherTransactionTypeController extends Controller implements HasMiddlewa
     {
         return [
             new Middleware('permission:voucher-transaction-type-view', only: ['index', 'downloadPdf']),
+            new Middleware(
+                'permission:view-voucher|create-voucher|update-voucher|voucher-transaction-type-view',
+                only: ['options']
+            ),
             new Middleware('permission:voucher-transaction-type-create', only: ['store']),
             new Middleware('permission:voucher-transaction-type-update', only: ['edit', 'update']),
             new Middleware('permission:voucher-transaction-type-delete', only: ['destroy', 'bulkDelete']),
@@ -83,6 +88,21 @@ class VoucherTransactionTypeController extends Controller implements HasMiddlewa
                 $voucherTransactionType->load('voucherCategory:id,code,name')
             ),
         ]);
+    }
+
+    public function options(VoucherTransactionTypeOptionsRequest $request)
+    {
+        $validated = $request->validated();
+
+        return VoucherTransactionTypeResource::collection(
+            $this->transactionTypes->options(
+                (int) $validated['category_id'],
+                $validated['voucher_type'],
+                isset($validated['selected_id'])
+                    ? (int) $validated['selected_id']
+                    : null
+            )
+        );
     }
 
     public function store(VoucherTransactionTypeRequest $request)

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\VoucherTransactionType;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -55,6 +56,27 @@ class VoucherTransactionTypeService
         );
 
         return $transactionType->fresh('voucherCategory');
+    }
+
+    public function options(
+        int $voucherCategoryId,
+        string $voucherType,
+        ?int $selectedId = null
+    ): Collection {
+        return VoucherTransactionType::query()
+            ->with('voucherCategory:id,code,name')
+            ->forCategory($voucherCategoryId)
+            ->forVoucherType($voucherType)
+            ->where(function ($query) use ($selectedId): void {
+                $query->where('status', true);
+
+                if ($selectedId) {
+                    $query->orWhere('id', $selectedId);
+                }
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
     }
 
     public function delete(VoucherTransactionType $transactionType): void

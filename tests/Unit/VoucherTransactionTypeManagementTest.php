@@ -3,6 +3,7 @@
 use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\PaymentVoucherRequest;
+use App\Http\Requests\ReceivedVoucherRequest;
 use App\Models\VoucherCategory;
 use App\Models\VoucherTransactionType;
 use App\Services\VoucherTransactionTypeService;
@@ -11,6 +12,7 @@ use Database\Seeders\SystemVoucherTransactionTypeSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -223,4 +225,124 @@ it('normalizes the legacy payment subtype request field', function () {
 
     expect($request->input('vouchers.0.voucher_transaction_type_id'))
         ->toBe(77);
+});
+
+it('loads transaction type options by category and exact voucher type', function () {
+    (new SystemVoucherTransactionTypeSeeder)->run();
+    $service = app(VoucherTransactionTypeService::class);
+    $customer = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::customerCode())
+        ->firstOrFail();
+
+    $paymentTypes = $service->options(
+        $customer->id,
+        VoucherTransactionTypeHelper::paymentVoucherType()
+    );
+    $receiptTypes = $service->options(
+        $customer->id,
+        VoucherTransactionTypeHelper::receiptVoucherType()
+    );
+
+    expect($paymentTypes)->not->toBeEmpty()
+        ->and($paymentTypes->every(fn (VoucherTransactionType $type) => (
+            (int) $type->voucher_category_id === $customer->id
+            && $type->voucher_type
+                === VoucherTransactionTypeHelper::paymentVoucherType()
+        )))->toBeTrue()
+        ->and($receiptTypes)->not->toBeEmpty()
+        ->and($receiptTypes->every(fn (VoucherTransactionType $type) => (
+            (int) $type->voucher_category_id === $customer->id
+            && $type->voucher_type
+                === VoucherTransactionTypeHelper::receiptVoucherType()
+        )))->toBeTrue();
+});
+
+it('keeps an inactive current option available only for compatible edit data', function () {
+    (new SystemVoucherTransactionTypeSeeder)->run();
+    $service = app(VoucherTransactionTypeService::class);
+    $customer = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::customerCode())
+        ->firstOrFail();
+    $inactive = VoucherTransactionType::query()->create([
+        'voucher_category_id' => $customer->id,
+        'code' => '9998',
+        'name' => 'Legacy Customer Payment',
+        'voucher_type' => VoucherTransactionTypeHelper::paymentVoucherType(),
+        'sort_order' => 999,
+        'status' => false,
+        'is_system' => false,
+    ]);
+
+    expect($service->options(
+        $customer->id,
+        VoucherTransactionTypeHelper::paymentVoucherType()
+    )->contains('id', $inactive->id))->toBeFalse()
+        ->and($service->options(
+            $customer->id,
+            VoucherTransactionTypeHelper::paymentVoucherType(),
+            $inactive->id
+        )->contains('id', $inactive->id))->toBeTrue()
+        ->and($service->options(
+            $customer->id,
+            VoucherTransactionTypeHelper::receiptVoucherType(),
+            $inactive->id
+        )->contains('id', $inactive->id))->toBeFalse();
+});
+
+it('rejects category and voucher type mismatches with ERP messages', function () {
+    (new SystemVoucherTransactionTypeSeeder)->run();
+    $customer = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::customerCode())
+        ->firstOrFail();
+    $employee = VoucherCategory::query()
+        ->where('code', VoucherCategoryHelper::employeeCode())
+        ->firstOrFail();
+    $employeePayment = VoucherTransactionType::query()
+        ->forCategory($employee->id)
+        ->forVoucherType(VoucherTransactionTypeHelper::paymentVoucherType())
+        ->firstOrFail();
+    $customerPayment = VoucherTransactionType::query()
+        ->forCategory($customer->id)
+        ->forVoucherType(VoucherTransactionTypeHelper::paymentVoucherType())
+        ->firstOrFail();
+
+    $paymentRequest = PaymentVoucherRequest::create(
+        '/vouchers/payment',
+        'POST',
+        [
+            'vouchers' => [[
+                'voucher_category_id' => $customer->id,
+                'voucher_transaction_type_id' => $employeePayment->id,
+            ]],
+        ]
+    );
+    $paymentValidator = Validator::make([], []);
+    foreach ($paymentRequest->after() as $callback) {
+        $callback($paymentValidator);
+    }
+
+    $receiptRequest = ReceivedVoucherRequest::create(
+        '/vouchers/received',
+        'POST',
+        [
+            'vouchers' => [[
+                'voucher_category_id' => $customer->id,
+                'voucher_transaction_type_id' => $customerPayment->id,
+            ]],
+        ]
+    );
+    $receiptValidator = Validator::make([], []);
+    foreach ($receiptRequest->after() as $callback) {
+        $callback($receiptValidator);
+    }
+
+    expect($paymentValidator->errors()->first(
+        'vouchers.0.voucher_transaction_type_id'
+    ))->toBe(
+        'The selected transaction type does not belong to the selected voucher category.'
+    )->and($receiptValidator->errors()->first(
+        'vouchers.0.voucher_transaction_type_id'
+    ))->toBe(
+        'The selected transaction type is not valid for this voucher.'
+    );
 });

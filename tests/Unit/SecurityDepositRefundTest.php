@@ -444,6 +444,43 @@ it('rejects a refund above the available security deposit and rolls back', funct
         ->toBe(40000.0);
 });
 
+it('rejects a receipt transaction type in the payment posting service', function () {
+    $fixture = makeRefundFixture();
+    $receiptTypeId = DB::table('voucher_transaction_types')->insertGetId([
+        'code' => 'RECEIPT-ONLY',
+        'name' => 'Receipt Only',
+        'voucher_category_id' => $fixture['categoryId'],
+        'voucher_type' => VoucherTransactionTypeHelper::receiptVoucherType(),
+        'status' => true,
+    ]);
+    $payload = refundPayload($fixture, 10000);
+    $payload['vouchers'][0]['voucher_transaction_type_id'] = $receiptTypeId;
+
+    try {
+        $fixture['service']->createMany(
+            VoucherTransactionTypeHelper::paymentVoucherType(),
+            $payload
+        );
+        $this->fail('Expected the voucher type validation to fail.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors()[
+            'vouchers.0.voucher_transaction_type_id'
+        ][0])->toBe(
+            'The selected transaction type is not valid for this voucher.'
+        );
+    }
+
+    expect(Voucher::query()->count())->toBe(0)
+        ->and(DB::table('journal_entries')
+            ->where(
+                'event_type',
+                VoucherTransactionTypeHelper::paymentVoucherType()
+                    .'_voucher'
+            )
+            ->count())
+        ->toBe(0);
+});
+
 it('restores the available deposit when a refund voucher is reversed', function () {
     $fixture = makeRefundFixture();
     $voucher = $fixture['service']->createMany(

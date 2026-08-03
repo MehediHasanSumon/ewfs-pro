@@ -69,6 +69,14 @@ class VoucherTransactionTypeHelper
         return array_values($types);
     }
 
+    public static function assignableVoucherTypes(): array
+    {
+        return [
+            self::paymentVoucherType(),
+            self::receiptVoucherType(),
+        ];
+    }
+
     public static function paymentVoucherType(): string
     {
         return self::getVoucherType('payment');

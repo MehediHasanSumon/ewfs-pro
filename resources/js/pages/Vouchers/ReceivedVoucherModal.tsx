@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useVoucherTransactionTypes } from '@/hooks/use-voucher-transaction-types';
 import {
     Select,
     SelectContent,
@@ -11,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { router } from '@inertiajs/react';
 import { Edit, Plus, Trash2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface ReceivedVoucher {
     id: number;
@@ -31,12 +32,6 @@ export interface ReceivedVoucher {
 interface VoucherCategory {
     id: number;
     name: string;
-}
-
-interface VoucherTransactionType {
-    id: number;
-    name: string;
-    voucher_category_id: number;
 }
 
 interface Account {
@@ -60,7 +55,8 @@ interface ReceivedVoucherModalProps {
     shifts: Shift[];
     closedShifts: Array<{close_date: string; shift_id: number}>;
     voucherCategories: VoucherCategory[];
-    voucherTransactionTypes: VoucherTransactionType[];
+    voucherType: string;
+    transactionTypeOptionsUrl: string;
     initialDate?: string;
     initialShiftId?: string;
 }
@@ -94,7 +90,8 @@ export function ReceivedVoucherModal({
     shifts,
     closedShifts,
     voucherCategories,
-    voucherTransactionTypes,
+    voucherType,
+    transactionTypeOptionsUrl,
     initialDate,
     initialShiftId,
 }: ReceivedVoucherModalProps) {
@@ -145,10 +142,41 @@ export function ReceivedVoucherModal({
     const [data, setData] = useState(getInitialData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
+    const {
+        transactionTypes,
+        loadingTransactionTypes,
+        loadTransactionTypes,
+        clearTransactionTypes,
+    } = useVoucherTransactionTypes(
+        voucherType,
+        transactionTypeOptionsUrl,
+    );
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const initialData = getInitialData();
+        const initialVoucher = initialData.vouchers[0];
+        setData(initialData);
+        setErrors({});
+        void loadTransactionTypes(
+            initialVoucher.voucher_category_id,
+            initialVoucher.voucher_transaction_type_id,
+        );
+    }, [
+        editingVoucher,
+        initialDate,
+        initialShiftId,
+        isOpen,
+        loadTransactionTypes,
+    ]);
 
     const reset = () => {
         setData(buildInitialState());
         setErrors({});
+        clearTransactionTypes();
     };
     const setField = (key: 'date' | 'shift_id', value: string) => {
         setData((prev) => ({ ...prev, [key]: value }));
@@ -171,7 +199,7 @@ export function ReceivedVoucherModal({
         return groupedAccounts[groupName] || [];
     };
 
-    const getAvailableShifts = useCallback(() => {
+    const getAvailableShifts = () => {
         if (!data.date) return [];
 
         const selectedDate = data.date;
@@ -180,7 +208,7 @@ export function ReceivedVoucherModal({
             .map((cs) => cs.shift_id);
 
         return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
-    }, [data.date, shifts, closedShifts]);
+    };
 
     const updateVoucher = (index: number, field: string, value: string) => {
         setData((prev) => {
@@ -189,6 +217,9 @@ export function ReceivedVoucherModal({
             if (field === 'payment_method') {
                 vouchers[index].from_account_id = '';
                 vouchers[index].to_account_id = '';
+            }
+            if (field === 'voucher_category_id') {
+                vouchers[index].voucher_transaction_type_id = '';
             }
             return { ...prev, vouchers };
         });
@@ -286,6 +317,12 @@ export function ReceivedVoucherModal({
     };
 
     const currentVoucher = data.vouchers[0];
+    const transactionTypeError =
+        errors['vouchers.0.voucher_transaction_type_id'] ??
+        errors.voucher_transaction_type_id;
+    const voucherCategoryError =
+        errors['vouchers.0.voucher_category_id'] ??
+        errors.voucher_category_id;
 
     return (
         <FormModal
@@ -343,11 +380,7 @@ export function ReceivedVoucherModal({
                         value={currentVoucher.voucher_category_id}
                         onValueChange={(value) => {
                             updateVoucher(0, 'voucher_category_id', value);
-                            updateVoucher(
-                                0,
-                                'voucher_transaction_type_id',
-                                '',
-                            );
+                            void loadTransactionTypes(value);
                         }}
                     >
                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -361,8 +394,8 @@ export function ReceivedVoucherModal({
                             ))}
                         </SelectContent>
                     </Select>
-                    {errors['vouchers.0.voucher_category_id'] && (
-                        <span className="text-sm text-red-500">{errors['vouchers.0.voucher_category_id']}</span>
+                    {voucherCategoryError && (
+                        <span className="text-sm text-red-500">{voucherCategoryError}</span>
                     )}
                 </div>
                 <div>
@@ -381,17 +414,21 @@ export function ReceivedVoucherModal({
                                 value,
                             )
                         }
-                        disabled={!currentVoucher.voucher_category_id}
+                        disabled={
+                            !currentVoucher.voucher_category_id ||
+                            loadingTransactionTypes
+                        }
                     >
                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                             <SelectValue placeholder="Choose sub type" />
                         </SelectTrigger>
                         <SelectContent>
-                            {voucherTransactionTypes
+                            {transactionTypes
                                 .filter(
                                     (subType) =>
                                         subType.voucher_category_id.toString() ===
-                                        currentVoucher.voucher_category_id,
+                                            currentVoucher.voucher_category_id &&
+                                        subType.voucher_type === voucherType,
                                 )
                                 .map((subType) => (
                                     <SelectItem key={subType.id} value={subType.id.toString()}>
@@ -400,13 +437,9 @@ export function ReceivedVoucherModal({
                                 ))}
                         </SelectContent>
                     </Select>
-                    {errors['vouchers.0.voucher_transaction_type_id'] && (
+                    {transactionTypeError && (
                         <span className="text-sm text-red-500">
-                            {
-                                errors[
-                                    'vouchers.0.voucher_transaction_type_id'
-                                ]
-                            }
+                            {transactionTypeError}
                         </span>
                     )}
                 </div>
@@ -713,6 +746,10 @@ export function ReceivedVoucherModal({
                                                             const newVouchers = data.vouchers.filter((_, i) => i !== actualIndex);
                                                             newVouchers[0] = editVoucher;
                                                             setData((prev) => ({ ...prev, vouchers: newVouchers }));
+                                                            void loadTransactionTypes(
+                                                                editVoucher.voucher_category_id,
+                                                                editVoucher.voucher_transaction_type_id,
+                                                            );
                                                         }}
                                                         className="text-indigo-600 hover:text-indigo-800"
                                                     >

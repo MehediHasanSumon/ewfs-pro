@@ -10,7 +10,6 @@ use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
-use App\Models\VoucherTransactionType;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -50,16 +49,16 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
             'shifts' => Shift::query()->where('status', true)->get(['id', 'name']),
             'closedShifts' => $this->closedShifts(),
-            'voucherCategories' => VoucherCategory::query()->where('status', true)->get(),
-            'voucherTransactionTypes' => VoucherTransactionType::query()
-                ->with('voucherCategory')
+            'voucherCategories' => VoucherCategory::query()
                 ->where('status', true)
-                ->whereIn('voucher_type', [
-                    VoucherTransactionTypeHelper::paymentVoucherType(),
-                    VoucherTransactionTypeHelper::bothVoucherType(),
-                ])
                 ->orderBy('sort_order')
-                ->get(),
+                ->orderBy('name')
+                ->get(['id', 'code', 'name']),
+            'voucherType' => VoucherTransactionTypeHelper::paymentVoucherType(),
+            'transactionTypeOptionsUrl' => route(
+                'voucher-transaction-types.options',
+                absolute: false
+            ),
             'filters' => $request->only([
                 'search', 'payment_method', 'start_date', 'end_date',
                 'sort_by', 'sort_order', 'per_page',
@@ -69,14 +68,21 @@ class PaymentVoucherController extends Controller implements HasMiddleware
 
     public function store(PaymentVoucherRequest $request)
     {
-        $this->vouchers->createMany('payment', $request->validated());
+        $this->vouchers->createMany(
+            VoucherTransactionTypeHelper::paymentVoucherType(),
+            $request->validated()
+        );
 
         return back()->with('success', 'Payment voucher created successfully.');
     }
 
     public function update(PaymentVoucherRequest $request, Voucher $voucher)
     {
-        abort_unless($voucher->voucher_type === 'payment', 404);
+        abort_unless(
+            $voucher->voucher_type
+                === VoucherTransactionTypeHelper::paymentVoucherType(),
+            404
+        );
         $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Payment voucher updated successfully.');
@@ -84,7 +90,11 @@ class PaymentVoucherController extends Controller implements HasMiddleware
 
     public function destroy(Voucher $voucher)
     {
-        abort_unless($voucher->voucher_type === 'payment', 404);
+        abort_unless(
+            $voucher->voucher_type
+                === VoucherTransactionTypeHelper::paymentVoucherType(),
+            404
+        );
         $this->vouchers->reverse($voucher);
 
         return back()->with('success', 'Payment voucher deleted successfully.');
@@ -98,7 +108,10 @@ class PaymentVoucherController extends Controller implements HasMiddleware
         ]);
 
         Voucher::query()
-            ->where('voucher_type', 'payment')
+            ->where(
+                'voucher_type',
+                VoucherTransactionTypeHelper::paymentVoucherType()
+            )
             ->whereIn('id', $validated['ids'])
             ->with('journalEntry')
             ->get()
@@ -127,7 +140,10 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 'lines.paymentDetail',
                 'transaction',
             ])
-            ->where('voucher_type', 'payment')
+            ->where(
+                'voucher_type',
+                VoucherTransactionTypeHelper::paymentVoucherType()
+            )
             ->whereHas('journalEntry', fn ($entry) => $entry->posted());
 
         if ($request->filled('search')) {

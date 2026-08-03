@@ -36,12 +36,6 @@ interface VoucherCategory {
     name: string;
 }
 
-interface VoucherTransactionType {
-    id: number;
-    name: string;
-    voucher_category_id: number;
-}
-
 interface Account {
     id: number;
     name: string;
@@ -79,7 +73,8 @@ interface ReceivedVoucherProps {
     shifts?: Shift[];
     closedShifts?: Array<{close_date: string; shift_id: number}>;
     voucherCategories?: VoucherCategory[];
-    voucherTransactionTypes?: VoucherTransactionType[];
+    voucherType: string;
+    transactionTypeOptionsUrl: string;
     filters?: {
         search?: string;
         shift?: string;
@@ -106,7 +101,8 @@ export default function ReceivedVoucher({
     groupedAccounts = {},
     shifts = [], closedShifts = [],
     voucherCategories = [],
-    voucherTransactionTypes = [],
+    voucherType,
+    transactionTypeOptionsUrl,
     filters = {},
 }: ReceivedVoucherProps) {
     const { can } = usePermission();
@@ -596,7 +592,8 @@ export default function ReceivedVoucher({
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    voucherTransactionTypes={voucherTransactionTypes}
+                    voucherType={voucherType}
+                    transactionTypeOptionsUrl={transactionTypeOptionsUrl}
                 />
 
                 <DeleteModal

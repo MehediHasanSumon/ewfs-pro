@@ -59,13 +59,21 @@ class VoucherPostingService
     {
         return DB::transaction(function () use ($voucher, $data) {
             $type = $voucher->voucher_type;
+            $existingTransactionTypeId = $voucher
+                ->voucher_transaction_type_id;
             $this->reverse($voucher, ucfirst(str_replace('_', ' ', $type)).' replaced from the edit workflow.');
 
             if ($type === 'office_payment') {
                 return $this->createOfficePayment($data);
             }
 
-            return $this->createDocument($type, $data, $data);
+            return $this->createDocument(
+                $type,
+                $data,
+                $data,
+                '',
+                $existingTransactionTypeId
+            );
         });
     }
 
@@ -96,7 +104,8 @@ class VoucherPostingService
         string $type,
         array $headerData,
         array $lineData,
-        string $errorPrefix = ''
+        string $errorPrefix = '',
+        ?int $allowedInactiveTransactionTypeId = null
     ): Voucher {
         $businessDate = $headerData['date'] ?? $headerData['voucher_date'];
         $accounts = Account::query()
@@ -118,18 +127,33 @@ class VoucherPostingService
 
         $transactionType = VoucherTransactionType::query()
             ->with('voucherCategory:id,code,name')
-            ->findOrFail($this->transactionTypeId($lineData));
+            ->find($this->transactionTypeId($lineData));
+
+        if (! $transactionType) {
+            throw ValidationException::withMessages([
+                $errorPrefix.'voucher_transaction_type_id' => 'The selected transaction type is not valid for this voucher.',
+            ]);
+        }
 
         if (
             (int) $transactionType->voucher_category_id
                 !== (int) $lineData['voucher_category_id']
-            || ! in_array($transactionType->voucher_type, [
-                $type,
-                VoucherTransactionTypeHelper::bothVoucherType(),
-            ], true)
         ) {
             throw ValidationException::withMessages([
-                $errorPrefix.'voucher_transaction_type_id' => 'The selected voucher transaction type does not belong to this category.',
+                $errorPrefix.'voucher_transaction_type_id' => 'The selected transaction type does not belong to the selected voucher category.',
+            ]);
+        }
+
+        if (
+            $transactionType->voucher_type !== $type
+            || (
+                ! $transactionType->status
+                && $transactionType->id
+                    !== $allowedInactiveTransactionTypeId
+            )
+        ) {
+            throw ValidationException::withMessages([
+                $errorPrefix.'voucher_transaction_type_id' => 'The selected transaction type is not valid for this voucher.',
             ]);
         }
 
@@ -166,8 +190,8 @@ class VoucherPostingService
             'created_by' => auth()->id(),
         ]);
 
-        $debitAccount = $type === 'receipt' ? $toAccount : $toAccount;
-        $creditAccount = $type === 'receipt' ? $fromAccount : $fromAccount;
+        $debitAccount = $toAccount;
+        $creditAccount = $fromAccount;
 
         $debitLine = $voucher->lines()->create([
             'line_no' => 1,

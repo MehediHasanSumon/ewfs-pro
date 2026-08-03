@@ -155,12 +155,6 @@ interface VoucherCategory {
     name: string;
 }
 
-interface VoucherTransactionType {
-    id: number;
-    name: string;
-    voucher_category_id: number;
-}
-
 interface DispenserReadingProps {
     dispenserReading: DispenserReading[];
     shifts: Shift[];
@@ -173,7 +167,9 @@ interface DispenserReadingProps {
     groupedAccounts?: Record<string, Account[]>;
     employees?: Employee[];
     voucherCategories?: VoucherCategory[];
-    voucherTransactionTypes?: VoucherTransactionType[];
+    paymentVoucherType: string;
+    receiptVoucherType: string;
+    transactionTypeOptionsUrl: string;
 }
 
 export default function DispenserReading({
@@ -188,7 +184,9 @@ export default function DispenserReading({
     groupedAccounts = {},
     employees = [],
     voucherCategories = [],
-    voucherTransactionTypes = [],
+    paymentVoucherType,
+    receiptVoucherType,
+    transactionTypeOptionsUrl,
 }: DispenserReadingProps) {
     const { can } = usePermission();
     const canCreateCreditSales = can('create-credit-sale');
@@ -2026,7 +2024,8 @@ export default function DispenserReading({
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    voucherTransactionTypes={voucherTransactionTypes}
+                    voucherType={receiptVoucherType}
+                    transactionTypeOptionsUrl={transactionTypeOptionsUrl}
                     initialDate={data.transaction_date}
                     initialShiftId={data.shift_id}
                 />
@@ -2049,7 +2048,8 @@ export default function DispenserReading({
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    voucherTransactionTypes={voucherTransactionTypes}
+                    voucherType={paymentVoucherType}
+                    transactionTypeOptionsUrl={transactionTypeOptionsUrl}
                     initialDate={data.transaction_date}
                     initialShiftId={data.shift_id}
                 />

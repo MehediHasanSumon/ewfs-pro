@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\DispenserCalculationRequest;
 use App\Http\Requests\ShiftClosingRequest;
 use App\Models\Account;
@@ -16,7 +17,6 @@ use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Vehicle;
 use App\Models\VoucherCategory;
-use App\Models\VoucherTransactionType;
 use App\Services\DispenserCalculationService;
 use App\Services\ShiftClosingService;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -120,12 +120,17 @@ class DispenserReadingController extends Controller implements HasMiddleware
                 ->filter()
                 ->unique()
                 ->values(),
-            'voucherCategories' => VoucherCategory::query()->where('status', true)->get(),
-            'voucherTransactionTypes' => VoucherTransactionType::query()
-                ->with('voucherCategory')
+            'voucherCategories' => VoucherCategory::query()
                 ->where('status', true)
                 ->orderBy('sort_order')
-                ->get(),
+                ->orderBy('name')
+                ->get(['id', 'code', 'name']),
+            'paymentVoucherType' => VoucherTransactionTypeHelper::paymentVoucherType(),
+            'receiptVoucherType' => VoucherTransactionTypeHelper::receiptVoucherType(),
+            'transactionTypeOptionsUrl' => route(
+                'voucher-transaction-types.options',
+                absolute: false
+            ),
         ]);
     }
 

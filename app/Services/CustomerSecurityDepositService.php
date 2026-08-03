@@ -21,10 +21,8 @@ class CustomerSecurityDepositService
 
         return $transactionType->code
                 === VoucherTransactionTypeHelper::customerSecurityDepositRefundCode()
-            && in_array($transactionType->voucher_type, [
-                VoucherTransactionTypeHelper::paymentVoucherType(),
-                VoucherTransactionTypeHelper::bothVoucherType(),
-            ], true)
+            && $transactionType->voucher_type
+                === VoucherTransactionTypeHelper::paymentVoucherType()
             && (
                 $transactionType->voucherCategory?->code === VoucherCategoryHelper::customerCode()
                 || (

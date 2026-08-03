@@ -3,11 +3,15 @@
 namespace App\Http\Requests;
 
 use App\Helpers\VoucherTransactionTypeHelper;
+use App\Http\Requests\Concerns\ValidatesVoucherTransactionTypeSelection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class PaymentVoucherRequest extends FormRequest
 {
+    use ValidatesVoucherTransactionTypeSelection;
+
     public function authorize(): bool
     {
         return true;
@@ -44,6 +48,20 @@ class PaymentVoucherRequest extends FormRequest
             'vouchers.*.amount.gt' => 'Amount must be greater than zero.',
             'from_account_id.different' => 'The source and destination accounts must be different.',
             'vouchers.*.from_account_id.different' => 'The source and destination accounts must be different.',
+            'voucher_transaction_type_id.exists' => 'The selected transaction type is not valid for this voucher.',
+            'vouchers.*.voucher_transaction_type_id.exists' => 'The selected transaction type is not valid for this voucher.',
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $this->validateVoucherTransactionTypeSelections(
+                    $validator,
+                    VoucherTransactionTypeHelper::paymentVoucherType()
+                );
+            },
         ];
     }
 
@@ -58,12 +76,7 @@ class PaymentVoucherRequest extends FormRequest
             'voucher_transaction_type_id' => [
                 'required',
                 'integer',
-                Rule::exists('voucher_transaction_types', 'id')
-                    ->where('status', true)
-                    ->whereIn('voucher_type', [
-                        VoucherTransactionTypeHelper::paymentVoucherType(),
-                        VoucherTransactionTypeHelper::bothVoucherType(),
-                    ]),
+                Rule::exists('voucher_transaction_types', 'id'),
             ],
             'from_account_id' => [
                 'required',

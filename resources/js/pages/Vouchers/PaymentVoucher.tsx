@@ -35,12 +35,6 @@ interface VoucherCategory {
     name: string;
 }
 
-interface VoucherTransactionType {
-    id: number;
-    name: string;
-    voucher_category_id: number;
-}
-
 interface Account {
     id: number;
     name: string;
@@ -77,7 +71,8 @@ interface PaymentVoucherProps {
     shifts: Shift[];
     closedShifts: Array<{close_date: string; shift_id: number}>;
     voucherCategories: VoucherCategory[];
-    voucherTransactionTypes: VoucherTransactionType[];
+    voucherType: string;
+    transactionTypeOptionsUrl: string;
     filters: {
         search?: string;
         payment_method?: string;
@@ -89,7 +84,7 @@ interface PaymentVoucherProps {
     };
 }
 
-export default function PaymentVoucher({ vouchers, accounts = [], groupedAccounts = {}, shifts = [], closedShifts = [], voucherCategories = [], voucherTransactionTypes = [], filters }: PaymentVoucherProps) {
+export default function PaymentVoucher({ vouchers, accounts = [], groupedAccounts = {}, shifts = [], closedShifts = [], voucherCategories = [], voucherType, transactionTypeOptionsUrl, filters }: PaymentVoucherProps) {
     const { can } = usePermission();
     const hasActionPermission = can('update-voucher') || can('delete-voucher');
     const canFilter = can('can-voucher-filter');
@@ -480,7 +475,8 @@ export default function PaymentVoucher({ vouchers, accounts = [], groupedAccount
                     shifts={shifts}
                     closedShifts={closedShifts}
                     voucherCategories={voucherCategories}
-                    voucherTransactionTypes={voucherTransactionTypes}
+                    voucherType={voucherType}
+                    transactionTypeOptionsUrl={transactionTypeOptionsUrl}
                 />
 
                 <DeleteModal

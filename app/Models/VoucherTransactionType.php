@@ -55,10 +55,14 @@ class VoucherTransactionType extends Model
 
     public function scopeForVoucherType(Builder $query, string $voucherType): Builder
     {
-        return $query->whereIn('voucher_type', [
-            $voucherType,
-            VoucherTransactionTypeHelper::bothVoucherType(),
-        ]);
+        return $query->where('voucher_type', $voucherType);
+    }
+
+    public function scopeForCategory(
+        Builder $query,
+        int $voucherCategoryId
+    ): Builder {
+        return $query->where('voucher_category_id', $voucherCategoryId);
     }
 
     public function getTypeAttribute(): ?string
