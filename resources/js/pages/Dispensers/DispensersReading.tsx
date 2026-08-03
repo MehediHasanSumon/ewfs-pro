@@ -251,10 +251,10 @@ export default function DispenserReading({
         dispenser_readings: dispenserReading.map((reading) => ({
             dispenser_id: reading.dispenser_id,
             product_id: reading.product_id,
-            item_rate: reading.item_rate,
-            start_reading: reading.start_reading,
-            end_reading: reading.end_reading,
-            meter_test: reading.meter_test || 0,
+            item_rate: Number(reading.item_rate) || 0,
+            start_reading: Number(reading.start_reading) || 0,
+            end_reading: Number(reading.end_reading) || 0,
+            meter_test: Number(reading.meter_test) || 0,
             reading_by: '',
             net_reading: 0,
             total_sale: 0,
@@ -1194,12 +1194,14 @@ export default function DispenserReading({
                                                                 'No Product Assigned'}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {reading.item_rate}
+                                                            {Number(
+                                                                reading.item_rate,
+                                                            ).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {
-                                                                reading.start_reading
-                                                            }
+                                                            {Number(
+                                                                reading.start_reading,
+                                                            ).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
                                                             <Input
@@ -1445,7 +1447,9 @@ export default function DispenserReading({
                                                             {(Number(product.sales_price) || 0).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {currentStock}
+                                                            {currentStock.toFixed(
+                                                                2,
+                                                            )}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
                                                             <Input
@@ -1470,7 +1474,9 @@ export default function DispenserReading({
                                                             />
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {newStock}
+                                                            {Number(
+                                                                newStock,
+                                                            ).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
                                                             <Select
@@ -1588,7 +1594,9 @@ export default function DispenserReading({
                                                             {name}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {rate}
+                                                            {Number(
+                                                                rate,
+                                                            ).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
                                                             {productData.net_reading.toFixed(2)}
@@ -1628,7 +1636,9 @@ export default function DispenserReading({
                                                             {(Number(product.sales_price) || 0).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
-                                                            {sale.sell_quantity}
+                                                            {Number(
+                                                                sale.sell_quantity,
+                                                            ).toFixed(2)}
                                                         </td>
                                                         <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:text-white">
                                                             {totalSale.toFixed(2)}
