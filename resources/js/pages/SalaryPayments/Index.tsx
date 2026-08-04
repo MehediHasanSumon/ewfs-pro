@@ -42,7 +42,6 @@ interface SalaryEmployee {
     payment_account: {
         id: number;
         name: string;
-        ac_number: string;
     } | null;
     monthly_salary: number;
     pay_amount: number;
@@ -639,17 +638,6 @@ export default function SalaryPaymentIndex({
                                                                     ?.name ??
                                                                     'Not configured'}
                                                             </p>
-                                                            {employee
-                                                                .payment_account
-                                                                ?.ac_number && (
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    {
-                                                                        employee
-                                                                            .payment_account
-                                                                            .ac_number
-                                                                    }
-                                                                </p>
-                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="p-3 text-right text-[13px] whitespace-nowrap tabular-nums dark:text-gray-300">

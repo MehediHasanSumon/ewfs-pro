@@ -41,7 +41,6 @@ class SalaryPaymentEmployeeResource extends JsonResource
             'payment_account' => $paymentAccount ? [
                 'id' => $paymentAccount->id,
                 'name' => $paymentAccount->name,
-                'ac_number' => $paymentAccount->ac_number,
             ] : null,
             'monthly_salary' => $grossSalary,
             'pay_amount' => $grossSalary,
