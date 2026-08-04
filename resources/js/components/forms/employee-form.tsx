@@ -20,11 +20,26 @@ import {
 import { useFocusFirstError } from '@/hooks/use-focus-first-error';
 import { router } from '@inertiajs/react';
 import { Calculator, LoaderCircle, Save } from 'lucide-react';
-import { type FormEvent, useRef, useState } from 'react';
+import { type FormEvent, useMemo, useRef, useState } from 'react';
 
 export interface EmployeeOption {
     id: number;
     name: string;
+}
+
+export interface EmployeePaymentMethodOption {
+    value: string;
+    label: string;
+    group_codes: string[];
+}
+
+export interface EmployeePaymentGroupOption extends EmployeeOption {
+    code: string;
+}
+
+export interface EmployeePaymentAccountOption extends EmployeeOption {
+    group_id: number;
+    ac_number: string;
 }
 
 export interface EmployeeUploadLimits {
@@ -34,6 +49,9 @@ export interface EmployeeUploadLimits {
 
 export interface EmployeeFormData {
     employee_name: string;
+    payment_method: string;
+    payment_account_group_id: string;
+    payment_account_id: string;
     email: string;
     mobile: string;
     mobile_two: string;
@@ -82,6 +100,9 @@ interface EmployeeFormProps {
     departments: EmployeeOption[];
     designations: EmployeeOption[];
     empTypes: EmployeeOption[];
+    paymentMethods: EmployeePaymentMethodOption[];
+    paymentAccountGroups: EmployeePaymentGroupOption[];
+    paymentAccounts: EmployeePaymentAccountOption[];
     uploadLimits: EmployeeUploadLimits;
     existingFiles?: ExistingEmployeeFiles;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -101,6 +122,9 @@ export function EmployeeForm({
     departments,
     designations,
     empTypes,
+    paymentMethods,
+    paymentAccountGroups,
+    paymentAccounts,
     uploadLimits,
     existingFiles = {},
     onSubmit,
@@ -109,6 +133,29 @@ export function EmployeeForm({
     const formRef = useRef<HTMLFormElement>(null);
     const [salaryOpen, setSalaryOpen] = useState(false);
     const grossSalary = calculateSalary(data.salary_structure).grossSalary;
+    const selectedPaymentMethod = useMemo(
+        () =>
+            paymentMethods.find(
+                (method) => method.value === data.payment_method,
+            ),
+        [data.payment_method, paymentMethods],
+    );
+    const availablePaymentGroups = useMemo(
+        () =>
+            paymentAccountGroups.filter((group) =>
+                selectedPaymentMethod?.group_codes.includes(group.code),
+            ),
+        [paymentAccountGroups, selectedPaymentMethod],
+    );
+    const availablePaymentAccounts = useMemo(
+        () =>
+            paymentAccounts.filter(
+                (account) =>
+                    account.group_id.toString() ===
+                    data.payment_account_group_id,
+            ),
+        [data.payment_account_group_id, paymentAccounts],
+    );
 
     useFocusFirstError(formRef, errors);
 
@@ -300,6 +347,99 @@ export function EmployeeForm({
                                 error('salary_structure.deductions')
                             }
                         />
+                    </div>
+
+                    <div>
+                        <Label htmlFor="payment_method">Payment Method *</Label>
+                        <Select
+                            value={data.payment_method}
+                            onValueChange={(value) => {
+                                setData('payment_method', value);
+                                setData('payment_account_group_id', '');
+                                setData('payment_account_id', '');
+                            }}
+                        >
+                            <SelectTrigger
+                                id="payment_method"
+                                className={fieldClass}
+                            >
+                                <SelectValue placeholder="Select payment method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {paymentMethods.map((method) => (
+                                    <SelectItem
+                                        key={method.value}
+                                        value={method.value}
+                                    >
+                                        {method.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={error('payment_method')} />
+                    </div>
+
+                    <div>
+                        <Label htmlFor="payment_account_group_id">
+                            Account Group *
+                        </Label>
+                        <Select
+                            value={data.payment_account_group_id}
+                            onValueChange={(value) => {
+                                setData('payment_account_group_id', value);
+                                setData('payment_account_id', '');
+                            }}
+                            disabled={!data.payment_method}
+                        >
+                            <SelectTrigger
+                                id="payment_account_group_id"
+                                className={fieldClass}
+                            >
+                                <SelectValue placeholder="Select account group" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availablePaymentGroups.map((group) => (
+                                    <SelectItem
+                                        key={group.id}
+                                        value={group.id.toString()}
+                                    >
+                                        {group.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError
+                            message={error('payment_account_group_id')}
+                        />
+                    </div>
+
+                    <div>
+                        <Label htmlFor="payment_account_id">Account *</Label>
+                        <Select
+                            value={data.payment_account_id}
+                            onValueChange={(value) =>
+                                setData('payment_account_id', value)
+                            }
+                            disabled={!data.payment_account_group_id}
+                        >
+                            <SelectTrigger
+                                id="payment_account_id"
+                                className={fieldClass}
+                            >
+                                <SelectValue placeholder="Select payment account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availablePaymentAccounts.map((account) => (
+                                    <SelectItem
+                                        key={account.id}
+                                        value={account.id.toString()}
+                                    >
+                                        {account.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={error('payment_account_id')} />
                     </div>
 
                     <div>

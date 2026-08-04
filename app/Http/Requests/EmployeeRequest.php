@@ -2,8 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Services\PaymentAccountService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator;
 
 class EmployeeRequest extends FormRequest
 {
@@ -16,11 +20,23 @@ class EmployeeRequest extends FormRequest
     {
         $imageMax = (int) config('erp.employee_uploads.image_max_kb', 5120);
         $nidMax = (int) config('erp.employee_uploads.nid_max_kb', 10240);
+        $paymentMethods = app(PaymentAccountService::class)->methods();
 
         return [
             'employee_code' => ['prohibited'],
             'salary' => ['prohibited'],
             'employee_name' => ['required', 'string', 'max:100'],
+            'payment_method' => ['required', 'string', Rule::in($paymentMethods)],
+            'payment_account_group_id' => [
+                'required',
+                'integer',
+                Rule::exists('groups', 'id')->where('status', true),
+            ],
+            'payment_account_id' => [
+                'required',
+                'integer',
+                Rule::exists('accounts', 'id')->where('status', true),
+            ],
             'email' => ['nullable', 'email', 'max:150'],
             'emp_type_id' => ['nullable', 'exists:emp_types,id'],
             'department_id' => ['nullable', 'exists:emp_departments,id'],
@@ -69,6 +85,35 @@ class EmployeeRequest extends FormRequest
         ];
     }
 
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->hasAny([
+                    'payment_method',
+                    'payment_account_group_id',
+                    'payment_account_id',
+                ])) {
+                    return;
+                }
+
+                try {
+                    app(PaymentAccountService::class)->resolve(
+                        $this->integer('payment_account_id'),
+                        (string) $this->input('payment_method'),
+                        'payment_account_id',
+                        $this->integer('payment_account_group_id')
+                    );
+                } catch (ValidationException) {
+                    $validator->errors()->add(
+                        'payment_account_id',
+                        'The selected account is not valid for the selected payment method.'
+                    );
+                }
+            },
+        ];
+    }
+
     public function messages(): array
     {
         return [
@@ -77,6 +122,7 @@ class EmployeeRequest extends FormRequest
             'salary_structure.required' => 'Configure the employee salary structure.',
             'salary_structure.basic_salary.required' => 'Basic Salary is required.',
             'salary_structure.basic_salary.gt' => 'Basic Salary must be greater than zero.',
+            'payment_account_id.required' => 'Select a payment account.',
         ];
     }
 }

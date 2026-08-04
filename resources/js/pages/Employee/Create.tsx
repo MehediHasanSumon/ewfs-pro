@@ -2,6 +2,9 @@ import {
     EmployeeForm,
     type EmployeeFormData,
     type EmployeeOption,
+    type EmployeePaymentAccountOption,
+    type EmployeePaymentGroupOption,
+    type EmployeePaymentMethodOption,
     type EmployeeUploadLimits,
 } from '@/components/forms/employee-form';
 import { Button } from '@/components/ui/button';
@@ -22,11 +25,17 @@ interface CreateEmployeeProps {
     departments: EmployeeOption[];
     designations: EmployeeOption[];
     empTypes: EmployeeOption[];
+    paymentMethods: EmployeePaymentMethodOption[];
+    paymentAccountGroups: EmployeePaymentGroupOption[];
+    paymentAccounts: EmployeePaymentAccountOption[];
     employeeUploadLimits: EmployeeUploadLimits;
 }
 
 const initialData: EmployeeFormData = {
     employee_name: '',
+    payment_method: '',
+    payment_account_group_id: '',
+    payment_account_id: '',
     email: '',
     mobile: '',
     mobile_two: '',
@@ -69,6 +78,9 @@ export default function CreateEmployee({
     departments = [],
     designations = [],
     empTypes = [],
+    paymentMethods = [],
+    paymentAccountGroups = [],
+    paymentAccounts = [],
     employeeUploadLimits = {
         image_max_kb: 5120,
         nid_max_kb: 10240,
@@ -115,6 +127,9 @@ export default function CreateEmployee({
                             departments={departments}
                             designations={designations}
                             empTypes={empTypes}
+                            paymentMethods={paymentMethods}
+                            paymentAccountGroups={paymentAccountGroups}
+                            paymentAccounts={paymentAccounts}
                             uploadLimits={employeeUploadLimits}
                             onSubmit={handleSubmit}
                             setData={setData}

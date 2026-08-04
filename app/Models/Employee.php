@@ -11,6 +11,7 @@ class Employee extends Model
 {
     protected $fillable = [
         'account_id',
+        'payment_account_id',
         'user_id',
         'emp_type_id',
         'department_id',
@@ -64,6 +65,11 @@ class Employee extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'account_id');
+    }
+
+    public function paymentAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'payment_account_id');
     }
 
     public function user(): BelongsTo

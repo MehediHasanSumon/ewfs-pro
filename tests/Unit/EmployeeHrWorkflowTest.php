@@ -2,10 +2,12 @@
 
 use App\Helpers\VoucherHelper;
 use App\Http\Requests\EmployeeRequest;
+use App\Http\Resources\EmployeeResource;
 use App\Models\Account;
 use App\Services\DocumentNumberService;
 use App\Services\EmployeeProfileService;
 use App\Services\PartyAccountService;
+use App\Services\PaymentAccountService;
 use App\Services\SalaryStructureService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -19,8 +21,20 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 beforeEach(function () {
+    Schema::create('groups', function (Blueprint $table) {
+        $table->id();
+        $table->string('code')->unique();
+        $table->string('name');
+        $table->string('account_class');
+        $table->string('normal_balance');
+        $table->boolean('status')->default(true);
+        $table->timestamps();
+    });
+
     Schema::create('accounts', function (Blueprint $table) {
         $table->id();
+        $table->foreignId('group_id');
+        $table->string('ac_number')->unique();
         $table->string('name');
         $table->boolean('status')->default(true);
         $table->timestamps();
@@ -29,6 +43,7 @@ beforeEach(function () {
     Schema::create('employees', function (Blueprint $table) {
         $table->id();
         $table->foreignId('account_id')->nullable();
+        $table->foreignId('payment_account_id')->nullable();
         $table->string('employee_code')->unique();
         $table->string('employee_name');
         $table->string('email')->nullable();
@@ -88,17 +103,76 @@ beforeEach(function () {
         $table->unique(['document_type', 'fiscal_year']);
     });
 
+    DB::table('groups')->insert([
+        [
+            'id' => 1,
+            'code' => '40002',
+            'name' => 'Employee Management',
+            'account_class' => 'liability',
+            'normal_balance' => 'credit',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => 2,
+            'code' => '100020002',
+            'name' => 'Cash in hand',
+            'account_class' => 'asset',
+            'normal_balance' => 'debit',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => 3,
+            'code' => '100020004',
+            'name' => 'Bank Account',
+            'account_class' => 'asset',
+            'normal_balance' => 'debit',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
     DB::table('accounts')->insert([
-        'id' => 1,
-        'name' => 'Employee Account',
-        'status' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
+        [
+            'id' => 1,
+            'group_id' => 1,
+            'ac_number' => 'EMP-LEDGER',
+            'name' => 'Employee Account',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => 2,
+            'group_id' => 2,
+            'ac_number' => 'CASH-001',
+            'name' => 'Office Cash',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => 3,
+            'group_id' => 3,
+            'ac_number' => 'BANK-001',
+            'name' => 'Dutch Bangla Bank',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
     ]);
 
     Storage::fake('public');
     config()->set('erp.employee_uploads.disk', 'public');
     config()->set('erp.employee_uploads.directory', 'employees');
+    config()->set('erp.accounting.payment_groups', [
+        'Cash' => ['100020002'],
+        'Bank' => ['100020004'],
+    ]);
 });
 
 function employeeProfileService(): EmployeeProfileService
@@ -119,6 +193,9 @@ function employeePayload(array $overrides = []): array
 {
     return array_replace_recursive([
         'employee_name' => 'Test Employee',
+        'payment_method' => 'Cash',
+        'payment_account_group_id' => 2,
+        'payment_account_id' => 2,
         'status' => true,
         'photo' => UploadedFile::fake()->create(
             'employee.jpg',
@@ -158,6 +235,7 @@ it('creates employee uploads, a sequential code, and normalized salary structure
 
     expect($employee->employee_code)->toBe('EMP000001')
         ->and($secondEmployee->employee_code)->toBe('EMP000002')
+        ->and($employee->payment_account_id)->toBe(2)
         ->and((float) $employee->salary)->toBe(31000.0)
         ->and((float) $employee->salaryStructure->gross_salary)->toBe(31000.0)
         ->and((float) $employee->salaryStructure->home_rent_amount)->toBe(8000.0)
@@ -237,4 +315,47 @@ it('does not allow deductions to produce a non-positive gross salary', function 
         'other_allowances' => 0,
         'deductions' => 1000,
     ]))->toThrow(ValidationException::class);
+});
+
+it('loads only configured active payment groups and accounts', function () {
+    $options = (new PaymentAccountService)->formOptions();
+
+    expect($options['paymentMethods']->pluck('value')->all())
+        ->toBe(['Cash', 'Bank'])
+        ->and($options['paymentAccountGroups']->pluck('id')->all())
+        ->toBe([3, 2])
+        ->and($options['paymentAccounts']->pluck('id')->sort()->values()->all())
+        ->toBe([2, 3]);
+});
+
+it('rejects an account outside the selected payment method and group', function () {
+    $payload = employeePayload([
+        'payment_method' => 'Cash',
+        'payment_account_group_id' => 2,
+        'payment_account_id' => 3,
+    ]);
+    $request = EmployeeRequest::create('/employees', 'POST', $payload);
+    $request->setContainer(app());
+    $validator = Validator::make(
+        $payload,
+        $request->rules(),
+        $request->messages()
+    );
+
+    $validator->passes();
+    foreach ($request->after() as $callback) {
+        $callback($validator);
+    }
+
+    expect($validator->errors()->first('payment_account_id'))
+        ->toBe('The selected account is not valid for the selected payment method.');
+});
+
+it('hydrates the saved payment account and group for employee edit mode', function () {
+    $employee = employeeProfileService()->create(employeePayload())
+        ->load('paymentAccount.group');
+    $resource = (new EmployeeResource($employee))->resolve();
+
+    expect($resource['payment_account_id'])->toBe(2)
+        ->and($resource['payment_account_group_id'])->toBe(2);
 });

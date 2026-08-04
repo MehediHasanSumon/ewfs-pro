@@ -12,6 +12,7 @@ use App\Models\EmpType;
 use App\Models\Group;
 use App\Services\EmployeeProfileService;
 use App\Services\PartyLedgerService;
+use App\Services\PaymentAccountService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -31,7 +32,8 @@ class EmployeeController extends Controller implements HasMiddleware
 
     public function __construct(
         private readonly PartyLedgerService $partyLedger,
-        private readonly EmployeeProfileService $employeeProfiles
+        private readonly EmployeeProfileService $employeeProfiles,
+        private readonly PaymentAccountService $paymentAccounts
     ) {}
 
     public static function middleware(): array
@@ -122,7 +124,14 @@ class EmployeeController extends Controller implements HasMiddleware
 
     public function show(Employee $employee)
     {
-        $employee->load('account', 'empType', 'department', 'designation', 'salaryStructure');
+        $employee->load(
+            'account',
+            'paymentAccount.group',
+            'empType',
+            'department',
+            'designation',
+            'salaryStructure'
+        );
 
         $salaryQuery = $this->employeeVouchers($employee, 'payment', self::SALARY_CODES);
         $advanceQuery = $this->employeeVouchers($employee, 'payment', self::ADVANCE_CODES);
@@ -171,7 +180,14 @@ class EmployeeController extends Controller implements HasMiddleware
 
     public function edit(Employee $employee)
     {
-        $employee->load('account', 'empType', 'department', 'designation', 'salaryStructure');
+        $employee->load(
+            'account',
+            'paymentAccount.group',
+            'empType',
+            'department',
+            'designation',
+            'salaryStructure'
+        );
 
         return Inertia::render('Employee/Update', [
             'employee' => EmployeeResource::make($employee)->resolve(),
@@ -371,6 +387,7 @@ class EmployeeController extends Controller implements HasMiddleware
             'departments' => EmpDepartment::query()->where('status', true)->get(['id', 'name']),
             'designations' => EmpDesignation::query()->where('status', true)->get(['id', 'name']),
             'groups' => Group::query()->active()->get(['id', 'code', 'name']),
+            ...$this->paymentAccounts->formOptions(),
             'employeeUploadLimits' => [
                 'image_max_kb' => (int) config('erp.employee_uploads.image_max_kb', 5120),
                 'nid_max_kb' => (int) config('erp.employee_uploads.nid_max_kb', 10240),

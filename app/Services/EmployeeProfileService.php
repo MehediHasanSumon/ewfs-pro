@@ -124,6 +124,7 @@ class EmployeeProfileService
     private function employeePayload(array $validated, bool $status): array
     {
         return [
+            'payment_account_id' => $validated['payment_account_id'] ?? null,
             'emp_type_id' => $validated['emp_type_id'] ?? null,
             'department_id' => $validated['department_id'] ?? null,
             'designation_id' => $validated['designation_id'] ?? null,

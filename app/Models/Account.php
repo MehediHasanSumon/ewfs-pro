@@ -47,6 +47,11 @@ class Account extends Model
         return $this->hasOne(Employee::class);
     }
 
+    public function paymentEmployees(): HasMany
+    {
+        return $this->hasMany(Employee::class, 'payment_account_id');
+    }
+
     public function supplier(): HasOne
     {
         return $this->hasOne(Supplier::class);

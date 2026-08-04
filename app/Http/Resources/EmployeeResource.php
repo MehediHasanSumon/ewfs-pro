@@ -14,6 +14,11 @@ class EmployeeResource extends JsonResource
             'id' => $this->id,
             'employee_code' => $this->employee_code,
             'employee_name' => $this->employee_name,
+            'payment_account_id' => $this->payment_account_id,
+            'payment_account_group_id' => $this->whenLoaded(
+                'paymentAccount',
+                fn () => $this->paymentAccount?->group_id
+            ),
             'email' => $this->email,
             'mobile' => $this->mobile,
             'mobile_two' => $this->mobile_two,

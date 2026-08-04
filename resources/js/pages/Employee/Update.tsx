@@ -3,6 +3,9 @@ import {
     EmployeeForm,
     type EmployeeFormData,
     type EmployeeOption,
+    type EmployeePaymentAccountOption,
+    type EmployeePaymentGroupOption,
+    type EmployeePaymentMethodOption,
     type EmployeeUploadLimits,
     type ExistingEmployeeFiles,
 } from '@/components/forms/employee-form';
@@ -18,6 +21,8 @@ interface Employee extends ExistingEmployeeFiles {
     id: number;
     employee_code: string;
     employee_name: string;
+    payment_account_id?: number | null;
+    payment_account_group_id?: number | null;
     email?: string | null;
     mobile?: string | null;
     mobile_two?: string | null;
@@ -53,6 +58,9 @@ interface UpdateEmployeeProps {
     departments: EmployeeOption[];
     designations: EmployeeOption[];
     empTypes: EmployeeOption[];
+    paymentMethods: EmployeePaymentMethodOption[];
+    paymentAccountGroups: EmployeePaymentGroupOption[];
+    paymentAccounts: EmployeePaymentAccountOption[];
     employeeUploadLimits: EmployeeUploadLimits;
 }
 
@@ -69,15 +77,32 @@ export default function UpdateEmployee({
     departments = [],
     designations = [],
     empTypes = [],
+    paymentMethods = [],
+    paymentAccountGroups = [],
+    paymentAccounts = [],
     employeeUploadLimits = {
         image_max_kb: 5120,
         nid_max_kb: 10240,
     },
 }: UpdateEmployeeProps) {
     const salaryStructure = employee.salary_structure;
+    const paymentGroup = paymentAccountGroups.find(
+        (group) => group.id === employee.payment_account_group_id,
+    );
+    const paymentMethod =
+        paymentMethods.find((method) =>
+            paymentGroup
+                ? method.group_codes.includes(paymentGroup.code)
+                : false,
+        )?.value ?? '';
     const { data, setData, post, transform, processing, errors } =
         useForm<EmployeeFormData>({
             employee_name: employee.employee_name,
+            payment_method: paymentMethod,
+            payment_account_group_id:
+                employee.payment_account_group_id?.toString() ?? '',
+            payment_account_id:
+                employee.payment_account_id?.toString() ?? '',
             email: stringValue(employee.email),
             mobile: stringValue(employee.mobile),
             mobile_two: stringValue(employee.mobile_two),
@@ -173,6 +198,9 @@ export default function UpdateEmployee({
                             departments={departments}
                             designations={designations}
                             empTypes={empTypes}
+                            paymentMethods={paymentMethods}
+                            paymentAccountGroups={paymentAccountGroups}
+                            paymentAccounts={paymentAccounts}
                             uploadLimits={employeeUploadLimits}
                             existingFiles={employee}
                             onSubmit={handleSubmit}
