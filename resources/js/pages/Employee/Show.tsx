@@ -150,11 +150,15 @@ export default function ShowEmployee({
         });
     };
 
-    const formatCurrency = (amount: string) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD'
-        }).format(parseFloat(amount));
+    const formatAmount = (amount: number | string | null | undefined) => {
+        const numericAmount = Number(amount ?? 0);
+
+        return Number.isFinite(numericAmount)
+            ? numericAmount.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })
+            : '0.00';
     };
 
     const getStatusColor = (status: boolean) => {
@@ -206,13 +210,13 @@ export default function ShowEmployee({
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Salary</p>
-                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{(employee.salary || 0).toLocaleString()}</p>
+                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatAmount(employee.salary)}</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{monthsWorked} months worked</p>
                                 </div>
                             </div>
@@ -224,7 +228,7 @@ export default function ShowEmployee({
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Salary</p>
-                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{totalPaidSalary.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatAmount(totalPaidSalary)}</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{salaryPaymentCount} payments</p>
                                 </div>
                             </div>
@@ -236,8 +240,19 @@ export default function ShowEmployee({
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Net Advanced</p>
-                                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{netAdvanced.toLocaleString()}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Given: {totalAdvanced.toLocaleString()}, Returned: {totalAdvancedReturns.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{formatAmount(netAdvanced)}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Given: {formatAmount(totalAdvanced)}, Returned: {formatAmount(totalAdvancedReturns)}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Loan</p>
+                                    <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{formatAmount(0)}</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -255,7 +270,7 @@ export default function ShowEmployee({
                                                 ? 'text-green-600 dark:text-green-400' 
                                                 : 'text-gray-900 dark:text-white'
                                     }`}>
-                                        {salaryDue.toLocaleString()}
+                                        {formatAmount(salaryDue)}
                                     </p>
                                 </div>
                             </div>
@@ -276,7 +291,7 @@ export default function ShowEmployee({
                                                 ? 'text-red-600 dark:text-red-400' 
                                                 : 'text-gray-900 dark:text-white'
                                     }`}>
-                                        {Math.abs(netBalance).toLocaleString()}
+                                        {formatAmount(Math.abs(Number(netBalance)))}
                                     </p>
                                 </div>
                             </div>
@@ -429,7 +444,7 @@ export default function ShowEmployee({
                                         Salary
                                     </label>
                                     <p className="font-semibold dark:text-white">
-                                        {employee.salary?.toLocaleString() || 'Not Set'}
+                                        {employee.salary === null || employee.salary === undefined ? 'Not Set' : formatAmount(employee.salary)}
                                     </p>
                                 </div>
                                 <div>
@@ -497,7 +512,7 @@ export default function ShowEmployee({
                                                         <td className="py-2 text-gray-900 dark:text-white">{index + 1}</td>
                                                         <td className="py-2 text-gray-900 dark:text-white">{payment.voucher_no}</td>
                                                         <td className="py-2 text-gray-900 dark:text-white">{payment.date}</td>
-                                                        <td className="py-2 text-gray-900 dark:text-white">{payment.amount.toLocaleString()}</td>
+                                                        <td className="py-2 text-gray-900 dark:text-white">{formatAmount(payment.amount)}</td>
                                                         <td className="py-2 text-gray-600 dark:text-gray-400">{payment.sub_type}</td>
                                                         <td className="py-2 text-gray-600 dark:text-gray-400">{payment.type}</td>
                                                         <td className="py-2">
@@ -551,7 +566,7 @@ export default function ShowEmployee({
                                                         <td className="py-2 text-gray-900 dark:text-white">{index + 1}</td>
                                                         <td className="py-2 text-gray-900 dark:text-white">{payment.voucher_no}</td>
                                                         <td className="py-2 text-gray-900 dark:text-white">{payment.date}</td>
-                                                        <td className="py-2 text-gray-900 dark:text-white">{payment.amount.toLocaleString()}</td>
+                                                        <td className="py-2 text-gray-900 dark:text-white">{formatAmount(payment.amount)}</td>
                                                         <td className="py-2 text-gray-600 dark:text-gray-400">{payment.sub_type}</td>
                                                         <td className="py-2 text-gray-600 dark:text-gray-400">{payment.type}</td>
                                                         <td className="py-2">
