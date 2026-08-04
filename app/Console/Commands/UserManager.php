@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Helpers\SalaryPaymentHelper;
 use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\User;
@@ -493,6 +494,7 @@ class UserManager extends Command
                 'view-s-m-s-template',
                 'can-s-m-s-template-filter',
                 'can-s-m-s-template-download',
+                ...SalaryPaymentHelper::permissionNames(),
                 ...VoucherCategoryHelper::permissionNames(),
                 ...VoucherTransactionTypeHelper::permissionNames(),
             ];

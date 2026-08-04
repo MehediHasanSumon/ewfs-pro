@@ -342,7 +342,6 @@ function salaryPaymentPayload(array $employeeIds): array
         'salary_month' => 8,
         'salary_year' => 2026,
         'employee_ids' => $employeeIds,
-        'remarks' => [],
     ];
 }
 
@@ -404,11 +403,7 @@ it('creates standard payment vouchers and journals from employee payroll data', 
         'salaryStructure',
         'salaryPayments.paymentVoucher.journalEntry',
     ]);
-    $resource = (new SalaryPaymentEmployeeResource(
-        $employee,
-        8,
-        2026
-    ))->resolve();
+    $resource = (new SalaryPaymentEmployeeResource($employee))->resolve();
 
     expect($resource['payment_method'])->toBe('Cash')
         ->and($resource['monthly_salary'])->toBe(21000.0)

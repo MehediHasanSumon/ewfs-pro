@@ -35,7 +35,6 @@ interface NamedOption {
 
 interface SalaryEmployee {
     id: number;
-    employee_code: string;
     employee_name: string;
     department: NamedOption | null;
     designation: NamedOption | null;
@@ -47,7 +46,6 @@ interface SalaryEmployee {
     } | null;
     monthly_salary: number;
     pay_amount: number;
-    remarks: string;
     payment_status: 'pending' | 'already_paid';
     can_select: boolean;
     configuration_error: string | null;
@@ -151,7 +149,6 @@ export default function SalaryPaymentIndex({
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>(
         [],
     );
-    const [remarks, setRemarks] = useState<Record<number, string>>({});
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -277,18 +274,6 @@ export default function SalaryPaymentIndex({
                 salary_month: Number(salaryMonth),
                 salary_year: Number(salaryYear),
                 employee_ids: selectedEmployeeIds,
-                remarks: Object.fromEntries(
-                    selectedEmployeeIds.map((employeeId) => {
-                        const employee = employees.data.find(
-                            (row) => row.id === employeeId,
-                        );
-
-                        return [
-                            employeeId,
-                            remarks[employeeId] ?? employee?.remarks ?? '',
-                        ];
-                    }),
-                ),
             },
             {
                 preserveScroll: true,
@@ -564,7 +549,7 @@ export default function SalaryPaymentIndex({
                 <Card>
                     <CardContent>
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1320px]">
+                            <table className="w-full min-w-[1080px]">
                                 <thead>
                                     <tr className="border-b dark:border-gray-700">
                                         <th className="w-14 p-3 text-left">
@@ -584,7 +569,6 @@ export default function SalaryPaymentIndex({
                                             />
                                         </th>
                                         {[
-                                            'Employee Code',
                                             'Employee Name',
                                             'Department',
                                             'Designation',
@@ -592,7 +576,6 @@ export default function SalaryPaymentIndex({
                                             'Account',
                                             'Monthly Salary',
                                             'Pay Amount',
-                                            'Remarks',
                                             'Status',
                                         ].map((heading) => (
                                             <th
@@ -630,9 +613,6 @@ export default function SalaryPaymentIndex({
                                                             }
                                                             aria-label={`Select ${employee.employee_name}`}
                                                         />
-                                                    </td>
-                                                    <td className="p-3 text-[13px] whitespace-nowrap dark:text-gray-200">
-                                                        {employee.employee_code}
                                                     </td>
                                                     <td className="p-3 text-[13px] font-medium whitespace-nowrap dark:text-white">
                                                         {employee.employee_name}
@@ -682,31 +662,6 @@ export default function SalaryPaymentIndex({
                                                             employee.pay_amount,
                                                         )}
                                                     </td>
-                                                    <td className="w-80 p-3">
-                                                        <Input
-                                                            value={
-                                                                remarks[
-                                                                    employee.id
-                                                                ] ??
-                                                                employee.remarks
-                                                            }
-                                                            onChange={(event) =>
-                                                                setRemarks(
-                                                                    (current) => ({
-                                                                        ...current,
-                                                                        [employee.id]:
-                                                                            event
-                                                                                .target
-                                                                                .value,
-                                                                    }),
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                !employee.can_select
-                                                            }
-                                                            aria-label={`Remarks for ${employee.employee_name}`}
-                                                        />
-                                                    </td>
                                                     <td className="p-3">
                                                         {employee.payment_status ===
                                                         'already_paid' ? (
@@ -747,7 +702,7 @@ export default function SalaryPaymentIndex({
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={11}
+                                                colSpan={9}
                                                 className="p-10 text-center text-gray-500 dark:text-gray-400"
                                             >
                                                 <Users

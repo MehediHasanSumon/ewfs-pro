@@ -6,6 +6,30 @@ use Carbon\Carbon;
 
 class SalaryPaymentHelper
 {
+    public static function viewPermission(): string
+    {
+        return 'salary-payment-view';
+    }
+
+    public static function createPermission(): string
+    {
+        return 'salary-payment-create';
+    }
+
+    public static function historyPermission(): string
+    {
+        return 'salary-payment-history';
+    }
+
+    public static function permissionNames(): array
+    {
+        return [
+            self::viewPermission(),
+            self::createPermission(),
+            self::historyPermission(),
+        ];
+    }
+
     public static function periodLabel(int $month, int $year): string
     {
         return Carbon::create($year, $month, 1)->format('F Y');

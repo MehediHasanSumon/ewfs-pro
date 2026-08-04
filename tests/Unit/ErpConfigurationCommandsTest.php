@@ -1,6 +1,7 @@
 <?php
 
 use App\Helpers\ErpHelper;
+use App\Helpers\SalaryPaymentHelper;
 use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Category;
@@ -122,6 +123,10 @@ it('creates voucher master permissions through user manager setup', function () 
         ->toBeTrue()
         ->and($superAdmin->hasAllPermissions(
             VoucherTransactionTypeHelper::permissionNames()
+        ))
+        ->toBeTrue()
+        ->and($superAdmin->hasAllPermissions(
+            SalaryPaymentHelper::permissionNames()
         ))
         ->toBeTrue();
 });

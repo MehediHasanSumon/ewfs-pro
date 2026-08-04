@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\SalaryPaymentHelper;
 use App\Http\Requests\SalaryPaymentRequest;
 use App\Http\Resources\SalaryPaymentEmployeeResource;
 use App\Models\EmpDepartment;
@@ -27,10 +28,13 @@ class SalaryPaymentController extends Controller implements HasMiddleware
     {
         return [
             new Middleware(
-                'permission:view-employee|view-voucher',
+                'permission:'.SalaryPaymentHelper::viewPermission(),
                 only: ['index']
             ),
-            new Middleware('permission:create-voucher', only: ['store']),
+            new Middleware(
+                'permission:'.SalaryPaymentHelper::createPermission(),
+                only: ['store']
+            ),
         ];
     }
 
@@ -86,11 +90,7 @@ class SalaryPaymentController extends Controller implements HasMiddleware
             ->withQueryString()
             ->through(
                 fn (Employee $employee) => (
-                    new SalaryPaymentEmployeeResource(
-                        $employee,
-                        $month,
-                        $year
-                    )
+                    new SalaryPaymentEmployeeResource($employee)
                 )->resolve($request)
             );
 

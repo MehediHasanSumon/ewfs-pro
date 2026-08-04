@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Helpers\SalaryPaymentHelper;
 use App\Models\EmployeeSalaryPayment;
 use App\Services\PaymentAccountService;
 use Illuminate\Http\Request;
@@ -10,14 +9,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class SalaryPaymentEmployeeResource extends JsonResource
 {
-    public function __construct(
-        $resource,
-        private readonly int $salaryMonth,
-        private readonly int $salaryYear
-    ) {
-        parent::__construct($resource);
-    }
-
     public function toArray(Request $request): array
     {
         $paymentAccount = $this->paymentAccount;
@@ -37,7 +28,6 @@ class SalaryPaymentEmployeeResource extends JsonResource
 
         return [
             'id' => $this->id,
-            'employee_code' => $this->employee_code,
             'employee_name' => $this->employee_name,
             'department' => $this->department ? [
                 'id' => $this->department->id,
@@ -55,11 +45,6 @@ class SalaryPaymentEmployeeResource extends JsonResource
             ] : null,
             'monthly_salary' => $grossSalary,
             'pay_amount' => $grossSalary,
-            'remarks' => SalaryPaymentHelper::remarks(
-                $this->employee_name,
-                $this->salaryMonth,
-                $this->salaryYear
-            ),
             'payment_status' => $isPaid ? 'already_paid' : 'pending',
             'can_select' => ! $isPaid && $configurationError === null,
             'configuration_error' => $configurationError,
