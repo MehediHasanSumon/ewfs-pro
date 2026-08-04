@@ -138,6 +138,14 @@ class Voucher extends Model
             ->with(['account', 'paymentDetail']);
     }
 
+    public function salaryPayment(): HasOne
+    {
+        return $this->hasOne(
+            EmployeeSalaryPayment::class,
+            'payment_voucher_id'
+        );
+    }
+
     public function getDateAttribute(): ?string
     {
         return $this->voucher_date?->format('Y-m-d');

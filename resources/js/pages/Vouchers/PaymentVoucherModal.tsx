@@ -24,6 +24,7 @@ export interface PaymentVoucher {
     transaction?: { amount: number; payment_type: string };
     voucher_category?: { id: number; name: string };
     voucher_transaction_type?: { id: number; name: string };
+    salary_payment?: { id: number };
     description?: string;
     remarks: string;
     created_at: string;

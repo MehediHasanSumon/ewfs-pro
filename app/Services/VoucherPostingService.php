@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
+use App\Models\EmployeeSalaryPayment;
 use App\Models\Voucher;
 use App\Models\VoucherTransactionType;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class VoucherPostingService
@@ -79,11 +81,23 @@ class VoucherPostingService
 
     public function reverse(Voucher $voucher, string $reason = 'Voucher deleted from the workflow.'): void
     {
-        $voucher->loadMissing('journalEntry');
+        DB::transaction(function () use ($voucher, $reason): void {
+            $voucher->loadMissing('journalEntry');
 
-        if ($voucher->journalEntry?->status === 'posted') {
-            $this->accounting->reverse($voucher->journalEntry, $reason);
-        }
+            if ($voucher->journalEntry?->status === 'posted') {
+                $this->accounting->reverse($voucher->journalEntry, $reason);
+            }
+
+            if (Schema::hasTable('employee_salary_payments')) {
+                EmployeeSalaryPayment::query()
+                    ->where('payment_voucher_id', $voucher->id)
+                    ->where('status', EmployeeSalaryPayment::STATUS_PAID)
+                    ->update([
+                        'status' => EmployeeSalaryPayment::STATUS_REVERSED,
+                        'updated_at' => now(),
+                    ]);
+            }
+        });
     }
 
     private function createOne(

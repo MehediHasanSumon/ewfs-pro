@@ -227,6 +227,12 @@ const mainNavItems = [
         icon: UserCheck,
         children: [
             { title: 'Employees', href: '/employees', icon: UserCheck, permission: 'view-employee' },
+            {
+                title: 'Salary Payment',
+                href: '/salary-payments',
+                icon: DollarSign,
+                permission: 'view-employee',
+            },
             { title: 'Employee Type', href: '/emp-types', icon: Users, permission: 'view-emp-type' },
             { title: 'Department', href: '/emp-departments', icon: Building, permission: 'view-emp-department' },
             {

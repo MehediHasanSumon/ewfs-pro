@@ -35,6 +35,7 @@ use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseReportController;
 use App\Http\Controllers\ReceivedVoucherController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SalaryPaymentController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\ShiftClosedListController;
 use App\Http\Controllers\ShiftController;
@@ -257,6 +258,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
     Route::delete('employees/bulk/delete', [EmployeeController::class, 'bulkDelete'])->name('employees.bulk.delete');
     Route::get('employees/download-pdf', [EmployeeController::class, 'downloadPdf'])->name('employees.download.pdf');
+
+    // Salary Payment routes
+    Route::get('salary-payments', [SalaryPaymentController::class, 'index'])->name('salary-payments.index');
+    Route::post('salary-payments', [SalaryPaymentController::class, 'store'])->name('salary-payments.store');
 
     // Supplier routes
     Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');

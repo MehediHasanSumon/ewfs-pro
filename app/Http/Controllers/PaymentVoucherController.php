@@ -15,6 +15,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class PaymentVoucherController extends Controller implements HasMiddleware
@@ -83,6 +84,11 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::paymentVoucherType(),
             404
         );
+        if ($voucher->salaryPayment()->exists()) {
+            throw ValidationException::withMessages([
+                'voucher' => 'Salary payment vouchers cannot be edited from Payment Voucher. Reverse the voucher and process the salary again.',
+            ]);
+        }
         $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Payment voucher updated successfully.');
@@ -137,6 +143,7 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 'shift',
                 'voucherCategory',
                 'voucherTransactionType',
+                'salaryPayment:id,payment_voucher_id',
                 'lines.paymentDetail',
                 'transaction',
             ])

@@ -79,6 +79,35 @@ class PaymentAccountService
         return array_keys($this->paymentGroups());
     }
 
+    public function methodFor(Account $account): ?string
+    {
+        $account->loadMissing('group');
+        $group = $account->group;
+
+        if (
+            ! $account->status
+            || ! $group
+            || ! $group->status
+            || $group->account_class !== 'asset'
+        ) {
+            return null;
+        }
+
+        foreach ($this->paymentGroups() as $method => $groupCodes) {
+            if (
+                in_array(
+                    (string) $group->code,
+                    array_map('strval', $groupCodes),
+                    true
+                )
+            ) {
+                return $method;
+            }
+        }
+
+        return null;
+    }
+
     private function groupCodesFor(string $paymentType): array
     {
         return collect($this->paymentGroups()[$paymentType] ?? [])

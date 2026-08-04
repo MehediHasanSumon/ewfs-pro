@@ -58,6 +58,11 @@ class VoucherTransactionTypeHelper
         return self::getCode('customer', 'security_deposit_refund');
     }
 
+    public static function monthlySalaryCode(): string
+    {
+        return self::getCode('employee', 'monthly_salary');
+    }
+
     public static function voucherTypes(): array
     {
         $types = config('app.erp.voucher.types');

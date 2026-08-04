@@ -410,7 +410,8 @@ export default function PaymentVoucher({ vouchers, accounts = [], groupedAccount
                                                 {hasActionPermission && (
                                                     <td className="p-4">
                                                         <div className="flex gap-2">
-                                                            {can('update-voucher') && (
+                                                            {can('update-voucher') &&
+                                                                !voucher.salary_payment && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"

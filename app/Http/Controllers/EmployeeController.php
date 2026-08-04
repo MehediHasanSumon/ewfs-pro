@@ -367,6 +367,7 @@ class EmployeeController extends Controller implements HasMiddleware
     ): float {
         return (float) DB::table('voucher_lines as vl')
             ->join('vouchers as v', 'v.id', '=', 'vl.voucher_id')
+            ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
             ->leftJoin(
                 'voucher_transaction_types as pst',
                 'pst.id',
@@ -376,6 +377,7 @@ class EmployeeController extends Controller implements HasMiddleware
             ->where('vl.employee_id', $employee->id)
             ->where('v.voucher_type', $type)
             ->where('v.status', 'posted')
+            ->where('je.status', 'posted')
             ->when($subTypeCodes, fn ($query) => $query->whereIn('pst.code', $subTypeCodes))
             ->sum('vl.amount');
     }

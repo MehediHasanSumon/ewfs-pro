@@ -97,6 +97,11 @@ class Employee extends Model
         return $this->hasOne(EmployeeSalaryStructure::class);
     }
 
+    public function salaryPayments(): HasMany
+    {
+        return $this->hasMany(EmployeeSalaryPayment::class);
+    }
+
     public function shiftClosingProductItems(): HasMany
     {
         return $this->hasMany(ShiftClosingProductItem::class);
