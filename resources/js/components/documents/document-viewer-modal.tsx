@@ -144,18 +144,18 @@ export function DocumentViewerModal({
         origin: Point;
         pan: Point;
         pointerType: string;
-    }>();
+    } | undefined>(undefined);
     const pinchRef = useRef<{
         distance: number;
         scale: number;
         center: Point;
         pan: Point;
-    }>();
+    } | undefined>(undefined);
     const swipeRef = useRef<{
         pointerId: number;
         origin: Point;
         startedAt: number;
-    }>();
+    } | undefined>(undefined);
     const scaleRef = useRef(scale);
     const panRef = useRef(pan);
 
@@ -673,11 +673,6 @@ export function DocumentViewerModal({
                             />
                             Previous
                         </Button>
-                        <p className="min-w-0 flex-1 truncate text-center text-xs text-gray-500 dark:text-gray-400">
-                            {activeDocument?.fileName ??
-                                activeDocument?.title ??
-                                'No document'}
-                        </p>
                         <Button
                             type="button"
                             variant="outline"
