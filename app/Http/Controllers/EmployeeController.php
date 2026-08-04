@@ -162,7 +162,7 @@ class EmployeeController extends Controller implements HasMiddleware
         $salaryDue = max(0, (float) ($employee->salary ?? 0) * $monthsWorked - $totalPaidSalary);
 
         return Inertia::render('Employee/Show', [
-            'employee' => $employee,
+            'employee' => EmployeeResource::make($employee)->resolve(),
             'recentSalaryPayments' => $recentSalaryPayments,
             'recentAdvancedPayments' => $recentAdvancedPayments,
             'totalPaidSalary' => $totalPaidSalary,

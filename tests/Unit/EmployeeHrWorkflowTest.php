@@ -357,5 +357,9 @@ it('hydrates the saved payment account and group for employee edit mode', functi
     $resource = (new EmployeeResource($employee))->resolve();
 
     expect($resource['payment_account_id'])->toBe(2)
-        ->and($resource['payment_account_group_id'])->toBe(2);
+        ->and($resource['payment_account_group_id'])->toBe(2)
+        ->and($resource['photo_path'])->toBe($employee->photo)
+        ->and($resource['photo_url'])->toContain($employee->photo)
+        ->and($resource['signature_url'])->toContain($employee->signature)
+        ->and($resource['nid_document_url'])->toContain($employee->nid_document_path);
 });

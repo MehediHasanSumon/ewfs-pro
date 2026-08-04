@@ -1,6 +1,12 @@
+import { DocumentViewerButton } from '@/components/documents/document-viewer-button';
+import {
+    DocumentViewerModal,
+    type ViewerDocument,
+} from '@/components/documents/document-viewer-modal';
+import { EmployeeProfileImage } from '@/components/employee/employee-profile-image';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
@@ -8,19 +14,18 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { 
     ArrowLeft, 
-    Edit, 
-    Mail, 
-    Phone, 
-    MapPin, 
-    Calendar, 
-    DollarSign,
     Building,
-    User,
-    Clock,
+    Calendar,
+    Edit, 
+    FileSignature,
     FileText,
-    UserPlus,
-    Briefcase
+    IdCard,
+    Mail, 
+    MapPin, 
+    Phone,
+    User,
 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface Employee {
     id: number;
@@ -51,8 +56,14 @@ interface Employee {
     joining_date: string;
     status: boolean;
     status_date: string;
-    photo: string;
-    signature: string;
+    photo?: string | null;
+    photo_path?: string | null;
+    photo_url?: string | null;
+    signature?: string | null;
+    signature_path?: string | null;
+    signature_url?: string | null;
+    nid_document_path?: string | null;
+    nid_document_url?: string | null;
     highest_education: string;
     reference_one_name: string;
     reference_one_phone: string;
@@ -134,14 +145,74 @@ export default function ShowEmployee({
     totalPaidSalary, 
     salaryPaymentCount, 
     totalAdvanced, 
-    advancedCount, 
     totalAdvancedReturns,
-    advancedReturnCount,
     netAdvanced,
     salaryDue,
     netBalance,
     monthsWorked
 }: ShowEmployeeProps) {
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [initialDocumentId, setInitialDocumentId] = useState<string | null>(
+        null,
+    );
+    const documents = useMemo<ViewerDocument[]>(() => {
+        const collection: ViewerDocument[] = [];
+
+        if (employee.photo_url) {
+            collection.push({
+                id: 'employee-image',
+                title: 'Employee Image',
+                url: employee.photo_url,
+                kind: 'image',
+                fileName: employee.photo_path?.split('/').pop(),
+            });
+        }
+
+        if (employee.signature_url) {
+            collection.push({
+                id: 'employee-signature',
+                title: 'Employee Signature',
+                url: employee.signature_url,
+                kind: 'image',
+                fileName: employee.signature_path?.split('/').pop(),
+            });
+        }
+
+        if (employee.nid_document_url) {
+            collection.push({
+                id: 'employee-nid',
+                title: 'Employee NID',
+                url: employee.nid_document_url,
+                kind: employee.nid_document_path
+                    ?.toLowerCase()
+                    .endsWith('.pdf')
+                    ? 'pdf'
+                    : 'image',
+                fileName: employee.nid_document_path?.split('/').pop(),
+            });
+        }
+
+        return collection;
+    }, [
+        employee.nid_document_path,
+        employee.nid_document_url,
+        employee.photo_path,
+        employee.photo_url,
+        employee.signature_path,
+        employee.signature_url,
+    ]);
+    const availableDocumentIds = useMemo(
+        () => new Set(documents.map((document) => document.id)),
+        [documents],
+    );
+
+    const openDocument = (documentId: string) => {
+        if (!availableDocumentIds.has(documentId)) return;
+
+        setInitialDocumentId(documentId);
+        setViewerOpen(true);
+    };
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -310,23 +381,58 @@ export default function ShowEmployee({
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-6">
-                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                            Full Name
-                                        </label>
-                                        <p className="mt-1 text-lg font-semibold dark:text-white">
-                                            {employee.employee_name}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                            Status
-                                        </label>
-                                        <div className="mt-1">
-                                            <Badge className={getStatusColor(employee.status)}>
-                                                {getStatusText(employee.status)}
-                                            </Badge>
+                                <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                                    <EmployeeProfileImage
+                                        employeeName={employee.employee_name}
+                                        src={employee.photo_url}
+                                        onView={() =>
+                                            openDocument('employee-image')
+                                        }
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-4">
+                                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                                    Full Name
+                                                </label>
+                                                <p className="mt-1 text-lg font-semibold dark:text-white">
+                                                    {employee.employee_name}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                                    Status
+                                                </label>
+                                                <div className="mt-1">
+                                                    <Badge className={getStatusColor(employee.status)}>
+                                                        {getStatusText(employee.status)}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <DocumentViewerButton
+                                                label="View Signature"
+                                                icon={FileSignature}
+                                                available={availableDocumentIds.has(
+                                                    'employee-signature',
+                                                )}
+                                                onClick={() =>
+                                                    openDocument(
+                                                        'employee-signature',
+                                                    )
+                                                }
+                                            />
+                                            <DocumentViewerButton
+                                                label="View NID"
+                                                icon={IdCard}
+                                                available={availableDocumentIds.has(
+                                                    'employee-nid',
+                                                )}
+                                                onClick={() =>
+                                                    openDocument('employee-nid')
+                                                }
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -597,6 +703,15 @@ export default function ShowEmployee({
 
 
             </div>
+
+            {viewerOpen && (
+                <DocumentViewerModal
+                    open
+                    documents={documents}
+                    initialDocumentId={initialDocumentId}
+                    onOpenChange={setViewerOpen}
+                />
+            )}
         </AppLayout>
     );
 }

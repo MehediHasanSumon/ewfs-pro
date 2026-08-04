@@ -25,6 +25,27 @@ class EmployeeResource extends JsonResource
             'department_id' => $this->department_id,
             'designation_id' => $this->designation_id,
             'emp_type_id' => $this->emp_type_id,
+            'department' => $this->whenLoaded(
+                'department',
+                fn () => $this->department ? [
+                    'id' => $this->department->id,
+                    'name' => $this->department->name,
+                ] : null
+            ),
+            'designation' => $this->whenLoaded(
+                'designation',
+                fn () => $this->designation ? [
+                    'id' => $this->designation->id,
+                    'name' => $this->designation->name,
+                ] : null
+            ),
+            'emp_type' => $this->whenLoaded(
+                'empType',
+                fn () => $this->empType ? [
+                    'id' => $this->empType->id,
+                    'name' => $this->empType->name,
+                ] : null
+            ),
             'dob' => $this->dob?->format('Y-m-d'),
             'gender' => $this->gender,
             'blood_group' => $this->blood_group,

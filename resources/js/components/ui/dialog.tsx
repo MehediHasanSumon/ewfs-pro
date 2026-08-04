@@ -44,11 +44,18 @@ function DialogOverlay({
   )
 }
 
+type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Content> & {
+  movable?: boolean
+  windowControls?: boolean
+}
+
 function DialogContent({
   className,
   children,
+  movable = true,
+  windowControls = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: DialogContentProps) {
   const [isMaximized, setIsMaximized] = React.useState(false)
   const [position, setPosition] = React.useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = React.useState(false)
@@ -56,7 +63,7 @@ function DialogContent({
   const contentRef = React.useRef<HTMLDivElement>(null)
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isMaximized) return
+    if (isMaximized || !movable) return
     setIsDragging(true)
     setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
     e.preventDefault()
@@ -116,28 +123,32 @@ function DialogContent({
         }}
         {...props}
       >
-        <div
-          className={cn(
-            "absolute top-0 left-0 right-12 h-10 select-none",
-            !isMaximized && "cursor-move"
-          )}
-          onMouseDown={handleMouseDown}
-        />
+        {movable && (
+          <div
+            className={cn(
+              "absolute top-0 left-0 right-12 h-10 select-none",
+              !isMaximized && "cursor-move"
+            )}
+            onMouseDown={handleMouseDown}
+          />
+        )}
         {children}
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <button
-            type="button"
-            onClick={toggleMaximize}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          >
-            {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            <span className="sr-only">{isMaximized ? 'Minimize' : 'Maximize'}</span>
-          </button>
-          <DialogPrimitive.Close className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-            <XIcon className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        </div>
+        {windowControls && (
+          <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <button
+              type="button"
+              onClick={toggleMaximize}
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            >
+              {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              <span className="sr-only">{isMaximized ? 'Minimize' : 'Maximize'}</span>
+            </button>
+            <DialogPrimitive.Close className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+              <XIcon className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          </div>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   )
