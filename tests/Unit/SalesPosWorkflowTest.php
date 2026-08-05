@@ -14,6 +14,7 @@ use App\Services\OperationalReportService;
 use App\Services\PartyLedgerService;
 use App\Services\PaymentAccountService;
 use App\Services\SalePostingService;
+use App\Services\SaleProductCatalogService;
 use App\Services\SalesCustomerService;
 use App\Services\SystemAccountService;
 use Illuminate\Database\Schema\Blueprint;
@@ -111,6 +112,21 @@ beforeEach(function () {
         $table->decimal('sales_price', 24, 6)->nullable();
         $table->date('effective_date');
         $table->boolean('status')->default(true);
+        $table->timestamps();
+    });
+
+    Schema::create('stocks', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('product_id')->unique();
+        $table->decimal('opening_stock', 24, 6)->default(0);
+        $table->decimal('current_stock', 24, 6)->default(0);
+        $table->decimal('reserved_stock', 24, 6)->default(0);
+        $table->decimal('available_stock', 24, 6)->default(0);
+        $table->decimal('minimum_stock', 24, 6)->default(0);
+        $table->decimal('maximum_stock', 24, 6)->nullable();
+        $table->unsignedBigInteger('last_movement_id')->nullable();
+        $table->unsignedBigInteger('version')->default(0);
+        $table->timestamp('refreshed_at')->nullable();
         $table->timestamps();
     });
 
@@ -262,7 +278,8 @@ function createPosProduct(
     int $categoryId,
     int $unitId,
     string $name,
-    float $salesPrice
+    ?float $salesPrice,
+    bool $status = true
 ): Product {
     $product = Product::query()->create([
         'category_id' => $categoryId,
@@ -270,20 +287,38 @@ function createPosProduct(
         'product_code' => strtoupper(str_replace(' ', '-', $name)),
         'product_name' => $name,
         'is_inventory_item' => false,
-        'status' => true,
+        'status' => $status,
     ]);
 
-    DB::table('product_rates')->insert([
-        'product_id' => $product->id,
-        'purchase_price' => 5,
-        'sales_price' => $salesPrice,
-        'effective_date' => '2026-07-28',
-        'status' => true,
+    if ($salesPrice !== null) {
+        DB::table('product_rates')->insert([
+            'product_id' => $product->id,
+            'purchase_price' => 5,
+            'sales_price' => $salesPrice,
+            'effective_date' => '2026-07-28',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    return $product;
+}
+
+function createPosCategory(
+    string $name,
+    string $code,
+    string $inventoryClass = 'merchandise',
+    bool $status = true
+): int {
+    return DB::table('categories')->insertGetId([
+        'name' => $name,
+        'code' => $code,
+        'inventory_class' => $inventoryClass,
+        'status' => $status,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
-
-    return $product;
 }
 
 function makeSalesPosFixture(): array
@@ -346,14 +381,11 @@ function makeSalesPosFixture(): array
         'vehicle_number' => 'XYZ-123',
         'status' => true,
     ]);
-    $categoryId = DB::table('categories')->insertGetId([
-        'name' => 'Merchandise',
-        'code' => 'MERCH',
-        'inventory_class' => 'merchandise',
-        'status' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    $categoryIds = [
+        'fuel' => createPosCategory('Fuel', 'FUEL', 'fuel'),
+        'lubricant' => createPosCategory('Lubricants', 'LUBRICANT'),
+        'accessory' => createPosCategory('Accessories', 'ACCESSORY'),
+    ];
     $unitId = DB::table('units')->insertGetId([
         'code' => 'PCS',
         'name' => 'Pieces',
@@ -363,9 +395,9 @@ function makeSalesPosFixture(): array
         'updated_at' => now(),
     ]);
     $products = [
-        createPosProduct($categoryId, $unitId, 'Petrol', 10.125),
-        createPosProduct($categoryId, $unitId, 'Diesel', 20),
-        createPosProduct($categoryId, $unitId, 'Engine Oil', 5.555),
+        createPosProduct($categoryIds['fuel'], $unitId, 'Petrol', 10.125),
+        createPosProduct($categoryIds['lubricant'], $unitId, 'Engine Oil', 20),
+        createPosProduct($categoryIds['accessory'], $unitId, 'Wiper Blade', 5.555),
     ];
 
     $numbers = Mockery::mock(DocumentNumberService::class);
@@ -441,7 +473,8 @@ function makeSalesPosFixture(): array
         $systemAccounts,
         $numbers,
         $customers,
-        new PaymentAccountService
+        new PaymentAccountService,
+        new SaleProductCatalogService
     );
 
     return compact(
@@ -453,6 +486,8 @@ function makeSalesPosFixture(): array
         'products',
         'cash',
         'bank',
+        'categoryIds',
+        'unitId',
         'inventoryService'
     );
 }
@@ -550,6 +585,8 @@ it('posts one voucher with multiple global products at master prices', function 
         ->toHaveCount(0)
         ->and($sale->items->pluck('unit_price')->map(fn ($price) => (float) $price)->all())
         ->toBe([10.125, 20.0, 5.555])
+        ->and($sale->items->pluck('category_name_snapshot')->all())
+        ->toBe(['Fuel', 'Lubricants', 'Accessories'])
         ->and((float) $sale->journalEntry->lines->sum('debit_amount'))
         ->toBe(65.8)
         ->and(round(
@@ -577,11 +614,105 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($metric['current_advance'])->toBe(0.0);
 });
 
+it('exposes every active sales category without dispenser or vehicle restrictions', function () {
+    $fixture = makeSalesPosFixture();
+    $futureCategoryId = createPosCategory('Services', 'FUTURE-SERVICE', 'service');
+    $futureProduct = createPosProduct(
+        $futureCategoryId,
+        $fixture['unitId'],
+        'Wheel Alignment',
+        250
+    );
+    $inactiveProduct = createPosProduct(
+        $fixture['categoryIds']['accessory'],
+        $fixture['unitId'],
+        'Inactive Accessory',
+        25,
+        false
+    );
+    $inactiveCategoryId = createPosCategory(
+        'Archived Parts',
+        'ARCHIVED-PARTS',
+        'merchandise',
+        false
+    );
+    $inactiveCategoryProduct = createPosProduct(
+        $inactiveCategoryId,
+        $fixture['unitId'],
+        'Archived Part',
+        75
+    );
+
+    $catalog = (new SaleProductCatalogService)->forSelection();
+    $visibleIds = $catalog->pluck('id')->all();
+    $expectedActiveIds = [
+        ...array_map(
+            fn (Product $product) => $product->id,
+            $fixture['products']
+        ),
+        $futureProduct->id,
+    ];
+
+    expect(array_diff($expectedActiveIds, $visibleIds))->toBe([])
+        ->and($visibleIds)->not->toContain($inactiveProduct->id)
+        ->not->toContain($inactiveCategoryProduct->id)
+        ->and($catalog->firstWhere('id', $futureProduct->id)['category']['name'])
+        ->toBe('Services');
+
+    expect(fn () => $fixture['service']->create(
+        regularPosPayload($fixture, [
+            'items' => [[
+                'product_id' => $inactiveCategoryProduct->id,
+                'quantity' => 1,
+                'discount' => 0,
+            ]],
+        ])
+    ))->toThrow(ValidationException::class);
+});
+
+it('honors explicitly configured sales category exclusions', function () {
+    $fixture = makeSalesPosFixture();
+    config()->set('erp.sales.excluded_category_codes', ['ACCESSORY']);
+
+    $catalog = new SaleProductCatalogService;
+    $visibleIds = $catalog->forSelection()->pluck('id')->all();
+
+    expect($visibleIds)
+        ->toContain($fixture['products'][0]->id)
+        ->toContain($fixture['products'][1]->id)
+        ->not->toContain($fixture['products'][2]->id);
+
+    expect(fn () => $fixture['service']->create(
+        regularPosPayload($fixture, [
+            'items' => [[
+                'product_id' => $fixture['products'][2]->id,
+                'quantity' => 1,
+                'discount' => 0,
+            ]],
+        ])
+    ))->toThrow(ValidationException::class);
+});
+
+it('uses the active master sales price instead of any submitted client price', function () {
+    $fixture = makeSalesPosFixture();
+    $payload = regularPosPayload($fixture, [
+        'items' => [[
+            'product_id' => $fixture['products'][1]->id,
+            'quantity' => 2,
+            'discount' => 0,
+            'unit_price' => 0.01,
+            'sales_price' => 0.01,
+        ]],
+    ]);
+
+    $sale = $fixture['service']->create($payload);
+
+    expect((float) $sale->items->first()->unit_price)->toBe(20.0)
+        ->and((float) $sale->grand_total)->toBe(40.0);
+});
+
 it('issues fuel inventory immediately when a regular cash sale is posted', function () {
     $fixture = makeSalesPosFixture();
-    DB::table('categories')->update([
-        'inventory_class' => 'fuel',
-    ]);
     $fixture['products'][0]->update([
         'is_inventory_item' => true,
     ]);

@@ -120,6 +120,11 @@ $paymentGroups = [
     'Bank' => [$accountGroups['bank_account']['code']],
 ];
 
+$salesExcludedCategoryCodes = array_values(array_filter(array_map(
+    'trim',
+    explode(',', (string) env('SALE_EXCLUDED_CATEGORY_CODES', ''))
+)));
+
 $voucherCategories = [
     'prefix' => 'VC',
     'padding' => 3,
@@ -269,6 +274,7 @@ return [
         'max_items' => (int) env('SALE_MAX_ITEMS', 100),
         'currency_scale' => (int) env('SALE_CURRENCY_SCALE', 2),
         'payment_groups' => $paymentGroups,
+        'excluded_category_codes' => $salesExcludedCategoryCodes,
     ],
 
     'accounting' => [

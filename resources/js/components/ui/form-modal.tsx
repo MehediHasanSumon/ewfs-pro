@@ -24,6 +24,7 @@ interface FormModalProps {
     wide?: boolean;
     errors?: Record<string, string | undefined>;
     submitDisabled?: boolean;
+    footerActions?: ReactNode;
 }
 
 export function FormModal({
@@ -39,6 +40,7 @@ export function FormModal({
     wide = false,
     errors = {},
     submitDisabled = false,
+    footerActions,
 }: FormModalProps) {
     const formRef = useRef<HTMLFormElement>(null);
     const pageErrors = usePage().props.errors as Record<
@@ -92,6 +94,7 @@ export function FormModal({
                         {children}
                     </div>
                     <div className="flex shrink-0 justify-end gap-2 border-t pt-4 dark:border-gray-700">
+                        {footerActions}
                         <Button
                             type="button"
                             variant="secondary"

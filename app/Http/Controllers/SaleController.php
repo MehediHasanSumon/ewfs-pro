@@ -8,11 +8,11 @@ use App\Http\Resources\SaleEditResource;
 use App\Http\Resources\SalesCustomerLookupResource;
 use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Services\SalePostingService;
+use App\Services\SaleProductCatalogService;
 use App\Services\SalesCustomerService;
 use App\Services\VehicleSalesContextService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -26,6 +26,7 @@ class SaleController extends Controller implements HasMiddleware
 {
     public function __construct(
         private readonly SalePostingService $sales,
+        private readonly SaleProductCatalogService $saleProducts,
         private readonly VehicleSalesContextService $vehicleSalesContext,
         private readonly SalesCustomerService $customers
     ) {}
@@ -56,15 +57,7 @@ class SaleController extends Controller implements HasMiddleware
             'accounts' => $accounts,
             'groupedAccounts' => $accounts->groupBy(fn (Account $account) => $account->group?->name ?? 'Other'),
             'vehicles' => $this->vehicleSalesContext->forPosSelection(),
-            'products' => Product::query()
-                ->with(['unit', 'stock', 'activeRate'])
-                ->active()
-                ->orderBy('product_name')
-                ->get(['id', 'product_name', 'product_code', 'unit_id'])
-                ->each(fn (Product $product) => $product->setAttribute(
-                    'sales_price',
-                    (float) ($product->activeRate?->sales_price ?? 0)
-                )),
+            'products' => $this->saleProducts->forSelection(),
             'shifts' => Shift::query()->where('status', true)->get(['id', 'name']),
             'closedShifts' => $this->closedShifts(),
             'uniqueCustomers' => Sale::query()

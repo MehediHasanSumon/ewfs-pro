@@ -20,7 +20,8 @@ class SalePostingService
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
         private readonly SalesCustomerService $customers,
-        private readonly PaymentAccountService $paymentAccounts
+        private readonly PaymentAccountService $paymentAccounts,
+        private readonly SaleProductCatalogService $saleProducts
     ) {}
 
     public function create(array $data, string $saleType = 'regular'): Sale
@@ -492,12 +493,9 @@ class SalePostingService
             ->pluck('product_id')
             ->map(fn ($id) => (int) $id)
             ->values();
-        $products = Product::query()
-            ->with(['category', 'unit', 'activeRate'])
-            ->where('status', true)
-            ->whereIn('id', $productIds)
-            ->get()
-            ->keyBy('id');
+        $products = $this->saleProducts->resolve(
+            $productIds->unique()->all()
+        );
 
         if ($products->count() !== $productIds->unique()->count()) {
             throw ValidationException::withMessages([
