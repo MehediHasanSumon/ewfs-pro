@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\CustomerMobileLookupRequest;
+use App\Http\Requests\SaleBatchRequest;
 use App\Http\Requests\SaleRequest;
 use App\Http\Resources\SaleEditResource;
 use App\Http\Resources\SalesCustomerLookupResource;
@@ -37,7 +38,7 @@ class SaleController extends Controller implements HasMiddleware
             new Middleware('permission:view-sale', only: ['index']),
             new Middleware('permission:view-sale|create-sale', only: ['customerLookup']),
             new Middleware('permission:view-sale|can-sale-download', only: ['downloadPdf', 'downloadInvoice']),
-            new Middleware('permission:create-sale', only: ['store']),
+            new Middleware('permission:create-sale', only: ['store', 'storeBatch']),
             new Middleware('permission:update-sale', only: ['edit', 'update']),
             new Middleware('permission:delete-sale', only: ['destroy', 'bulkDelete']),
         ];
@@ -86,6 +87,16 @@ class SaleController extends Controller implements HasMiddleware
         $this->sales->create($request->validated());
 
         return back()->with('success', 'Sale created successfully.');
+    }
+
+    public function storeBatch(SaleBatchRequest $request)
+    {
+        $sales = $this->sales->createBatch($request->validated());
+
+        return back()->with(
+            'success',
+            $sales->count().' sales created successfully.'
+        );
     }
 
     public function edit(Sale $sale)

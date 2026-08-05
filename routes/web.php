@@ -311,6 +311,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('sales', [SaleController::class, 'index'])->name('sales.index');
     Route::get('sales/customer-lookup', [SaleController::class, 'customerLookup'])->name('sales.customer-lookup');
     Route::get('sales/download-pdf', [SaleController::class, 'downloadPdf'])->name('sales.download.pdf');
+    Route::post('sales/batch', [SaleController::class, 'storeBatch'])->name('sales.batch.store');
     Route::post('sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('sales/{sale}/edit', [SaleController::class, 'edit'])->name('sales.edit');
     Route::get('sales/{sale}/pdf', [SaleController::class, 'downloadInvoice'])->name('sales.invoice.pdf');

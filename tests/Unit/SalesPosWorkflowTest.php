@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Requests\SaleBatchRequest;
 use App\Http\Requests\SaleRequest;
 use App\Http\Resources\SaleEditResource;
 use App\Models\Account;
@@ -20,6 +21,7 @@ use App\Services\SystemAccountService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -335,6 +337,12 @@ function makeSalesPosFixture(): array
         'asset',
         'Test Bank'
     );
+    $mobileBank = createPosAccount(
+        '100020003',
+        'Mobile Bank',
+        'asset',
+        'Test Mobile Bank'
+    );
     $receivable = createPosAccount(
         '100020001',
         'Customer Receivables',
@@ -401,9 +409,42 @@ function makeSalesPosFixture(): array
     ];
 
     $numbers = Mockery::mock(DocumentNumberService::class);
+    $documentCounters = [];
     $numbers->shouldReceive('next')
         ->zeroOrMoreTimes()
-        ->andReturn('IN0001');
+        ->andReturnUsing(function (
+            string $documentType,
+            string $prefix,
+            mixed $date = null,
+            int $padding = 6
+        ) use (&$documentCounters) {
+            $documentCounters[$documentType] =
+                ($documentCounters[$documentType] ?? 0) + 1;
+
+            return $prefix.str_pad(
+                (string) $documentCounters[$documentType],
+                $padding,
+                '0',
+                STR_PAD_LEFT
+            );
+        });
+    $numbers->shouldReceive('nextGlobal')
+        ->zeroOrMoreTimes()
+        ->andReturnUsing(function (
+            string $documentType,
+            string $prefix,
+            int $padding = 6
+        ) use (&$documentCounters) {
+            $documentCounters[$documentType] =
+                ($documentCounters[$documentType] ?? 0) + 1;
+
+            return $prefix.str_pad(
+                (string) $documentCounters[$documentType],
+                $padding,
+                '0',
+                STR_PAD_LEFT
+            );
+        });
     $customers = new SalesCustomerService;
     $accounting = Mockery::mock(AccountingService::class);
     $journalNumber = 0;
@@ -486,6 +527,7 @@ function makeSalesPosFixture(): array
         'products',
         'cash',
         'bank',
+        'mobileBank',
         'categoryIds',
         'unitId',
         'inventoryService'
@@ -532,6 +574,59 @@ function regularPosPayload(array $fixture, array $overrides = []): array
     return $payload;
 }
 
+function batchPosPayload(array $fixture, array $overrides = []): array
+{
+    return array_replace_recursive([
+        'sale_date' => '2026-07-28',
+        'shift_id' => 1,
+        'rows' => [
+            [
+                'customer_id' => $fixture['customer']->id,
+                'customer_name' => $fixture['customer']->name,
+                'customer_mobile' => $fixture['customer']->mobile,
+                'vehicle_id' => null,
+                'vehicle_no' => null,
+                'product_id' => $fixture['products'][0]->id,
+                'quantity' => 1,
+                'discount' => 0,
+                'payment_type' => 'Cash',
+                'to_account_id' => $fixture['cash']->id,
+                'remarks' => 'Cash fuel row',
+            ],
+            [
+                'customer_id' => $fixture['otherCustomer']->id,
+                'customer_name' => $fixture['otherCustomer']->name,
+                'customer_mobile' => $fixture['otherCustomer']->mobile,
+                'vehicle_id' => $fixture['vehicle']->id,
+                'vehicle_no' => $fixture['vehicle']->vehicle_number,
+                'product_id' => $fixture['products'][1]->id,
+                'quantity' => 2,
+                'discount' => 0,
+                'payment_type' => 'Bank',
+                'to_account_id' => $fixture['bank']->id,
+                'bank_type' => 'Online',
+                'bank_name' => 'Test Bank',
+                'remarks' => 'Bank lubricant row',
+            ],
+            [
+                'customer_id' => null,
+                'customer_name' => 'Walk In',
+                'customer_mobile' => '01922222222',
+                'vehicle_id' => null,
+                'vehicle_no' => 'WALK-100',
+                'product_id' => $fixture['products'][2]->id,
+                'quantity' => 3,
+                'discount' => 0,
+                'payment_type' => 'Mobile Bank',
+                'to_account_id' => $fixture['mobileBank']->id,
+                'mobile_bank' => 'bKash',
+                'payment_mobile_number' => '01922222222',
+                'remarks' => 'Mobile accessory row',
+            ],
+        ],
+    ], $overrides);
+}
+
 it('keeps removed modal fields out of the sale validation contract', function () {
     $rules = (new SaleRequest)->rules();
 
@@ -543,6 +638,22 @@ it('keeps removed modal fields out of the sale validation contract', function ()
     ] as $field) {
         expect(array_key_exists($field, $rules))->toBeFalse();
     }
+});
+
+it('validates independent payment requirements for every batch row', function () {
+    $fixture = makeSalesPosFixture();
+    $payload = batchPosPayload($fixture);
+    unset($payload['rows'][1]['bank_name']);
+
+    $validator = Validator::make(
+        $payload,
+        (new SaleBatchRequest)->rules(),
+        (new SaleBatchRequest)->messages()
+    );
+
+    expect($validator->fails())->toBeTrue()
+        ->and($validator->errors()->has('rows.1.bank_name'))->toBeTrue()
+        ->and($validator->errors()->has('rows.0.bank_name'))->toBeFalse();
 });
 
 it('looks up a normalized mobile with active vehicles', function () {
@@ -612,6 +723,68 @@ it('posts one voucher with multiple global products at master prices', function 
         ->and($metric['total_paid'])->toBe(0.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['current_advance'])->toBe(0.0);
+});
+
+it('posts each POS cart row as an independent atomic sale', function () {
+    $fixture = makeSalesPosFixture();
+    collect($fixture['products'])->each(
+        fn (Product $product) => $product->update([
+            'is_inventory_item' => true,
+        ])
+    );
+
+    $sales = $fixture['service']->createBatch(batchPosPayload($fixture));
+
+    expect($sales)->toHaveCount(3)
+        ->and(DB::table('sales')->count())->toBe(3)
+        ->and(DB::table('sale_items')->count())->toBe(3)
+        ->and(DB::table('journal_entries')->count())->toBe(3)
+        ->and($sales->pluck('items')->map->count()->all())->toBe([1, 1, 1])
+        ->and($sales->pluck('sale_date')->map->format('Y-m-d')->unique()->all())
+        ->toBe(['2026-07-28'])
+        ->and($sales->pluck('shift_id')->unique()->all())->toBe([1])
+        ->and($sales->pluck('memo_no')->unique()->count())->toBe(3)
+        ->and($sales->pluck('memo_no')->every(
+            fn (string $memo) => str_starts_with($memo, 'M-')
+        ))->toBeTrue()
+        ->and($sales->pluck('invoice_no')->unique()->count())->toBe(3)
+        ->and($sales->pluck('customer_name_snapshot')->all())
+        ->toBe(['Rahim', 'Karim', 'Walk In'])
+        ->and($sales->pluck('vehicle_number_snapshot')->all())
+        ->toBe([null, 'XYZ-123', 'WALK-100'])
+        ->and($sales->pluck('paymentDetail.payment_method')->all())
+        ->toBe(['cash', 'bank', 'mobile_bank'])
+        ->and(round((float) $sales->sum('grand_total'), 2))->toBe(66.8);
+
+    $fixture['inventoryService']
+        ->shouldHaveReceived('assertAvailable')
+        ->once()
+        ->with([
+            $fixture['products'][0]->id => 1.0,
+            $fixture['products'][1]->id => 2.0,
+            $fixture['products'][2]->id => 3.0,
+        ]);
+    $fixture['inventoryService']
+        ->shouldHaveReceived('recordMany')
+        ->times(3);
+});
+
+it('rolls back the entire POS batch when one row fails', function () {
+    $fixture = makeSalesPosFixture();
+    $payload = batchPosPayload($fixture);
+    $payload['rows'][1]['to_account_id'] = $fixture['cash']->id;
+
+    try {
+        $fixture['service']->createBatch($payload);
+        $this->fail('Expected the second sale row to fail.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toHaveKey('rows.1.to_account_id')
+            ->and(DB::table('sales')->count())->toBe(0)
+            ->and(DB::table('sale_items')->count())->toBe(0)
+            ->and(DB::table('journal_entries')->count())->toBe(0)
+            ->and(DB::table('journal_lines')->count())->toBe(0)
+            ->and(DB::table('sale_payment_details')->count())->toBe(0);
+    }
 });
 
 it('exposes every active sales category without dispenser or vehicle restrictions', function () {

@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Vehicle;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -31,6 +33,107 @@ class SalePostingService
             fn () => DB::transaction(
                 fn () => $this->postRegularSale(null, $data, $saleType)
             )
+        );
+    }
+
+    /**
+     * @return Collection<int, Sale>
+     */
+    public function createBatch(array $data): Collection
+    {
+        $rows = collect($data['rows'])
+            ->values()
+            ->map(fn (array $row) => [
+                ...$row,
+                'sale_date' => $data['sale_date'],
+                'shift_id' => $data['shift_id'],
+                'memo_no' => null,
+                'items' => [[
+                    'product_id' => $row['product_id'],
+                    'quantity' => $row['quantity'],
+                    'discount' => $row['discount'] ?? 0,
+                    'remarks' => null,
+                ]],
+            ]);
+
+        return $this->withCustomerMobileLocks(
+            $rows->all(),
+            fn () => DB::transaction(function () use ($rows) {
+                $productIds = $rows
+                    ->pluck('product_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values();
+                $products = $this->saleProducts->resolve($productIds->all());
+
+                if ($products->count() !== $productIds->count()) {
+                    throw ValidationException::withMessages([
+                        'rows' => 'One or more selected products are unavailable.',
+                    ]);
+                }
+
+                $resolvedRows = $rows->map(
+                    fn (array $row) => [
+                        'data' => $row,
+                        'items' => $this->resolveItems(
+                            $row['items'],
+                            $products
+                        ),
+                    ]
+                );
+                $paymentAccounts = $this->paymentAccounts->resolveBatch(
+                    $rows->all()
+                );
+                $postingAccounts = [
+                    'revenue' => $this->systemAccounts->salesRevenue(),
+                    'inventory' => $this->systemAccounts->inventoryAsset(),
+                    'cogs' => $this->systemAccounts->costOfGoodsSold(),
+                ];
+
+                try {
+                    $this->inventory->assertAvailable(
+                        $resolvedRows
+                            ->flatMap(fn (array $row) => $row['items'])
+                            ->filter(fn (array $resolved) => $resolved['product']
+                                ->is_inventory_item)
+                            ->groupBy(fn (array $resolved) => $resolved['product']->id)
+                            ->map(fn ($items) => round(
+                                (float) $items->sum('quantity'),
+                                6
+                            ))
+                            ->all()
+                    );
+                } catch (ValidationException $exception) {
+                    throw ValidationException::withMessages([
+                        'rows' => $exception->errors()['stock'][0]
+                            ?? 'One or more sale rows exceed available stock.',
+                    ]);
+                }
+
+                return $resolvedRows
+                    ->map(function (array $row, int $index) use (
+                        $paymentAccounts,
+                        $postingAccounts
+                    ) {
+                        try {
+                            return $this->postRegularSale(
+                                null,
+                                $row['data'],
+                                'regular',
+                                $row['items'],
+                                false,
+                                $paymentAccounts->get($index),
+                                $postingAccounts
+                            );
+                        } catch (ValidationException $exception) {
+                            throw $this->batchRowException(
+                                $exception,
+                                $index
+                            );
+                        }
+                    })
+                    ->values();
+            })
         );
     }
 
@@ -267,20 +370,27 @@ class SalePostingService
     private function postRegularSale(
         ?Sale $sale,
         array $data,
-        string $saleType
+        string $saleType,
+        ?array $resolvedItems = null,
+        bool $assertInventory = true,
+        ?Account $resolvedPaymentAccount = null,
+        ?array $postingAccounts = null
     ): Sale {
-        $resolvedItems = $this->resolveItems($data['items']);
-        $this->inventory->assertAvailable(
-            collect($resolvedItems)
-                ->filter(fn (array $resolved) => $resolved['product']
-                    ->is_inventory_item)
-                ->groupBy(fn (array $resolved) => $resolved['product']->id)
-                ->map(fn ($lines) => round(
-                    (float) $lines->sum('quantity'),
-                    6
-                ))
-                ->all()
-        );
+        $resolvedItems ??= $this->resolveItems($data['items']);
+
+        if ($assertInventory) {
+            $this->inventory->assertAvailable(
+                collect($resolvedItems)
+                    ->filter(fn (array $resolved) => $resolved['product']
+                        ->is_inventory_item)
+                    ->groupBy(fn (array $resolved) => $resolved['product']->id)
+                    ->map(fn ($lines) => round(
+                        (float) $lines->sum('quantity'),
+                        6
+                    ))
+                    ->all()
+            );
+        }
         $customer = $this->customers->resolve($data);
         $vehicle = $this->resolveVehicle($data, $customer);
         $currencyScale = $this->currencyScale();
@@ -302,12 +412,23 @@ class SalePostingService
             ]);
         }
 
-        $paymentAccount = $this->paymentAccounts->resolve(
-            (int) $data['to_account_id'],
-            $data['payment_type'],
-            'to_account_id'
-        );
+        $paymentAccount = $resolvedPaymentAccount
+            ?? $this->paymentAccounts->resolve(
+                (int) $data['to_account_id'],
+                $data['payment_type'],
+                'to_account_id'
+            );
         $businessDate = $data['sale_date'] ?? now()->toDateString();
+        $memoNo = $sale?->memo_no ?: ($data['memo_no'] ?? null);
+
+        if (! $memoNo) {
+            $memoNo = $this->numbers->nextGlobal(
+                'sale_memo',
+                'M-',
+                6
+            );
+        }
+
         $mobile = $this->customers->normalizeMobile($data['customer_mobile']);
         $vehicleNumber = $vehicle?->vehicle_number
             ?? ($data['vehicle_no'] ?: null);
@@ -318,7 +439,7 @@ class SalePostingService
             'sale_type' => $saleType,
             'sale_date' => $businessDate,
             'sale_time' => now()->format('H:i:s'),
-            'memo_no' => $data['memo_no'] ?? null,
+            'memo_no' => $memoNo,
             'customer_name_snapshot' => $customer?->name
                 ?? $data['customer_name'],
             'customer_mobile_snapshot' => $customer?->mobile ?? $mobile,
@@ -369,9 +490,12 @@ class SalePostingService
         );
 
         $description = ucfirst($saleType).' sale '.$sale->invoice_no;
-        $revenueAccount = $this->systemAccounts->salesRevenue();
-        $inventoryAccount = $this->systemAccounts->inventoryAsset();
-        $cogsAccount = $this->systemAccounts->costOfGoodsSold();
+        $revenueAccount = $postingAccounts['revenue']
+            ?? $this->systemAccounts->salesRevenue();
+        $inventoryAccount = $postingAccounts['inventory']
+            ?? $this->systemAccounts->inventoryAsset();
+        $cogsAccount = $postingAccounts['cogs']
+            ?? $this->systemAccounts->costOfGoodsSold();
         $paymentMethod = $this->normalizePaymentMethod($data);
         $journalLines = [[
             'account_id' => $paymentAccount->id,
@@ -486,18 +610,23 @@ class SalePostingService
         ]);
     }
 
-    private function resolveItems(array $items): array
-    {
+    private function resolveItems(
+        array $items,
+        ?Collection $resolvedProducts = null
+    ): array {
         $currencyScale = $this->currencyScale();
         $productIds = collect($items)
             ->pluck('product_id')
             ->map(fn ($id) => (int) $id)
             ->values();
-        $products = $this->saleProducts->resolve(
-            $productIds->unique()->all()
-        );
+        $requestedProductIds = $productIds->unique();
+        $products = $resolvedProducts
+            ?? $this->saleProducts->resolve($requestedProductIds->all());
+        $resolvedProductCount = $requestedProductIds
+            ->filter(fn (int $productId) => $products->has($productId))
+            ->count();
 
-        if ($products->count() !== $productIds->unique()->count()) {
+        if ($resolvedProductCount !== $requestedProductIds->count()) {
             throw ValidationException::withMessages([
                 'items' => 'One or more selected products are unavailable.',
             ]);
@@ -631,5 +760,78 @@ class SalePostingService
                 'customer_mobile' => 'This mobile number is being processed. Please try again.',
             ]);
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function withCustomerMobileLocks(
+        array $rows,
+        callable $callback
+    ): Collection {
+        $mobiles = collect($rows)
+            ->pluck('customer_mobile')
+            ->map(fn ($mobile) => $this->customers->normalizeMobile(
+                (string) $mobile
+            ))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return $this->acquireCustomerMobileLocks($mobiles, $callback);
+    }
+
+    /**
+     * @param  array<int, string>  $mobiles
+     */
+    private function acquireCustomerMobileLocks(
+        array $mobiles,
+        callable $callback
+    ): mixed {
+        $mobile = array_shift($mobiles);
+
+        if ($mobile === null) {
+            return $callback();
+        }
+
+        try {
+            return Cache::lock(
+                'sales-customer-mobile:'.sha1($mobile),
+                120
+            )->block(
+                5,
+                fn () => $this->acquireCustomerMobileLocks(
+                    $mobiles,
+                    $callback
+                )
+            );
+        } catch (LockTimeoutException) {
+            throw ValidationException::withMessages([
+                'rows' => 'One of the customer mobile numbers is being processed. Please try again.',
+            ]);
+        }
+    }
+
+    private function batchRowException(
+        ValidationException $exception,
+        int $index
+    ): ValidationException {
+        $errors = [];
+
+        foreach ($exception->errors() as $key => $messages) {
+            $field = match (true) {
+                str_starts_with($key, 'items.0.') => substr(
+                    $key,
+                    strlen('items.0.')
+                ),
+                $key === 'items' => 'product_id',
+                default => $key,
+            };
+            $errors["rows.{$index}.{$field}"] = $messages;
+        }
+
+        return ValidationException::withMessages($errors);
     }
 }

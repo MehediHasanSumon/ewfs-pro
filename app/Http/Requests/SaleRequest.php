@@ -120,56 +120,9 @@ class SaleRequest extends FormRequest
         $maxItems = max(1, (int) config('erp.sales.max_items', 100));
 
         return [
-            'sale_date' => ['required', 'date'],
-            'shift_id' => [
-                'required',
-                'integer',
-                Rule::exists('shifts', 'id')->where('status', true),
-            ],
-            'customer_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('customers', 'id')->where('status', true),
-            ],
-            'customer_name' => [
-                'required_without:customer_id',
-                'nullable',
-                'string',
-                'max:150',
-            ],
-            'customer_mobile' => ['required', 'string', 'max:50'],
-            'vehicle_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('vehicles', 'id')->where('status', true),
-            ],
-            'vehicle_no' => ['nullable', 'string', 'max:50'],
+            ...self::headerRules(),
+            ...self::transactionRules(),
             'memo_no' => ['nullable', 'string', 'max:150'],
-            'payment_type' => ['required', Rule::in(['Cash', 'Bank', 'Mobile Bank'])],
-            'to_account_id' => [
-                'required',
-                'integer',
-                Rule::exists('accounts', 'id')->where('status', true),
-            ],
-            'bank_type' => ['nullable', 'required_if:payment_type,Bank', 'string', 'max:50'],
-            'bank_name' => ['nullable', 'required_if:payment_type,Bank', 'string', 'max:150'],
-            'branch_name' => ['nullable', 'string', 'max:150'],
-            'account_no' => ['nullable', 'string', 'max:100'],
-            'cheque_no' => [
-                'nullable',
-                'required_if:bank_type,Cheque',
-                'string',
-                'max:100',
-            ],
-            'cheque_date' => ['nullable', 'required_if:bank_type,Cheque', 'date'],
-            'mobile_bank' => [
-                'nullable',
-                'required_if:payment_type,Mobile Bank',
-                'string',
-                'max:100',
-            ],
-            'payment_mobile_number' => ['nullable', 'string', 'max:50'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:'.$maxItems],
             'items.*.product_id' => [
                 'required',
@@ -180,6 +133,88 @@ class SaleRequest extends FormRequest
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'items.*.remarks' => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    public static function headerRules(string $prefix = ''): array
+    {
+        return [
+            $prefix.'sale_date' => ['required', 'date'],
+            $prefix.'shift_id' => [
+                'required',
+                'integer',
+                Rule::exists('shifts', 'id')->where('status', true),
+            ],
+        ];
+    }
+
+    public static function transactionRules(string $prefix = ''): array
+    {
+        return [
+            $prefix.'customer_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('customers', 'id')->where('status', true),
+            ],
+            $prefix.'customer_name' => [
+                'required_without:'.$prefix.'customer_id',
+                'nullable',
+                'string',
+                'max:150',
+            ],
+            $prefix.'customer_mobile' => ['required', 'string', 'max:50'],
+            $prefix.'vehicle_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('vehicles', 'id')->where('status', true),
+            ],
+            $prefix.'vehicle_no' => ['nullable', 'string', 'max:50'],
+            $prefix.'payment_type' => [
+                'required',
+                Rule::in(['Cash', 'Bank', 'Mobile Bank']),
+            ],
+            $prefix.'to_account_id' => [
+                'required',
+                'integer',
+                Rule::exists('accounts', 'id')->where('status', true),
+            ],
+            $prefix.'bank_type' => [
+                'nullable',
+                'required_if:'.$prefix.'payment_type,Bank',
+                'string',
+                'max:50',
+            ],
+            $prefix.'bank_name' => [
+                'nullable',
+                'required_if:'.$prefix.'payment_type,Bank',
+                'string',
+                'max:150',
+            ],
+            $prefix.'branch_name' => ['nullable', 'string', 'max:150'],
+            $prefix.'account_no' => ['nullable', 'string', 'max:100'],
+            $prefix.'cheque_no' => [
+                'nullable',
+                'required_if:'.$prefix.'bank_type,Cheque',
+                'string',
+                'max:100',
+            ],
+            $prefix.'cheque_date' => [
+                'nullable',
+                'required_if:'.$prefix.'bank_type,Cheque',
+                'date',
+            ],
+            $prefix.'mobile_bank' => [
+                'nullable',
+                'required_if:'.$prefix.'payment_type,Mobile Bank',
+                'string',
+                'max:100',
+            ],
+            $prefix.'payment_mobile_number' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
+            $prefix.'remarks' => ['nullable', 'string', 'max:2000'],
         ];
     }
 

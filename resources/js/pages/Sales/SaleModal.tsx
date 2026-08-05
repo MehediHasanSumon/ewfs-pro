@@ -13,8 +13,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { router } from '@inertiajs/react';
-import { Edit, LoaderCircle, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Edit, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface SaleItem {
     id: number;
@@ -104,23 +104,21 @@ interface CustomerLookup {
     }[];
 }
 
-interface CartLine {
-    key: string;
-    product_id: string;
-    quantity: string;
-    discount: string;
-    remarks: string;
-}
-
-interface FormState {
+interface SessionState {
     sale_date: string;
     shift_id: string;
-    memo_no: string;
+}
+
+interface SaleRowState {
     customer_id: string;
     customer_name: string;
     customer_mobile: string;
     vehicle_id: string;
     vehicle_no: string;
+    product_id: string;
+    quantity: string;
+    unit_price: number;
+    discount: string;
     payment_type: string;
     to_account_id: string;
     bank_type: string;
@@ -132,6 +130,11 @@ interface FormState {
     mobile_bank: string;
     payment_mobile_number: string;
     remarks: string;
+    memo_no: string;
+}
+
+interface CartRow extends SaleRowState {
+    key: string;
 }
 
 interface SaleModalProps {
@@ -149,12 +152,28 @@ interface SaleModalProps {
     initialShiftId?: string;
 }
 
-const emptyLine = (): CartLine => ({
-    key: `${Date.now()}-${Math.random()}`,
+const emptyRow = (): SaleRowState => ({
+    customer_id: '',
+    customer_name: '',
+    customer_mobile: '',
+    vehicle_id: '',
+    vehicle_no: '',
     product_id: '',
     quantity: '',
+    unit_price: 0,
     discount: '',
+    payment_type: 'Cash',
+    to_account_id: '',
+    bank_type: '',
+    bank_name: '',
+    branch_name: '',
+    account_no: '',
+    cheque_no: '',
+    cheque_date: '',
+    mobile_bank: '',
+    payment_mobile_number: '',
     remarks: '',
+    memo_no: '',
 });
 
 const paymentLabel = (method?: string | null) => {
@@ -173,6 +192,15 @@ const paymentLabel = (method?: string | null) => {
 const normalizeMobile = (mobile: string) =>
     mobile.trim().replace(/[\s\-()]+/g, '');
 
+const rowAmount = (row: SaleRowState) =>
+    Math.max(
+        0,
+        row.unit_price * (parseFloat(row.quantity) || 0) -
+            (parseFloat(row.discount) || 0),
+    );
+
+const rowKey = () => `${Date.now()}-${Math.random()}`;
+
 export function SaleModal({
     isOpen,
     onClose,
@@ -187,37 +215,19 @@ export function SaleModal({
     initialSaleDate,
     initialShiftId,
 }: SaleModalProps) {
-    const initialState = (): FormState => ({
+    const initialSession = (): SessionState => ({
         sale_date: initialSaleDate || '',
         shift_id: initialShiftId || '',
-        memo_no: '',
-        customer_id: '',
-        customer_name: '',
-        customer_mobile: '',
-        vehicle_id: '',
-        vehicle_no: '',
-        payment_type: 'Cash',
-        to_account_id: '',
-        bank_type: '',
-        bank_name: '',
-        branch_name: '',
-        account_no: '',
-        cheque_no: '',
-        cheque_date: '',
-        mobile_bank: '',
-        payment_mobile_number: '',
-        remarks: '',
     });
-
-    const [data, setData] = useState<FormState>(initialState);
-    const [draftLine, setDraftLine] = useState<CartLine>(emptyLine);
-    const [cart, setCart] = useState<CartLine[]>([]);
+    const [session, setSession] = useState<SessionState>(initialSession);
+    const [draft, setDraft] = useState<SaleRowState>(emptyRow);
+    const [cart, setCart] = useState<CartRow[]>([]);
+    const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
     const [availableShifts, setAvailableShifts] = useState<Shift[]>(shifts);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [lookupError, setLookupError] = useState('');
     const [lookupLoading, setLookupLoading] = useState(false);
-    const [lookupEnabled, setLookupEnabled] = useState(true);
     const latestLookupRef = useRef('');
     const resolvedLookupRef = useRef('');
 
@@ -239,31 +249,15 @@ export function SaleModal({
             })),
         [products],
     );
-    const selectedDraftProduct = productsById.get(draftLine.product_id);
-    const draftGross =
-        (selectedDraftProduct?.sales_price || 0) *
-        (parseFloat(draftLine.quantity) || 0);
-    const draftDiscount = parseFloat(draftLine.discount) || 0;
-    const draftTotal = Math.max(0, draftGross - draftDiscount);
-
-    const lineTotal = useCallback(
-        (line: CartLine) => {
-            const product = productsById.get(line.product_id);
-            const gross =
-                (product?.sales_price || 0) * (parseFloat(line.quantity) || 0);
-
-            return Math.max(0, gross - (parseFloat(line.discount) || 0));
-        },
-        [productsById],
+    const selectedProduct = productsById.get(draft.product_id);
+    const draftAmount = rowAmount({
+        ...draft,
+        unit_price: selectedProduct?.sales_price ?? draft.unit_price,
+    });
+    const grandTotal = useMemo(
+        () => cart.reduce((total, row) => total + rowAmount(row), 0),
+        [cart],
     );
-
-    const cartTotal = useMemo(
-        () => cart.reduce((total, line) => total + lineTotal(line), 0),
-        [cart, lineTotal],
-    );
-    const nestedItemError = Object.entries(errors).find(([key]) =>
-        key.startsWith('items.'),
-    )?.[1];
     const vehicleNumbers = useMemo(
         () =>
             Array.from(
@@ -271,27 +265,37 @@ export function SaleModal({
             ).sort(),
         [vehicles],
     );
+    const firstRowErrorEntry = Object.entries(errors).find(([key]) =>
+        key.startsWith('rows.'),
+    );
+    const firstRowError = firstRowErrorEntry
+        ? `Cart row ${
+              Number(firstRowErrorEntry[0].split('.')[1] || 0) + 1
+          }: ${firstRowErrorEntry[1]}`
+        : undefined;
 
-    function getAvailableShifts(selectedDate: string) {
-        if (!selectedDate) return shifts;
+    const getAvailableShifts = (selectedDate: string) => {
+        if (!selectedDate) {
+            return shifts;
+        }
 
         const closedShiftIds = closedShifts
             .filter((closing) => closing.close_date === selectedDate)
             .map((closing) => closing.shift_id);
 
         return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
-    }
+    };
 
     const getFilteredAccounts = (paymentType: string) => {
         if (paymentType === 'Cash') {
             return (
-                groupedAccounts['Cash in hand'] || groupedAccounts['Cash'] || []
+                groupedAccounts['Cash in hand'] || groupedAccounts.Cash || []
             );
         }
 
         if (paymentType === 'Bank') {
             return (
-                groupedAccounts['Bank Account'] || groupedAccounts['Bank'] || []
+                groupedAccounts['Bank Account'] || groupedAccounts.Bank || []
             );
         }
 
@@ -302,59 +306,21 @@ export function SaleModal({
         return [];
     };
 
-    const reset = () => {
-        const state = initialState();
-        latestLookupRef.current = '';
-        resolvedLookupRef.current = '';
-        setData(state);
-        setDraftLine(emptyLine());
-        setCart([]);
-        setAvailableShifts(getAvailableShifts(state.sale_date));
-        setErrors({});
-        setLookupError('');
-        setLookupLoading(false);
-        setLookupEnabled(true);
+    const updateDraft = (changes: Partial<SaleRowState>) => {
+        setDraft((current) => ({ ...current, ...changes }));
     };
-
-    const clearCartForCustomerChange = () => {
-        setCart([]);
-        setDraftLine(emptyLine());
-    };
-
-    const confirmCustomerChange = () =>
-        cart.length === 0 && !draftLine.product_id
-            ? true
-            : window.confirm(
-                  'Changing customer will clear the current cart. Continue?',
-              );
 
     const handleMobileChange = (value: string) => {
-        if (value !== data.customer_mobile && !confirmCustomerChange()) {
-            return;
-        }
-
-        if (value !== data.customer_mobile) {
-            clearCartForCustomerChange();
-        }
-
         latestLookupRef.current = normalizeMobile(value);
         resolvedLookupRef.current = '';
-        setLookupEnabled(true);
-        setData((current) => ({
+        setLookupError('');
+        setDraft((current) => ({
             ...current,
             customer_mobile: value,
             customer_id: '',
             customer_name: current.customer_id ? '' : current.customer_name,
             vehicle_id: '',
             vehicle_no: '',
-        }));
-        setLookupError('');
-    };
-
-    const handleCustomerNameChange = (value: string) => {
-        setData((current) => ({
-            ...current,
-            customer_name: value,
         }));
     };
 
@@ -363,159 +329,267 @@ export function SaleModal({
             (item) => item.vehicle_number === vehicleNumber,
         );
 
-        setData((current) => ({
-            ...current,
+        updateDraft({
             vehicle_id: vehicle?.id.toString() || '',
             vehicle_no: vehicleNumber,
-        }));
-    };
-
-    const updateDraftLine = (changes: Partial<CartLine>) => {
-        setDraftLine((current) => ({ ...current, ...changes }));
-    };
-
-    const addToCart = () => {
-        const product = productsById.get(draftLine.product_id);
-        const quantity = parseFloat(draftLine.quantity);
-
-        if (!product) {
-            setErrors((current) => ({
-                ...current,
-                draft_product_id: 'Select a product.',
-            }));
-            return;
-        }
-
-        if (product.sales_price === null || product.sales_price <= 0) {
-            setErrors((current) => ({
-                ...current,
-                draft_product_id:
-                    'The selected product has no active sales price.',
-            }));
-            return;
-        }
-
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-            setErrors((current) => ({
-                ...current,
-                draft_quantity: 'Quantity must be greater than zero.',
-            }));
-            return;
-        }
-
-        if (draftDiscount > draftGross) {
-            setErrors((current) => ({
-                ...current,
-                draft_discount: 'Discount cannot exceed the product amount.',
-            }));
-            return;
-        }
-
-        if (cart.some((line) => line.product_id === draftLine.product_id)) {
-            setErrors((current) => ({
-                ...current,
-                draft_product_id: 'This product is already in the cart.',
-            }));
-            return;
-        }
-
-        setCart((current) => [...current, { ...draftLine }]);
-        setDraftLine(emptyLine());
-        setErrors((current) => {
-            const next = { ...current };
-            delete next.draft_product_id;
-            delete next.draft_quantity;
-            delete next.draft_discount;
-
-            return next;
         });
     };
 
-    const editCartLine = (line: CartLine) => {
-        setCart((current) => current.filter((item) => item.key !== line.key));
-        setDraftLine(line);
+    const clearDraft = () => {
+        setDraft(emptyRow());
+        setEditingRowKey(null);
+        setLookupError('');
+        latestLookupRef.current = '';
+        resolvedLookupRef.current = '';
     };
 
-    const removeCartLine = (key: string) => {
-        setCart((current) => current.filter((line) => line.key !== key));
+    const validateDraft = () => {
+        const nextErrors: Record<string, string> = {};
+        const product = productsById.get(draft.product_id);
+        const quantity = parseFloat(draft.quantity);
+
+        if (!draft.customer_id && !draft.customer_name.trim()) {
+            nextErrors.draft_customer_name =
+                'Customer name is required for a walk-in customer.';
+        }
+
+        if (!draft.customer_mobile.trim()) {
+            nextErrors.draft_customer_mobile = 'Mobile number is required.';
+        }
+
+        if (!product) {
+            nextErrors.draft_product_id = 'Select a product.';
+        } else if (product.sales_price === null || product.sales_price <= 0) {
+            nextErrors.draft_product_id =
+                'The selected product has no active sales price.';
+        }
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            nextErrors.draft_quantity = 'Quantity must be greater than zero.';
+        }
+
+        if (!draft.payment_type) {
+            nextErrors.draft_payment_type = 'Select a payment method.';
+        }
+
+        if (!draft.to_account_id) {
+            nextErrors.draft_to_account_id = 'Select a payment account.';
+        }
+
+        if (draft.payment_type === 'Bank') {
+            if (!draft.bank_type) {
+                nextErrors.draft_bank_type =
+                    'Bank transaction type is required.';
+            }
+            if (!draft.bank_name.trim()) {
+                nextErrors.draft_bank_name = 'Bank name is required.';
+            }
+            if (draft.bank_type === 'Cheque') {
+                if (!draft.cheque_no.trim()) {
+                    nextErrors.draft_cheque_no = 'Cheque number is required.';
+                }
+                if (!draft.cheque_date) {
+                    nextErrors.draft_cheque_date = 'Cheque date is required.';
+                }
+            }
+        }
+
+        if (draft.payment_type === 'Mobile Bank' && !draft.mobile_bank) {
+            nextErrors.draft_mobile_bank = 'Mobile bank name is required.';
+        }
+
+        setErrors(nextErrors);
+
+        return Object.keys(nextErrors).length === 0 && product ? product : null;
     };
+
+    const addOrUpdateCartRow = () => {
+        const product = validateDraft();
+
+        if (!product || product.sales_price === null) {
+            return;
+        }
+
+        const nextRow: CartRow = {
+            ...draft,
+            key: editingRowKey || rowKey(),
+            unit_price: product.sales_price,
+        };
+
+        setCart((current) => {
+            let rows = editingRowKey
+                ? current.map((row) =>
+                      row.key === editingRowKey ? nextRow : row,
+                  )
+                : [...current, nextRow];
+
+            if (editingSale) {
+                const shared = {
+                    customer_id: nextRow.customer_id,
+                    customer_name: nextRow.customer_name,
+                    customer_mobile: nextRow.customer_mobile,
+                    vehicle_id: nextRow.vehicle_id,
+                    vehicle_no: nextRow.vehicle_no,
+                    payment_type: nextRow.payment_type,
+                    to_account_id: nextRow.to_account_id,
+                    bank_type: nextRow.bank_type,
+                    bank_name: nextRow.bank_name,
+                    branch_name: nextRow.branch_name,
+                    account_no: nextRow.account_no,
+                    cheque_no: nextRow.cheque_no,
+                    cheque_date: nextRow.cheque_date,
+                    mobile_bank: nextRow.mobile_bank,
+                    payment_mobile_number: nextRow.payment_mobile_number,
+                    remarks: nextRow.remarks,
+                    memo_no: nextRow.memo_no,
+                };
+                rows = rows.map((row) => ({ ...row, ...shared }));
+            }
+
+            return rows;
+        });
+        clearDraft();
+        setErrors({});
+    };
+
+    const editCartRow = (row: CartRow) => {
+        setDraft({ ...row });
+        setEditingRowKey(row.key);
+        setErrors({});
+        latestLookupRef.current = normalizeMobile(row.customer_mobile);
+        resolvedLookupRef.current = latestLookupRef.current;
+    };
+
+    const removeCartRow = (key: string) => {
+        setCart((current) => current.filter((row) => row.key !== key));
+
+        if (editingRowKey === key) {
+            clearDraft();
+        }
+    };
+
+    const draftHasContent = () =>
+        Boolean(
+            draft.customer_name ||
+            draft.customer_mobile ||
+            draft.vehicle_no ||
+            draft.product_id ||
+            draft.quantity ||
+            draft.to_account_id ||
+            draft.remarks,
+        );
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
         setErrors({});
 
-        const items = [...cart];
-
-        if (draftLine.product_id || draftLine.quantity) {
-            const product = productsById.get(draftLine.product_id);
-            const quantity = parseFloat(draftLine.quantity);
-
-            if (!product || !Number.isFinite(quantity) || quantity <= 0) {
-                setErrors({
-                    items: 'Complete the current product before submitting.',
-                });
-                return;
-            }
-
-            if (
-                items.some((line) => line.product_id === draftLine.product_id)
-            ) {
-                setErrors({
-                    items: 'The same product cannot be added more than once.',
-                });
-                return;
-            }
-
-            items.push(draftLine);
-        }
-
-        if (items.length === 0) {
-            setErrors({ items: 'Add at least one product to the cart.' });
+        if (!session.sale_date) {
+            setErrors({ sale_date: 'Sale date is required.' });
             return;
         }
 
-        const payload = {
-            ...data,
-            items: items.map((line) => ({
-                product_id: line.product_id,
-                quantity: line.quantity,
-                discount: line.discount || 0,
-                remarks: line.remarks || null,
-            })),
-        };
+        if (!session.shift_id) {
+            setErrors({ shift_id: 'Shift is required.' });
+            return;
+        }
+
+        if (draftHasContent()) {
+            setErrors({
+                draft: 'Add or update the current sale row before submitting.',
+            });
+            return;
+        }
+
+        if (cart.length === 0) {
+            setErrors({ rows: 'Add at least one sale row to the cart.' });
+            return;
+        }
+
         const options = {
             preserveScroll: true,
             onStart: () => setProcessing(true),
-            onError: (validationErrors: Record<string, string>) => {
-                setErrors(validationErrors);
-            },
+            onError: (validationErrors: Record<string, string>) =>
+                setErrors(validationErrors),
             onFinish: () => setProcessing(false),
             onSuccess: () => {
-                if (editingSale) {
-                    onClose();
-                }
-
-                reset();
+                onClose();
                 onSuccess?.();
             },
         };
 
         if (editingSale) {
-            router.put(`/sales/${editingSale.id}`, payload, options);
-        } else {
-            router.post('/sales', payload, options);
+            const row = cart[0];
+            router.put(
+                `/sales/${editingSale.id}`,
+                {
+                    ...session,
+                    customer_id: row.customer_id || null,
+                    customer_name: row.customer_name,
+                    customer_mobile: row.customer_mobile,
+                    vehicle_id: row.vehicle_id || null,
+                    vehicle_no: row.vehicle_no || null,
+                    memo_no: row.memo_no || null,
+                    payment_type: row.payment_type,
+                    to_account_id: row.to_account_id,
+                    bank_type: row.bank_type || null,
+                    bank_name: row.bank_name || null,
+                    branch_name: row.branch_name || null,
+                    account_no: row.account_no || null,
+                    cheque_no: row.cheque_no || null,
+                    cheque_date: row.cheque_date || null,
+                    mobile_bank: row.mobile_bank || null,
+                    payment_mobile_number: row.payment_mobile_number || null,
+                    remarks: row.remarks || null,
+                    items: cart.map((item) => ({
+                        product_id: item.product_id,
+                        quantity: item.quantity,
+                        discount: item.discount || 0,
+                        remarks: null,
+                    })),
+                },
+                options,
+            );
+            return;
         }
+
+        router.post(
+            '/sales/batch',
+            {
+                ...session,
+                rows: cart.map((row) => ({
+                    customer_id: row.customer_id || null,
+                    customer_name: row.customer_name,
+                    customer_mobile: row.customer_mobile,
+                    vehicle_id: row.vehicle_id || null,
+                    vehicle_no: row.vehicle_no || null,
+                    product_id: row.product_id,
+                    quantity: row.quantity,
+                    discount: row.discount || 0,
+                    payment_type: row.payment_type,
+                    to_account_id: row.to_account_id,
+                    bank_type: row.bank_type || null,
+                    bank_name: row.bank_name || null,
+                    branch_name: row.branch_name || null,
+                    account_no: row.account_no || null,
+                    cheque_no: row.cheque_no || null,
+                    cheque_date: row.cheque_date || null,
+                    mobile_bank: row.mobile_bank || null,
+                    payment_mobile_number: row.payment_mobile_number || null,
+                    remarks: row.remarks || null,
+                })),
+            },
+            options,
+        );
     };
 
     useEffect(() => {
-        if (!isOpen || !lookupEnabled || !data.customer_mobile.trim()) {
+        if (!isOpen || !draft.customer_mobile.trim()) {
             return;
         }
 
         const controller = new AbortController();
-        const mobile = data.customer_mobile.trim();
+        const mobile = draft.customer_mobile.trim();
         const lookupKey = normalizeMobile(mobile);
-
         latestLookupRef.current = lookupKey;
 
         if (resolvedLookupRef.current === lookupKey) {
@@ -541,25 +615,23 @@ export function SaleModal({
                 }
 
                 if (!response.ok) {
-                    const message =
+                    setLookupError(
                         payload.errors?.mobile?.[0] ||
-                        payload.message ||
-                        'Unable to look up this mobile number.';
-                    setLookupError(message);
+                            payload.message ||
+                            'Unable to look up this mobile number.',
+                    );
                     return;
                 }
 
                 const customer = payload.data as CustomerLookup | null;
+                resolvedLookupRef.current = lookupKey;
 
                 if (!customer) {
-                    resolvedLookupRef.current = lookupKey;
-                    setData((current) =>
-                        current.customer_mobile.trim() === mobile &&
-                        current.customer_id
+                    setDraft((current) =>
+                        normalizeMobile(current.customer_mobile) === lookupKey
                             ? {
                                   ...current,
                                   customer_id: '',
-                                  customer_name: '',
                                   vehicle_id: '',
                                   vehicle_no: '',
                               }
@@ -568,8 +640,7 @@ export function SaleModal({
                     return;
                 }
 
-                resolvedLookupRef.current = lookupKey;
-                setData((current) => {
+                setDraft((current) => {
                     if (
                         normalizeMobile(current.customer_mobile) !== lookupKey
                     ) {
@@ -583,14 +654,8 @@ export function SaleModal({
                         customer_id: customer.id.toString(),
                         customer_name: customer.name,
                         customer_mobile: customer.mobile,
-                        vehicle_id:
-                            current.vehicle_id ||
-                            firstVehicle?.id.toString() ||
-                            '',
-                        vehicle_no:
-                            current.vehicle_no ||
-                            firstVehicle?.vehicle_number ||
-                            '',
+                        vehicle_id: firstVehicle?.id.toString() || '',
+                        vehicle_no: firstVehicle?.vehicle_number || '',
                     };
                 });
             } catch (error) {
@@ -610,27 +675,27 @@ export function SaleModal({
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [data.customer_mobile, isOpen, lookupEnabled]);
+    }, [draft.customer_mobile, isOpen]);
 
     useEffect(() => {
         if (!isOpen) {
-            reset();
             return;
         }
+
+        setErrors({});
+        setDraft(emptyRow());
+        setEditingRowKey(null);
+        setCart([]);
+        latestLookupRef.current = '';
+        resolvedLookupRef.current = '';
 
         if (!editingSale) {
-            const state = initialState();
-            latestLookupRef.current = '';
-            resolvedLookupRef.current = '';
-            setData(state);
-            setDraftLine(emptyLine());
-            setCart([]);
-            setAvailableShifts(getAvailableShifts(state.sale_date));
-            setLookupEnabled(true);
+            const nextSession = initialSession();
+            setSession(nextSession);
+            setAvailableShifts(getAvailableShifts(nextSession.sale_date));
             return;
         }
 
-        setLookupEnabled(false);
         const controller = new AbortController();
 
         void fetch(`/sales/${editingSale.id}/edit`, {
@@ -648,31 +713,17 @@ export function SaleModal({
 
                 const sale = payload.sale;
                 const payment = sale.payment || {};
-                const lines: CartLine[] = (sale.items || []).map(
-                    (item: {
-                        id: number;
-                        product_id: number;
-                        quantity: number;
-                        discount: number;
-                        remarks?: string | null;
-                    }) => ({
-                        key: `sale-item-${item.id}`,
-                        product_id: item.product_id.toString(),
-                        quantity: item.quantity.toString(),
-                        discount: item.discount ? item.discount.toString() : '',
-                        remarks: item.remarks || '',
-                    }),
-                );
-                const state: FormState = {
-                    sale_date: sale.sale_date || '',
-                    shift_id: sale.shift_id?.toString() || '',
-                    memo_no: sale.memo_no || '',
+                const paymentType = paymentLabel(payment.payment_type);
+                const common: Omit<
+                    SaleRowState,
+                    'product_id' | 'quantity' | 'unit_price' | 'discount'
+                > = {
                     customer_id: sale.customer_id?.toString() || '',
                     customer_name: sale.customer_name || '',
                     customer_mobile: sale.customer_mobile || '',
                     vehicle_id: sale.vehicle_id?.toString() || '',
                     vehicle_no: sale.vehicle_no || '',
-                    payment_type: paymentLabel(payment.payment_type),
+                    payment_type: paymentType,
                     to_account_id: payment.to_account_id?.toString() || '',
                     bank_type: payment.bank_type || '',
                     bank_name: payment.bank_name || '',
@@ -683,26 +734,43 @@ export function SaleModal({
                     mobile_bank: payment.mobile_bank || '',
                     payment_mobile_number: payment.payment_mobile_number || '',
                     remarks: sale.remarks || '',
+                    memo_no: sale.memo_no || '',
+                };
+                const rows: CartRow[] = (sale.items || []).map(
+                    (item: {
+                        id: number;
+                        product_id: number;
+                        quantity: number;
+                        unit_price: number;
+                        discount: number;
+                    }) => ({
+                        ...common,
+                        key: `sale-item-${item.id}`,
+                        product_id: item.product_id.toString(),
+                        quantity: item.quantity.toString(),
+                        unit_price:
+                            productsById.get(item.product_id.toString())
+                                ?.sales_price ?? item.unit_price,
+                        discount: item.discount ? item.discount.toString() : '',
+                    }),
+                );
+                const nextSession = {
+                    sale_date: sale.sale_date || '',
+                    shift_id: sale.shift_id?.toString() || '',
                 };
 
-                setData(state);
-                setCart(lines);
-                setDraftLine(emptyLine());
-                setAvailableShifts(getAvailableShifts(state.sale_date));
-                latestLookupRef.current = normalizeMobile(
-                    state.customer_mobile,
-                );
-                resolvedLookupRef.current = latestLookupRef.current;
+                setSession(nextSession);
+                setAvailableShifts(getAvailableShifts(nextSession.sale_date));
+                setCart(rows);
             })
             .catch((error) => {
                 if ((error as Error).name !== 'AbortError') {
-                    setErrors({
-                        sale: (error as Error).message,
-                    });
+                    setErrors({ sale: (error as Error).message });
                 }
             });
 
         return () => controller.abort();
+        // Existing lookup collections are stable for the lifetime of the modal.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingSale, isOpen]);
 
@@ -713,77 +781,15 @@ export function SaleModal({
             title={editingSale ? 'Update Sale' : 'Create Sale'}
             onSubmit={handleSubmit}
             processing={processing}
-            submitText={editingSale ? 'Update Sale' : 'Save Sale'}
+            submitText={editingSale ? 'Update Sale' : 'Create Sale'}
             errors={errors}
-            className="w-[calc(100vw-2rem)] max-w-[65vw] max-md:max-w-[calc(100vw-2rem)]"
-            footerActions={
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={reset}
-                    disabled={processing}
-                >
-                    <RotateCcw className="h-4 w-4" />
-                    Reset
-                </Button>
-            }
+            className="w-[calc(100vw-2rem)] max-w-[90vw] max-md:max-w-[calc(100vw-2rem)]"
         >
             <div className="space-y-4">
-                <InputError message={errors.sale} />
+                <InputError message={errors.sale || errors.rows} />
+                <InputError message={errors.draft || firstRowError} />
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div>
-                        <Label>
-                            Mobile Number{' '}
-                            <span className="text-red-500">*</span>
-                        </Label>
-                        <div className="relative">
-                            <Input
-                                name="customer_mobile"
-                                value={data.customer_mobile}
-                                onChange={(event) =>
-                                    handleMobileChange(event.target.value)
-                                }
-                                placeholder="Enter mobile number"
-                                className="pr-9"
-                            />
-                            {lookupLoading && (
-                                <LoaderCircle className="absolute top-2.5 right-3 h-4 w-4 animate-spin text-gray-500" />
-                            )}
-                        </div>
-                        <InputError
-                            message={errors.customer_mobile || lookupError}
-                        />
-                    </div>
-
-                    <div>
-                        <Label>
-                            Customer <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                            name="customer_name"
-                            value={data.customer_name}
-                            onChange={(event) =>
-                                handleCustomerNameChange(event.target.value)
-                            }
-                            placeholder="Enter customer name"
-                        />
-                        <InputError message={errors.customer_name} />
-                    </div>
-
-                    <div>
-                        <Label>Vehicle</Label>
-                        <Combobox
-                            options={vehicleNumbers}
-                            value={data.vehicle_no}
-                            onValueChange={handleVehicleChange}
-                            placeholder="Type vehicle number"
-                        />
-                        <InputError
-                            message={errors.vehicle_id || errors.vehicle_no}
-                        />
-                    </div>
-
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                     <div>
                         <Label>
                             Sale Date <span className="text-red-500">*</span>
@@ -791,15 +797,16 @@ export function SaleModal({
                         <Input
                             name="sale_date"
                             type="date"
-                            value={data.sale_date}
+                            value={session.sale_date}
                             onChange={(event) => {
-                                const value = event.target.value;
-                                setData((current) => ({
-                                    ...current,
-                                    sale_date: value,
+                                const saleDate = event.target.value;
+                                setSession({
+                                    sale_date: saleDate,
                                     shift_id: '',
-                                }));
-                                setAvailableShifts(getAvailableShifts(value));
+                                });
+                                setAvailableShifts(
+                                    getAvailableShifts(saleDate),
+                                );
                             }}
                         />
                         <InputError message={errors.sale_date} />
@@ -810,14 +817,14 @@ export function SaleModal({
                             Shift <span className="text-red-500">*</span>
                         </Label>
                         <Select
-                            value={data.shift_id}
-                            onValueChange={(value) =>
-                                setData((current) => ({
+                            value={session.shift_id}
+                            onValueChange={(shiftId) =>
+                                setSession((current) => ({
                                     ...current,
-                                    shift_id: value,
+                                    shift_id: shiftId,
                                 }))
                             }
-                            disabled={!data.sale_date}
+                            disabled={!session.sale_date}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select shift" />
@@ -839,33 +846,149 @@ export function SaleModal({
                     <div>
                         <Label>Memo No</Label>
                         <Input
-                            value={data.memo_no}
-                            onChange={(event) =>
-                                setData((current) => ({
-                                    ...current,
-                                    memo_no: event.target.value,
-                                }))
+                            value={
+                                editingSale
+                                    ? draft.memo_no || cart[0]?.memo_no || ''
+                                    : 'Auto-generated on save'
                             }
-                            placeholder="Enter memo number"
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
                         />
-                        <InputError message={errors.memo_no} />
                     </div>
-                </div>
 
-                <div
-                    className="grid grid-cols-1 gap-4 md:grid-cols-2"
-                    data-payment-method={data.payment_type}
-                >
+                    <div>
+                        <Label>
+                            Customer Name{' '}
+                            <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                            name="customer_name"
+                            value={draft.customer_name}
+                            onChange={(event) =>
+                                updateDraft({
+                                    customer_name: event.target.value,
+                                })
+                            }
+                            placeholder="Enter customer name"
+                        />
+                        <InputError message={errors.draft_customer_name} />
+                    </div>
+
+                    <div>
+                        <Label>
+                            Mobile Number{' '}
+                            <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                            <Input
+                                name="customer_mobile"
+                                value={draft.customer_mobile}
+                                onChange={(event) =>
+                                    handleMobileChange(event.target.value)
+                                }
+                                placeholder="Enter mobile number"
+                                className="pr-9"
+                            />
+                            {lookupLoading && (
+                                <LoaderCircle className="absolute top-2.5 right-3 h-4 w-4 animate-spin text-gray-500" />
+                            )}
+                        </div>
+                        <InputError
+                            message={
+                                errors.draft_customer_mobile || lookupError
+                            }
+                        />
+                    </div>
+
+                    <div>
+                        <Label>Vehicle</Label>
+                        <Combobox
+                            options={vehicleNumbers}
+                            value={draft.vehicle_no}
+                            onValueChange={handleVehicleChange}
+                            placeholder="Type vehicle number"
+                        />
+                    </div>
+
+                    <div>
+                        <Label>
+                            Product <span className="text-red-500">*</span>
+                        </Label>
+                        <SearchableSelect
+                            options={productOptions}
+                            value={draft.product_id}
+                            onValueChange={(productId) => {
+                                const product = productsById.get(productId);
+                                updateDraft({
+                                    product_id: productId,
+                                    unit_price: product?.sales_price || 0,
+                                });
+                            }}
+                            placeholder="Select product"
+                            searchPlaceholder="Search products..."
+                        />
+                        <InputError message={errors.draft_product_id} />
+                    </div>
+
+                    <div>
+                        <Label>Sales Price</Label>
+                        <Input
+                            value={
+                                selectedProduct?.sales_price != null
+                                    ? selectedProduct.sales_price.toFixed(2)
+                                    : ''
+                            }
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
+                        />
+                    </div>
+
+                    <div>
+                        <Label>
+                            Quantity <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                            name="quantity"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.quantity}
+                            onChange={(event) =>
+                                updateDraft({ quantity: event.target.value })
+                            }
+                        />
+                        <InputError message={errors.draft_quantity} />
+                    </div>
+
+                    <div>
+                        <Label>Amount</Label>
+                        <Input
+                            value={
+                                draft.product_id && draft.quantity
+                                    ? draftAmount.toFixed(2)
+                                    : ''
+                            }
+                            readOnly
+                            className="bg-gray-100 dark:bg-gray-600"
+                        />
+                    </div>
+
                     <div>
                         <Label>Payment Method</Label>
                         <Select
-                            value={data.payment_type}
-                            onValueChange={(value) =>
-                                setData((current) => ({
-                                    ...current,
-                                    payment_type: value,
+                            value={draft.payment_type}
+                            onValueChange={(paymentType) =>
+                                updateDraft({
+                                    payment_type: paymentType,
                                     to_account_id: '',
-                                }))
+                                    account_no: '',
+                                    bank_type: '',
+                                    bank_name: '',
+                                    cheque_no: '',
+                                    cheque_date: '',
+                                    mobile_bank: '',
+                                    payment_mobile_number: '',
+                                })
                             }
                         >
                             <SelectTrigger>
@@ -875,35 +998,32 @@ export function SaleModal({
                                 <SelectItem value="Cash">Cash</SelectItem>
                                 <SelectItem value="Bank">Bank</SelectItem>
                                 <SelectItem value="Mobile Bank">
-                                    Mobile Bank
+                                    Mobile Banking
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError message={errors.payment_type} />
+                        <InputError message={errors.draft_payment_type} />
                     </div>
 
                     <div>
                         <Label>To Account</Label>
                         <Select
-                            value={data.to_account_id}
-                            onValueChange={(value) => {
+                            value={draft.to_account_id}
+                            onValueChange={(accountId) => {
                                 const account = accounts.find(
-                                    (item) => item.id.toString() === value,
+                                    (item) => item.id.toString() === accountId,
                                 );
-                                setData((current) => ({
-                                    ...current,
-                                    to_account_id: value,
-                                    account_no:
-                                        account?.ac_number ||
-                                        current.account_no,
-                                }));
+                                updateDraft({
+                                    to_account_id: accountId,
+                                    account_no: account?.ac_number || '',
+                                });
                             }}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select payment account" />
                             </SelectTrigger>
                             <SelectContent>
-                                {getFilteredAccounts(data.payment_type).map(
+                                {getFilteredAccounts(draft.payment_type).map(
                                     (account) => (
                                         <SelectItem
                                             key={account.id}
@@ -915,325 +1035,250 @@ export function SaleModal({
                                 )}
                             </SelectContent>
                         </Select>
-                        <InputError message={errors.to_account_id} />
+                        <InputError message={errors.draft_to_account_id} />
                     </div>
-
-                    {data.payment_type === 'Bank' && (
-                        <>
-                            <div>
-                                <Label>Bank Type</Label>
-                                <Select
-                                    value={data.bank_type}
-                                    onValueChange={(value) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            bank_type: value,
-                                        }))
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Cheque">
-                                            Cheque
-                                        </SelectItem>
-                                        <SelectItem value="Cash Deposit">
-                                            Cash Deposit
-                                        </SelectItem>
-                                        <SelectItem value="Online">
-                                            Online
-                                        </SelectItem>
-                                        <SelectItem value="CHT">CHT</SelectItem>
-                                        <SelectItem value="RTGS">
-                                            RTGS
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.bank_type} />
-                            </div>
-
-                            <div>
-                                <Label>Bank Name</Label>
-                                <Input
-                                    value={data.bank_name}
-                                    onChange={(event) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            bank_name: event.target.value,
-                                        }))
-                                    }
-                                />
-                                <InputError message={errors.bank_name} />
-                            </div>
-
-                            {data.bank_type === 'Cheque' && (
-                                <>
-                                    <div>
-                                        <Label>Cheque No</Label>
-                                        <Input
-                                            value={data.cheque_no}
-                                            onChange={(event) =>
-                                                setData((current) => ({
-                                                    ...current,
-                                                    cheque_no:
-                                                        event.target.value,
-                                                }))
-                                            }
-                                        />
-                                        <InputError
-                                            message={errors.cheque_no}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Cheque Date</Label>
-                                        <Input
-                                            type="date"
-                                            value={data.cheque_date}
-                                            onChange={(event) =>
-                                                setData((current) => ({
-                                                    ...current,
-                                                    cheque_date:
-                                                        event.target.value,
-                                                }))
-                                            }
-                                        />
-                                        <InputError
-                                            message={errors.cheque_date}
-                                        />
-                                    </div>
-                                </>
-                            )}
-                        </>
-                    )}
-
-                    {data.payment_type === 'Mobile Bank' && (
-                        <>
-                            <div>
-                                <Label>Mobile Bank</Label>
-                                <Select
-                                    value={data.mobile_bank}
-                                    onValueChange={(value) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            mobile_bank: value,
-                                        }))
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select mobile bank" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="bKash">
-                                            bKash
-                                        </SelectItem>
-                                        <SelectItem value="Nagad">
-                                            Nagad
-                                        </SelectItem>
-                                        <SelectItem value="Rocket">
-                                            Rocket
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.mobile_bank} />
-                            </div>
-
-                            <div>
-                                <Label>Payment Mobile Number</Label>
-                                <Input
-                                    value={data.payment_mobile_number}
-                                    onChange={(event) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            payment_mobile_number:
-                                                event.target.value,
-                                        }))
-                                    }
-                                />
-                                <InputError
-                                    message={errors.payment_mobile_number}
-                                />
-                            </div>
-                        </>
-                    )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
-                    <div>
-                        <Label>
-                            Product <span className="text-red-500">*</span>
-                        </Label>
-                        <SearchableSelect
-                            options={productOptions}
-                            value={draftLine.product_id}
-                            onValueChange={(value) =>
-                                updateDraftLine({ product_id: value })
-                            }
-                            placeholder="Select product"
-                            searchPlaceholder="Search products..."
-                        />
-                        <InputError
-                            message={
-                                errors.draft_product_id ||
-                                errors['items.0.product_id']
-                            }
-                        />
-                    </div>
+                {draft.payment_type === 'Bank' && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                        <div>
+                            <Label>Bank Type</Label>
+                            <Select
+                                value={draft.bank_type}
+                                onValueChange={(bankType) =>
+                                    updateDraft({
+                                        bank_type: bankType,
+                                        cheque_no: '',
+                                        cheque_date: '',
+                                    })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cheque">
+                                        Cheque
+                                    </SelectItem>
+                                    <SelectItem value="Cash Deposit">
+                                        Cash Deposit
+                                    </SelectItem>
+                                    <SelectItem value="Online">
+                                        Online
+                                    </SelectItem>
+                                    <SelectItem value="CHT">CHT</SelectItem>
+                                    <SelectItem value="RTGS">RTGS</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.draft_bank_type} />
+                        </div>
 
-                    <div>
-                        <Label>
-                            Quantity <span className="text-red-500">*</span>
-                        </Label>
+                        <div>
+                            <Label>Bank Name</Label>
+                            <Input
+                                value={draft.bank_name}
+                                onChange={(event) =>
+                                    updateDraft({
+                                        bank_name: event.target.value,
+                                    })
+                                }
+                            />
+                            <InputError message={errors.draft_bank_name} />
+                        </div>
+
+                        {draft.bank_type === 'Cheque' && (
+                            <>
+                                <div>
+                                    <Label>Cheque No</Label>
+                                    <Input
+                                        value={draft.cheque_no}
+                                        onChange={(event) =>
+                                            updateDraft({
+                                                cheque_no: event.target.value,
+                                            })
+                                        }
+                                    />
+                                    <InputError
+                                        message={errors.draft_cheque_no}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Cheque Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={draft.cheque_date}
+                                        onChange={(event) =>
+                                            updateDraft({
+                                                cheque_date: event.target.value,
+                                            })
+                                        }
+                                    />
+                                    <InputError
+                                        message={errors.draft_cheque_date}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {draft.payment_type === 'Mobile Bank' && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                        <div>
+                            <Label>Mobile Bank</Label>
+                            <Select
+                                value={draft.mobile_bank}
+                                onValueChange={(mobileBank) =>
+                                    updateDraft({
+                                        mobile_bank: mobileBank,
+                                    })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select mobile bank" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="bKash">bKash</SelectItem>
+                                    <SelectItem value="Nagad">Nagad</SelectItem>
+                                    <SelectItem value="Rocket">
+                                        Rocket
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.draft_mobile_bank} />
+                        </div>
+
+                        <div>
+                            <Label>Payment Mobile Number</Label>
+                            <Input
+                                value={draft.payment_mobile_number}
+                                onChange={(event) =>
+                                    updateDraft({
+                                        payment_mobile_number:
+                                            event.target.value,
+                                    })
+                                }
+                            />
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <div className="md:col-span-3">
+                        <Label>Remarks</Label>
                         <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draftLine.quantity}
+                            value={draft.remarks}
                             onChange={(event) =>
-                                updateDraftLine({
-                                    quantity: event.target.value,
-                                })
+                                updateDraft({ remarks: event.target.value })
                             }
-                        />
-                        <InputError
-                            message={
-                                errors.draft_quantity ||
-                                errors['items.0.quantity']
-                            }
-                        />
-                    </div>
-
-                    <div>
-                        <Label>Sales Price</Label>
-                        <Input
-                            value={
-                                selectedDraftProduct?.sales_price != null
-                                    ? selectedDraftProduct.sales_price.toFixed(
-                                          2,
-                                      )
-                                    : ''
-                            }
-                            readOnly
-                            className="bg-gray-100 dark:bg-gray-600"
-                        />
-                    </div>
-
-                    <div>
-                        <Label>Discount</Label>
-                        <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draftLine.discount}
-                            onChange={(event) =>
-                                updateDraftLine({
-                                    discount: event.target.value,
-                                })
-                            }
-                        />
-                        <InputError
-                            message={
-                                errors.draft_discount ||
-                                errors['items.0.discount']
-                            }
-                        />
-                    </div>
-
-                    <div>
-                        <Label>Amount</Label>
-                        <Input
-                            value={
-                                draftLine.product_id && draftLine.quantity
-                                    ? draftTotal.toFixed(2)
-                                    : ''
-                            }
-                            readOnly
-                            className="bg-gray-100 dark:bg-gray-600"
+                            placeholder="Enter any remarks"
                         />
                     </div>
 
                     <div className="flex flex-col justify-end">
-                        <Button type="button" onClick={addToCart}>
-                            <Plus className="h-4 w-4" />
-                            Add to Cart
+                        <Button type="button" onClick={addOrUpdateCartRow}>
+                            {editingRowKey ? (
+                                <Edit className="h-4 w-4" />
+                            ) : (
+                                <Plus className="h-4 w-4" />
+                            )}
+                            {editingRowKey ? 'Update Cart Row' : 'Add to Cart'}
                         </Button>
                     </div>
                 </div>
-
-                <InputError message={errors.items || nestedItemError} />
 
                 <div className="overflow-x-auto">
                     <table className="w-full border border-gray-300 dark:border-gray-600">
                         <thead className="bg-gray-100 dark:bg-gray-700">
                             <tr>
-                                <th className="p-2 text-left text-sm font-medium">
-                                    SL
-                                </th>
-                                <th className="p-2 text-left text-sm font-medium">
-                                    Product
-                                </th>
-                                <th className="p-2 text-right text-sm font-medium">
-                                    Price
-                                </th>
-                                <th className="p-2 text-right text-sm font-medium">
-                                    Quantity
-                                </th>
-                                <th className="p-2 text-right text-sm font-medium">
-                                    Discount
-                                </th>
-                                <th className="p-2 text-right text-sm font-medium">
-                                    Total
-                                </th>
-                                <th className="p-2 text-left text-sm font-medium">
-                                    Action
-                                </th>
+                                {[
+                                    'SL',
+                                    'Memo No',
+                                    'Customer',
+                                    'Mobile',
+                                    'Vehicle',
+                                    'Product',
+                                    'Qty',
+                                    'Unit Price',
+                                    'Amount',
+                                    'Payment Method',
+                                    'Account',
+                                    'Remarks',
+                                    'Action',
+                                ].map((heading) => (
+                                    <th
+                                        key={heading}
+                                        className="p-2 text-left text-sm font-medium whitespace-nowrap"
+                                    >
+                                        {heading}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
                             {cart.length > 0 ? (
-                                cart.map((line, index) => {
+                                cart.map((row, index) => {
                                     const product = productsById.get(
-                                        line.product_id,
+                                        row.product_id,
+                                    );
+                                    const account = accounts.find(
+                                        (item) =>
+                                            item.id.toString() ===
+                                            row.to_account_id,
                                     );
 
                                     return (
                                         <tr
-                                            key={line.key}
+                                            key={row.key}
                                             className="border-t dark:border-gray-600"
                                         >
                                             <td className="p-2 text-sm">
                                                 {index + 1}
                                             </td>
+                                            <td className="p-2 text-sm whitespace-nowrap">
+                                                {row.memo_no || 'Auto on save'}
+                                            </td>
+                                            <td className="p-2 text-sm">
+                                                {row.customer_name ||
+                                                    'Walk-in Customer'}
+                                            </td>
+                                            <td className="p-2 text-sm whitespace-nowrap">
+                                                {row.customer_mobile}
+                                            </td>
+                                            <td className="p-2 text-sm">
+                                                {row.vehicle_no || '-'}
+                                            </td>
                                             <td className="p-2 text-sm">
                                                 {product?.product_name || 'N/A'}
                                             </td>
                                             <td className="p-2 text-right text-sm">
-                                                {(
-                                                    product?.sales_price || 0
-                                                ).toFixed(2)}
+                                                {row.quantity}
                                             </td>
                                             <td className="p-2 text-right text-sm">
-                                                {line.quantity}
+                                                {row.unit_price.toFixed(2)}
                                             </td>
                                             <td className="p-2 text-right text-sm">
-                                                {(
-                                                    parseFloat(line.discount) ||
-                                                    0
-                                                ).toFixed(2)}
+                                                {rowAmount(row).toFixed(2)}
                                             </td>
-                                            <td className="p-2 text-right text-sm">
-                                                {lineTotal(line).toFixed(2)}
+                                            <td className="p-2 text-sm whitespace-nowrap">
+                                                {row.payment_type}
+                                            </td>
+                                            <td className="p-2 text-sm">
+                                                {account?.name || 'N/A'}
+                                            </td>
+                                            <td className="max-w-48 truncate p-2 text-sm">
+                                                {row.remarks || '-'}
                                             </td>
                                             <td className="p-2">
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-1">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() =>
-                                                            editCartLine(line)
+                                                            editCartRow(row)
                                                         }
-                                                        aria-label={`Edit ${product?.product_name || 'product'}`}
+                                                        aria-label={`Edit sale row ${index + 1}`}
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
@@ -1242,11 +1287,11 @@ export function SaleModal({
                                                         variant="destructive"
                                                         size="sm"
                                                         onClick={() =>
-                                                            removeCartLine(
-                                                                line.key,
+                                                            removeCartRow(
+                                                                row.key,
                                                             )
                                                         }
-                                                        aria-label={`Remove ${product?.product_name || 'product'}`}
+                                                        aria-label={`Delete sale row ${index + 1}`}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -1258,10 +1303,10 @@ export function SaleModal({
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan={7}
+                                        colSpan={13}
                                         className="p-6 text-center text-sm text-gray-500"
                                     >
-                                        No products added
+                                        No sale rows added
                                     </td>
                                 </tr>
                             )}
@@ -1269,33 +1314,18 @@ export function SaleModal({
                         <tfoot>
                             <tr className="border-t bg-gray-50 font-medium dark:border-gray-600 dark:bg-gray-700">
                                 <td
-                                    colSpan={5}
+                                    colSpan={8}
                                     className="p-2 text-right text-sm"
                                 >
                                     Grand Total
                                 </td>
                                 <td className="p-2 text-right text-sm">
-                                    {cartTotal.toFixed(2)}
+                                    {grandTotal.toFixed(2)}
                                 </td>
-                                <td />
+                                <td colSpan={4} />
                             </tr>
                         </tfoot>
                     </table>
-                </div>
-
-                <div>
-                    <Label>Remarks</Label>
-                    <Input
-                        value={data.remarks}
-                        onChange={(event) =>
-                            setData((current) => ({
-                                ...current,
-                                remarks: event.target.value,
-                            }))
-                        }
-                        placeholder="Enter any remarks"
-                    />
-                    <InputError message={errors.remarks} />
                 </div>
             </div>
         </FormModal>

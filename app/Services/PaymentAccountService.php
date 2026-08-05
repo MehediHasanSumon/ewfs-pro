@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Group;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class PaymentAccountService
@@ -18,6 +19,50 @@ class PaymentAccountService
             ->with('group:id,code,name,account_class,status')
             ->where('status', true)
             ->find($accountId);
+
+        return $this->validateAccount(
+            $account,
+            $paymentType,
+            $errorKey,
+            $groupId
+        );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return Collection<int, Account>
+     */
+    public function resolveBatch(array $rows): Collection
+    {
+        $accounts = Account::query()
+            ->with('group:id,code,name,account_class,status')
+            ->where('status', true)
+            ->whereIn(
+                'id',
+                collect($rows)
+                    ->pluck('to_account_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->filter()
+                    ->unique()
+            )
+            ->get()
+            ->keyBy('id');
+
+        return collect($rows)
+            ->values()
+            ->map(fn (array $row, int $index) => $this->validateAccount(
+                $accounts->get((int) ($row['to_account_id'] ?? 0)),
+                (string) ($row['payment_type'] ?? ''),
+                "rows.{$index}.to_account_id"
+            ));
+    }
+
+    private function validateAccount(
+        ?Account $account,
+        string $paymentType,
+        string $errorKey,
+        ?int $groupId = null
+    ): Account {
         $allowedGroupCodes = $this->groupCodesFor($paymentType);
 
         if (
