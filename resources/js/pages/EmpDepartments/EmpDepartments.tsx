@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -267,7 +268,7 @@ export default function EmpDepartments({ departments, empTypes, filters }: EmpDe
                                     if (endDate) params.append('end_date', endDate);
                                     if (sortBy) params.append('sort_by', sortBy);
                                     if (sortOrder) params.append('sort_order', sortOrder);
-                                    window.location.href = `/emp-departments/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/emp-departments/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="h-4 w-4 mr-2" />

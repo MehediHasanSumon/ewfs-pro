@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
@@ -81,7 +82,9 @@ export default function ShiftClosedShow({ shiftClosed }: ShiftClosedShowProps) {
                         <Button
                             variant="success"
                             onClick={() =>
-                                (window.location.href = `/shift-closed-list/${shiftClosed.id}/download-pdf`)
+                                openPdfViewer(
+                                    `/shift-closed-list/${shiftClosed.id}/download-pdf`,
+                                )
                             }
                         >
                             <FileText className="mr-2 h-4 w-4" />

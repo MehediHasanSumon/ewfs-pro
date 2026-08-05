@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -296,7 +297,7 @@ export default function Vehicles({
                                         params.append('customer', customer);
                                     if (status !== 'all')
                                         params.append('status', status);
-                                    window.location.href = `/vehicles/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/vehicles/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="mr-2 h-4 w-4" />

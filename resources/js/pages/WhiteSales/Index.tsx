@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
@@ -456,7 +457,7 @@ export default function WhiteSales({ whiteSales, products = [], shifts = [], fil
                                     if (endDate) params.append('end_date', endDate);
                                     if (sortBy) params.append('sort_by', sortBy);
                                     if (sortOrder) params.append('sort_order', sortOrder);
-                                    window.location.href = `/white-sales/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/white-sales/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="mr-2 h-4 w-4" />
@@ -587,7 +588,7 @@ export default function WhiteSales({ whiteSales, products = [], shifts = [], fil
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => window.open(`/white-sales/${sale.id}/pdf`, '_blank')}
+                                                                onClick={() => openPdfViewer(`/white-sales/${sale.id}/pdf`)}
                                                                 className="text-blue-600 hover:text-blue-800"
                                                                 title="Download PDF"
                                                             >

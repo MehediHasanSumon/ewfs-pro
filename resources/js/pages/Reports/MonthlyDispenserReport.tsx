@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -225,7 +226,7 @@ export default function MonthlyDispenserReport({
                                 if (endDate) params.append('end_date', endDate);
                                 params.append('visible_columns', JSON.stringify(visibleColumns));
                                 params.append('visible_products', JSON.stringify(visibleProducts));
-                                window.location.href = `/reports/monthly-dispenser-report/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/reports/monthly-dispenser-report/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

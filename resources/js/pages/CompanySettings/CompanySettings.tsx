@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -150,7 +151,7 @@ export default function CompanySettings({ companySettings = [], filters }: Compa
                                     if (status !== 'all') params.append('status', status);
                                     if (startDate) params.append('start_date', startDate);
                                     if (endDate) params.append('end_date', endDate);
-                                    window.location.href = `/company-settings/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/company-settings/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="h-4 w-4 mr-2" />

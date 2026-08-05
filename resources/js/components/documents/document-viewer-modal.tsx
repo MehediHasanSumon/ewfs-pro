@@ -12,8 +12,6 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-    ChevronLeft,
-    ChevronRight,
     ExternalLink,
     FileText,
     ImageOff,
@@ -125,9 +123,7 @@ export function DocumentViewerModal({
     const requestedInitialIndex = availableDocuments.findIndex(
         (document) => document.id === initialDocumentId,
     );
-    const [activeIndex, setActiveIndex] = useState(
-        requestedInitialIndex >= 0 ? requestedInitialIndex : 0,
-    );
+    const activeIndex = requestedInitialIndex >= 0 ? requestedInitialIndex : 0;
     const [scale, setScale] = useState(1);
     const [rotation, setRotation] = useState(0);
     const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -139,29 +135,29 @@ export function DocumentViewerModal({
     const viewerRef = useRef<HTMLDivElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const pointersRef = useRef(new Map<number, Point>());
-    const dragRef = useRef<{
-        pointerId: number;
-        origin: Point;
-        pan: Point;
-        pointerType: string;
-    } | undefined>(undefined);
-    const pinchRef = useRef<{
-        distance: number;
-        scale: number;
-        center: Point;
-        pan: Point;
-    } | undefined>(undefined);
-    const swipeRef = useRef<{
-        pointerId: number;
-        origin: Point;
-        startedAt: number;
-    } | undefined>(undefined);
+    const dragRef = useRef<
+        | {
+              pointerId: number;
+              origin: Point;
+              pan: Point;
+              pointerType: string;
+          }
+        | undefined
+    >(undefined);
+    const pinchRef = useRef<
+        | {
+              distance: number;
+              scale: number;
+              center: Point;
+              pan: Point;
+          }
+        | undefined
+    >(undefined);
     const scaleRef = useRef(scale);
     const panRef = useRef(pan);
 
     const activeDocument = availableDocuments[activeIndex];
     const isImage = activeDocument?.kind === 'image';
-    const hasNavigation = availableDocuments.length > 1;
 
     useEffect(() => {
         scaleRef.current = scale;
@@ -181,24 +177,7 @@ export function DocumentViewerModal({
         pointersRef.current.clear();
         dragRef.current = undefined;
         pinchRef.current = undefined;
-        swipeRef.current = undefined;
     }, []);
-
-    const goPrevious = useCallback(() => {
-        if (availableDocuments.length < 2) return;
-        resetDocumentState();
-        setActiveIndex(
-            (current) =>
-                (current - 1 + availableDocuments.length) %
-                availableDocuments.length,
-        );
-    }, [availableDocuments.length, resetDocumentState]);
-
-    const goNext = useCallback(() => {
-        if (availableDocuments.length < 2) return;
-        resetDocumentState();
-        setActiveIndex((current) => (current + 1) % availableDocuments.length);
-    }, [availableDocuments.length, resetDocumentState]);
 
     const actualSize = useCallback(() => {
         setScale(1);
@@ -246,25 +225,6 @@ export function DocumentViewerModal({
     }, []);
 
     useEffect(() => {
-        if (!open || availableDocuments.length < 2) return;
-
-        const adjacentIndexes = [
-            (activeIndex - 1 + availableDocuments.length) %
-                availableDocuments.length,
-            (activeIndex + 1) % availableDocuments.length,
-        ];
-
-        adjacentIndexes.forEach((index) => {
-            const document = availableDocuments[index];
-            if (document.kind !== 'image') return;
-
-            const image = new Image();
-            image.decoding = 'async';
-            image.src = document.url;
-        });
-    }, [activeIndex, availableDocuments, open]);
-
-    useEffect(() => {
         const handleFullscreenChange = () =>
             setIsFullscreen(document.fullscreenElement === viewerRef.current);
 
@@ -289,13 +249,7 @@ export function DocumentViewerModal({
                 return;
             }
 
-            if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                goPrevious();
-            } else if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                goNext();
-            } else if (isImage && (event.key === '+' || event.key === '=')) {
+            if (isImage && (event.key === '+' || event.key === '=')) {
                 event.preventDefault();
                 zoomBy(ZOOM_STEP);
             } else if (isImage && event.key === '-') {
@@ -312,16 +266,7 @@ export function DocumentViewerModal({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [
-        goNext,
-        goPrevious,
-        isImage,
-        onOpenChange,
-        open,
-        resetView,
-        toggleFullscreen,
-        zoomBy,
-    ]);
+    }, [isImage, onOpenChange, open, resetView, toggleFullscreen, zoomBy]);
 
     const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
         if (!isImage || loadError) return;
@@ -343,13 +288,6 @@ export function DocumentViewerModal({
                 pan: panRef.current,
                 pointerType: event.pointerType,
             };
-            if (event.pointerType === 'touch') {
-                swipeRef.current = {
-                    pointerId: event.pointerId,
-                    origin: point,
-                    startedAt: Date.now(),
-                };
-            }
         } else if (pointersRef.current.size === 2) {
             const [first, second] = Array.from(pointersRef.current.values());
             pinchRef.current = {
@@ -358,7 +296,6 @@ export function DocumentViewerModal({
                 center: pointCenter(first, second),
                 pan: panRef.current,
             };
-            swipeRef.current = undefined;
         }
     };
 
@@ -400,32 +337,10 @@ export function DocumentViewerModal({
     };
 
     const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
-        const swipe = swipeRef.current;
-        if (
-            swipe &&
-            swipe.pointerId === event.pointerId &&
-            scaleRef.current <= 1.05 &&
-            Date.now() - swipe.startedAt < 700
-        ) {
-            const horizontalDistance = event.clientX - swipe.origin.x;
-            const verticalDistance = Math.abs(event.clientY - swipe.origin.y);
-
-            if (Math.abs(horizontalDistance) >= 60 && verticalDistance <= 50) {
-                if (horizontalDistance > 0) {
-                    goPrevious();
-                } else {
-                    goNext();
-                }
-            }
-        }
-
         pointersRef.current.delete(event.pointerId);
         if (pointersRef.current.size < 2) pinchRef.current = undefined;
         if (dragRef.current?.pointerId === event.pointerId) {
             dragRef.current = undefined;
-        }
-        if (swipeRef.current?.pointerId === event.pointerId) {
-            swipeRef.current = undefined;
         }
     };
 
@@ -455,7 +370,8 @@ export function DocumentViewerModal({
                             </DialogTitle>
                             <DialogDescription className="mb-0 truncate text-xs">
                                 {activeDocument
-                                    ? `${activeIndex + 1} of ${availableDocuments.length}`
+                                    ? activeDocument.fileName ||
+                                      activeDocument.kind.toUpperCase()
                                     : 'No document available'}
                             </DialogDescription>
                         </div>
@@ -658,35 +574,6 @@ export function DocumentViewerModal({
                             </>
                         )}
                     </div>
-
-                    <footer className="flex min-h-14 items-center justify-between gap-3 border-t border-gray-200 px-3 sm:px-4 dark:border-gray-700">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={goPrevious}
-                            disabled={!hasNavigation}
-                        >
-                            <ChevronLeft
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                            />
-                            Previous
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={goNext}
-                            disabled={!hasNavigation}
-                        >
-                            Next
-                            <ChevronRight
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                            />
-                        </Button>
-                    </footer>
                 </div>
             </DialogContent>
         </Dialog>

@@ -75,7 +75,7 @@ class SMSTemplateController extends Controller implements HasMiddleware
         $smsTemplates = $this->filteredQuery($request)->get();
         $pdf = Pdf::loadView('pdf.sms-templates', compact('smsTemplates'));
 
-        return $pdf->download('sms-templates.pdf');
+        return $pdf->stream('sms-templates.pdf');
     }
 
     private function filteredQuery(Request $request): Builder

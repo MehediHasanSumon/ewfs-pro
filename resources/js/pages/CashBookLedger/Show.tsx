@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
@@ -70,7 +71,7 @@ export default function Show({ shiftClosed, cashTransactions }: Props) {
                         {canDownload && (
                             <Button
                                 variant="success"
-                                onClick={() => window.location.href = `/cash-book-ledger/${shiftClosed.id}/download-pdf`}
+                                onClick={() => openPdfViewer(`/cash-book-ledger/${shiftClosed.id}/download-pdf`)}
                             >
                                 <FileText className="mr-2 h-4 w-4" />
                                 Download

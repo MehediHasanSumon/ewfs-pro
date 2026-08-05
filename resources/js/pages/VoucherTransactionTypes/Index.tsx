@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -288,7 +289,7 @@ export default function VoucherTransactionTypeIndex({
                                     params.set('system', system);
                                 params.set('sort_by', sortBy);
                                 params.set('sort_order', sortOrder);
-                                window.location.href = `/voucher-transaction-types/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/voucher-transaction-types/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

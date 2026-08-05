@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -280,7 +281,7 @@ export default function SMSConfig({ configs, filters }: SMSConfigProps) {
                                 if (endDate) params.append('end_date', endDate);
                                 if (sortBy) params.append('sort_by', sortBy);
                                 if (sortOrder) params.append('sort_order', sortOrder);
-                                window.location.href = `/sms-configs/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/sms-configs/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

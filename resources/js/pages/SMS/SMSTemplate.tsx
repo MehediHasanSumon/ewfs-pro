@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -261,7 +262,7 @@ export default function SMSTemplate({ smsTemplates, filters }: SMSTemplateProps)
                                 if (search) params.append('search', search);
                                 if (sortBy) params.append('sort_by', sortBy);
                                 if (sortOrder) params.append('sort_order', sortOrder);
-                                window.location.href = `/sms-templates/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/sms-templates/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

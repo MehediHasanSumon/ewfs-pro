@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -192,7 +193,9 @@ export default function CustomerDetails({
                         <Button
                             variant="success"
                             onClick={() =>
-                                (window.location.href = `/customers/${customer.id}/download-pdf`)
+                                openPdfViewer(
+                                    `/customers/${customer.id}/download-pdf`,
+                                )
                             }
                         >
                             <FileText className="mr-2 h-4 w-4" />
@@ -896,10 +899,7 @@ export default function CustomerDetails({
                                     vehicleData.status ? 'active' : 'inactive'
                                 }
                                 onValueChange={(value) =>
-                                    setVehicleData(
-                                        'status',
-                                        value === 'active',
-                                    )
+                                    setVehicleData('status', value === 'active')
                                 }
                             >
                                 <SelectTrigger>

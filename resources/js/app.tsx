@@ -1,5 +1,6 @@
 import '../css/app.css';
 
+import { PdfViewerProvider } from '@/components/documents/pdf-viewer';
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { StrictMode } from 'react';
@@ -20,7 +21,9 @@ createInertiaApp({
 
         root.render(
             <StrictMode>
-                <App {...props} />
+                <PdfViewerProvider>
+                    <App {...props} />
+                </PdfViewerProvider>
             </StrictMode>,
         );
     },

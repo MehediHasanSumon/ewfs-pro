@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -202,7 +203,7 @@ export default function SupplierStatement({ supplier, transactions, currentBalan
                                         const params = new URLSearchParams();
                                         if (startDate) params.append('start_date', startDate);
                                         if (endDate) params.append('end_date', endDate);
-                                        window.location.href = `/suppliers/${supplier.id}/purchases-pdf?${params.toString()}`;
+                                        openPdfViewer(`/suppliers/${supplier.id}/purchases-pdf?${params.toString()}`);
                                     }}
                                 >
                                     <Download className="h-4 w-4 mr-2" />
@@ -259,7 +260,7 @@ export default function SupplierStatement({ supplier, transactions, currentBalan
                                         const params = new URLSearchParams();
                                         if (startDate) params.append('start_date', startDate);
                                         if (endDate) params.append('end_date', endDate);
-                                        window.location.href = `/suppliers/${supplier.id}/payments-pdf?${params.toString()}`;
+                                        openPdfViewer(`/suppliers/${supplier.id}/payments-pdf?${params.toString()}`);
                                     }}
                                 >
                                     <Download className="h-4 w-4 mr-2" />

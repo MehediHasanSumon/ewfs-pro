@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -73,7 +74,7 @@ export default function LoanStatement({ loanAccount, totalLoan, totalPayment, cu
                     <div className="flex gap-2">
                         <Button
                             variant="success"
-                            onClick={() => window.location.href = `/loans/${loanAccount.id}/statement-pdf`}
+                            onClick={() => openPdfViewer(`/loans/${loanAccount.id}/statement-pdf`)}
                         >
                             <FileText className="mr-2 h-4 w-4" />
                             Download PDF
@@ -135,7 +136,7 @@ export default function LoanStatement({ loanAccount, totalLoan, totalPayment, cu
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => window.location.href = `/loans/${loanAccount.id}/loans-pdf`}
+                                    onClick={() => openPdfViewer(`/loans/${loanAccount.id}/loans-pdf`)}
                                 >
                                     <Download className="h-4 w-4 mr-2" />
                                     Download
@@ -192,7 +193,7 @@ export default function LoanStatement({ loanAccount, totalLoan, totalPayment, cu
                                             const params = new URLSearchParams();
                                             if (startDate) params.append('start_date', startDate);
                                             if (endDate) params.append('end_date', endDate);
-                                            window.location.href = `/loans/${loanAccount.id}/payments-pdf?${params.toString()}`;
+                                            openPdfViewer(`/loans/${loanAccount.id}/payments-pdf?${params.toString()}`);
                                         }}
                                     >
                                         <Download className="h-4 w-4 mr-2" />

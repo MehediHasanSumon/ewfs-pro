@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -87,7 +88,7 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                 const params = new URLSearchParams();
                                 params.append('start_date', startDate);
                                 params.append('end_date', endDate);
-                                window.location.href = `/customer-ledger-details/${customerId}/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/customer-ledger-details/${customerId}/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />Download

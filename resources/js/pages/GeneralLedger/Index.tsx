@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
@@ -97,7 +98,7 @@ export default function GeneralLedger({ accounts, selectedAccount, transactions,
                                 if (accountId) params.append('account_id', accountId);
                                 if (startDate) params.append('start_date', startDate);
                                 if (endDate) params.append('end_date', endDate);
-                                window.location.href = `/general-ledger/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/general-ledger/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -241,7 +242,7 @@ export default function Permissions({ permissions, filters }: PermissionsProps) 
                                     if (endDate) params.append('end_date', endDate);
                                     if (sortBy) params.append('sort_by', sortBy);
                                     if (sortOrder) params.append('sort_order', sortOrder);
-                                    window.location.href = `/permissions/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/permissions/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="h-4 w-4 mr-2" />

@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
@@ -293,7 +294,7 @@ export default function ReceivedVoucher({
                                     if (sortBy) params.append('sort_by', sortBy);
                                     if (sortOrder)
                                         params.append('sort_order', sortOrder);
-                                    window.location.href = `/vouchers/received/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/vouchers/received/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="mr-2 h-4 w-4" />

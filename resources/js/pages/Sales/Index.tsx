@@ -1,7 +1,4 @@
-import {
-    DocumentViewerModal,
-    type ViewerDocument,
-} from '@/components/documents/document-viewer-modal';
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
@@ -31,7 +28,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Sale } from './SaleModal';
 import { SaleModal } from './SaleModal';
 
@@ -145,31 +142,6 @@ export default function Sales({
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
     const [sortOrder, setSortOrder] = useState(filters.sort_order || 'desc');
     const [perPage, setPerPage] = useState(filters.per_page || 10);
-    const [viewerOpen, setViewerOpen] = useState(false);
-    const [viewerDocuments, setViewerDocuments] = useState<ViewerDocument[]>(
-        [],
-    );
-    const [initialDocumentId, setInitialDocumentId] = useState<string | null>(
-        null,
-    );
-    const invoiceDocuments = useMemo<ViewerDocument[]>(
-        () =>
-            sales.data.map((sale) => ({
-                id: `sale-invoice-${sale.id}`,
-                title: `Invoice ${sale.invoice_no}`,
-                url: `/sales/${sale.id}/pdf`,
-                kind: 'pdf',
-                fileName: `sale-invoice-${sale.invoice_no}.pdf`,
-            })),
-        [sales.data],
-    );
-
-    const openViewer = (documents: ViewerDocument[], initialId: string) => {
-        setViewerDocuments(documents);
-        setInitialDocumentId(initialId);
-        setViewerOpen(true);
-    };
-
     const salesPdfUrl = () => {
         const params = new URLSearchParams();
         if (search) params.append('search', search);
@@ -348,17 +320,10 @@ export default function Sales({
                             <Button
                                 variant="success"
                                 onClick={() =>
-                                    openViewer(
-                                        [
-                                            {
-                                                id: 'sales-report',
-                                                title: 'Sales Report',
-                                                url: salesPdfUrl(),
-                                                kind: 'pdf',
-                                                fileName: 'sales.pdf',
-                                            },
-                                        ],
-                                        'sales-report',
+                                    openPdfViewer(
+                                        salesPdfUrl(),
+                                        'Sales Report',
+                                        'sales.pdf',
                                     )
                                 }
                             >
@@ -752,9 +717,10 @@ export default function Sales({
                                                                     variant="ghost"
                                                                     size="sm"
                                                                     onClick={() =>
-                                                                        openViewer(
-                                                                            invoiceDocuments,
-                                                                            `sale-invoice-${sale.id}`,
+                                                                        openPdfViewer(
+                                                                            `/sales/${sale.id}/pdf`,
+                                                                            `Invoice ${sale.invoice_no}`,
+                                                                            `sale-invoice-${sale.invoice_no}.pdf`,
                                                                         )
                                                                     }
                                                                     className="text-blue-600 hover:text-blue-800"
@@ -850,22 +816,6 @@ export default function Sales({
                     shifts={shifts}
                     closedShifts={closedShifts}
                 />
-
-                {viewerOpen && (
-                    <DocumentViewerModal
-                        open
-                        documents={viewerDocuments}
-                        initialDocumentId={initialDocumentId}
-                        onOpenChange={(open) => {
-                            setViewerOpen(open);
-
-                            if (!open) {
-                                setViewerDocuments([]);
-                                setInitialDocumentId(null);
-                            }
-                        }}
-                    />
-                )}
 
                 <DeleteModal
                     isOpen={!!deletingSale}

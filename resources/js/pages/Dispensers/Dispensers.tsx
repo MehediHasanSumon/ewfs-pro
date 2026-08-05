@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import InputError from '@/components/input-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -271,7 +272,7 @@ export default function Dispensers({ dispensers, products, filters }: Dispensers
                                     if (endDate) params.append('end_date', endDate);
                                     if (sortBy) params.append('sort_by', sortBy);
                                     if (sortOrder) params.append('sort_order', sortOrder);
-                                    window.location.href = `/dispensers/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/dispensers/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="mr-2 h-4 w-4" />

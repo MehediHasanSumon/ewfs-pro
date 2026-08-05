@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -92,7 +93,7 @@ export default function CustomerLedgerSummary({ ledgers = [], customers = [], fi
                                 if (customerId !== 'all') {
                                     params.append('customer_id', customerId);
                                 }
-                                window.location.href = `/customer-ledger-summary/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/customer-ledger-summary/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />Download

@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -130,7 +131,7 @@ export default function Show({ account, transactions, total_debit, total_credit,
                                 const params = new URLSearchParams();
                                 if (startDate) params.append('start_date', startDate);
                                 if (endDate) params.append('end_date', endDate);
-                                window.location.href = `/bank-book-ledger/${account.ac_number}/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/bank-book-ledger/${account.ac_number}/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />

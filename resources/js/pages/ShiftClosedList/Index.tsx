@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -197,7 +198,7 @@ export default function ShiftClosedList({ shiftClosedList, shifts, filters = {} 
                                     if (endDate) params.append('end_date', endDate);
                                     if (sortField) params.append('sort', sortField);
                                     if (sortDirection) params.append('direction', sortDirection);
-                                    window.location.href = `/shift-closed-list/download-pdf?${params.toString()}`;
+                                    openPdfViewer(`/shift-closed-list/download-pdf?${params.toString()}`);
                                 }}
                             >
                                 <FileText className="mr-2 h-4 w-4" />

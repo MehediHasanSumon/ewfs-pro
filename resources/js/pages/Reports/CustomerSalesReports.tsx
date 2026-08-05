@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -87,7 +88,7 @@ export default function CustomerSalesReports({ customerSales = [], customers = [
                                 if (startDate) params.append('start_date', startDate);
                                 if (endDate) params.append('end_date', endDate);
                                 if (customer && customer !== 'all') params.append('customer', customer);
-                                window.location.href = `/customer-wise-sales-reports/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/customer-wise-sales-reports/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />Download

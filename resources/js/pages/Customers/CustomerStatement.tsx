@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -170,7 +171,7 @@ export default function CustomerStatement({ customer, transactions, currentBalan
                                         variant="outline"
                                         size="sm"
                                         onClick={() => {
-                                            window.location.href = `/customers/${customer.id}/sales-pdf?year=${selectedYear}`;
+                                            openPdfViewer(`/customers/${customer.id}/sales-pdf?year=${selectedYear}`);
                                         }}
                                     >
                                         <Download className="h-4 w-4 mr-2" />
@@ -247,7 +248,7 @@ export default function CustomerStatement({ customer, transactions, currentBalan
                                             const params = new URLSearchParams();
                                             if (startDate) params.append('start_date', startDate);
                                             if (endDate) params.append('end_date', endDate);
-                                            window.location.href = `/customers/${customer.id}/payments-pdf?${params.toString()}`;
+                                            openPdfViewer(`/customers/${customer.id}/payments-pdf?${params.toString()}`);
                                         }}
                                     >
                                         <Download className="h-4 w-4 mr-2" />

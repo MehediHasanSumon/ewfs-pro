@@ -1,3 +1,4 @@
+import { openPdfViewer } from '@/components/documents/pdf-viewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -125,7 +126,7 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
                                 if (shiftId !== 'all') {
                                     params.append('shift_id', shiftId);
                                 }
-                                window.location.href = `/daily-statement/download-pdf?${params.toString()}`;
+                                openPdfViewer(`/daily-statement/download-pdf?${params.toString()}`);
                             }}
                         >
                             <FileText className="mr-2 h-4 w-4" />Download
