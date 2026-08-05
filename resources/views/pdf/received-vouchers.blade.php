@@ -176,6 +176,7 @@
             <tr>
                 <th class="text-center" style="width: 50px;">SL</th>
                 <th>Date</th>
+                <th>Shift</th>
                 <th>From Account</th>
                 <th>To Account</th>
                 <th style="width: 100px;">Amount</th>
@@ -187,6 +188,7 @@
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td>{{ \Carbon\Carbon::parse($voucher->date)->format('Y-m-d') }}</td>
+                <td>{{ $voucher->shift->name ?? 'N/A' }}</td>
                 <td>{{ $voucher->fromAccount->name ?? 'N/A' }}</td>
                 <td>{{ $voucher->toAccount->name ?? 'N/A' }}</td>
                 <td class="text-center">{{ number_format($voucher->toTransaction->amount ?? 0, 2) }}</td>
@@ -194,7 +196,7 @@
             </tr>
             @empty
             <tr>
-                <td colspan="6" class="text-center" style="padding: 20px; color: #999;">No received vouchers found</td>
+                <td colspan="7" class="text-center" style="padding: 20px; color: #999;">No received vouchers found</td>
             </tr>
             @endforelse
         </tbody>

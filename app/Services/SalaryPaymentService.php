@@ -199,7 +199,6 @@ class SalaryPaymentService
             VoucherTransactionTypeHelper::paymentVoucherType(),
             [
                 'date' => $data['date'],
-                'shift_id' => $data['shift_id'],
                 'vouchers' => $voucherLines,
             ]
         );

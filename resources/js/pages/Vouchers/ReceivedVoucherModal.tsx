@@ -159,6 +159,8 @@ export function ReceivedVoucherModal({
 
         const initialData = getInitialData();
         const initialVoucher = initialData.vouchers[0];
+        // Modal open/edit changes require synchronizing the form snapshot.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setData(initialData);
         setErrors({});
         void loadTransactionTypes(
@@ -199,16 +201,20 @@ export function ReceivedVoucherModal({
         return groupedAccounts[groupName] || [];
     };
 
-    const getAvailableShifts = () => {
+    const availableShifts = (() => {
         if (!data.date) return [];
 
-        const selectedDate = data.date;
         const closedShiftIds = closedShifts
-            .filter((cs) => cs.close_date === selectedDate)
-            .map((cs) => cs.shift_id);
+            .filter((closedShift) => closedShift.close_date === data.date)
+            .map((closedShift) => closedShift.shift_id);
+        const selectedShiftId = Number(data.shift_id);
 
-        return shifts.filter((shift) => !closedShiftIds.includes(shift.id));
-    };
+        return shifts.filter(
+            (shift) =>
+                shift.id === selectedShiftId ||
+                !closedShiftIds.includes(shift.id),
+        );
+    })();
 
     const updateVoucher = (index: number, field: string, value: string) => {
         setData((prev) => {
@@ -259,7 +265,7 @@ export function ReceivedVoucherModal({
             const firstVoucher = data.vouchers[0];
             const payload = {
                 date: data.date,
-                shift_id: data.shift_id,
+                shift_id: data.shift_id || null,
                 ...firstVoucher,
             };
 
@@ -296,7 +302,7 @@ export function ReceivedVoucherModal({
 
         const payload = {
             date: data.date,
-            shift_id: data.shift_id,
+            shift_id: data.shift_id || null,
             vouchers: validVouchers,
         };
 
@@ -352,18 +358,21 @@ export function ReceivedVoucherModal({
                 </div>
                 <div>
                     <Label htmlFor="shift_id" className="dark:text-gray-200">
-                        Shift
+                        Shift <span className="text-gray-500">(Optional)</span>
                     </Label>
                     <Select
                         value={data.shift_id}
-                        onValueChange={(value) => setField('shift_id', value)}
+                        onValueChange={(value) =>
+                            setField('shift_id', value === '__none__' ? '' : value)
+                        }
                         disabled={!data.date}
                     >
                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                             <SelectValue placeholder="Choose shift" />
                         </SelectTrigger>
                         <SelectContent>
-                            {getAvailableShifts().map((shift) => (
+                            <SelectItem value="__none__">No Shift</SelectItem>
+                            {availableShifts.map((shift) => (
                                 <SelectItem key={shift.id} value={shift.id.toString()}>
                                     {shift.name}
                                 </SelectItem>

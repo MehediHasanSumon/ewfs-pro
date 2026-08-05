@@ -345,7 +345,6 @@ function salaryPaymentPayload(array $employeeIds): array
 {
     return [
         'date' => '2026-08-04',
-        'shift_id' => 1,
         'salary_month' => 8,
         'salary_year' => 2026,
         'voucher_transaction_type_id' => VoucherTransactionType::query()
@@ -409,6 +408,7 @@ it('creates standard payment vouchers and journals from employee payroll data', 
         ->toBe(VoucherTransactionTypeHelper::monthlySalaryCode())
         ->and($voucher->from_account_id)->toBe($accounts['cash']->id)
         ->and($voucher->to_account_id)->toBe($employee->account_id)
+        ->and($voucher->shift_id)->toBeNull()
         ->and($voucher->amount)->toBe(21000.0)
         ->and($voucher->payment_method)->toBe('cash')
         ->and($voucher->remarks)

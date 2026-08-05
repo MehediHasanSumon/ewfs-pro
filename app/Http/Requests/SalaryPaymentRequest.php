@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
-use App\Models\ShiftClosing;
 use App\Models\VoucherTransactionType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,11 +20,6 @@ class SalaryPaymentRequest extends FormRequest
     {
         return [
             'date' => ['required', 'date'],
-            'shift_id' => [
-                'required',
-                'integer',
-                Rule::exists('shifts', 'id')->where('status', true),
-            ],
             'salary_month' => ['required', 'integer', 'between:1,12'],
             'salary_year' => ['required', 'integer', 'between:2000,2100'],
             'voucher_transaction_type_id' => [
@@ -60,26 +54,6 @@ class SalaryPaymentRequest extends FormRequest
             function (Validator $validator): void {
                 $this->validateTransactionTypeAndAmounts($validator);
 
-                if (
-                    $validator->errors()->hasAny(['date', 'shift_id'])
-                    || ! $this->filled('date')
-                    || ! $this->filled('shift_id')
-                ) {
-                    return;
-                }
-
-                $closed = ShiftClosing::query()
-                    ->posted()
-                    ->whereDate('business_date', $this->date('date'))
-                    ->where('shift_id', $this->integer('shift_id'))
-                    ->exists();
-
-                if ($closed) {
-                    $validator->errors()->add(
-                        'shift_id',
-                        'The selected shift is already closed for this date.'
-                    );
-                }
             },
         ];
     }
@@ -152,7 +126,6 @@ class SalaryPaymentRequest extends FormRequest
             'employee_ids.required' => 'Select at least one employee.',
             'employee_ids.min' => 'Select at least one employee.',
             'employee_ids.*.exists' => 'One or more selected employees are unavailable.',
-            'shift_id.required' => 'Select a shift.',
             'voucher_transaction_type_id.required' => 'Select an employee payment type.',
             'amount.prohibited' => 'Salary amount is loaded from the employee salary structure.',
             'payment_method.prohibited' => 'Payment method is loaded from the employee payment account.',

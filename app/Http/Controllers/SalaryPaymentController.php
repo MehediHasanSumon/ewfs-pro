@@ -10,8 +10,6 @@ use App\Http\Resources\SalaryPaymentEmployeeResource;
 use App\Models\EmpDepartment;
 use App\Models\EmpDesignation;
 use App\Models\Employee;
-use App\Models\Shift;
-use App\Models\ShiftClosing;
 use App\Models\VoucherTransactionType;
 use App\Services\SalaryPaymentService;
 use Carbon\Carbon;
@@ -125,15 +123,6 @@ class SalaryPaymentController extends Controller implements HasMiddleware
                 ->active()
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'shifts' => Shift::query()
-                ->where('status', true)
-                ->orderBy('display_order')
-                ->orderBy('name')
-                ->get(['id', 'name']),
-            'closedShiftIds' => ShiftClosing::query()
-                ->posted()
-                ->whereDate('business_date', $date)
-                ->pluck('shift_id'),
             'transactionTypes' => $transactionTypes
                 ->map(fn (VoucherTransactionType $transactionType) => [
                     'id' => $transactionType->id,
@@ -150,7 +139,6 @@ class SalaryPaymentController extends Controller implements HasMiddleware
                 'salary_month' => $month,
                 'salary_year' => $year,
                 'date' => $date,
-                'shift_id' => $request->integer('shift_id') ?: null,
                 'voucher_transaction_type_id' => $selectedTransactionType?->id,
                 'per_page' => $this->perPage($request),
             ],

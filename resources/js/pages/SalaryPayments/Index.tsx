@@ -67,7 +67,6 @@ interface SalaryPaymentFilters {
     salary_month: number;
     salary_year: number;
     date: string;
-    shift_id: number | null;
     voucher_transaction_type_id: number | null;
     per_page: number;
 }
@@ -84,9 +83,7 @@ interface SalaryPaymentPageProps {
     };
     departments: NamedOption[];
     designations: NamedOption[];
-    shifts: NamedOption[];
     transactionTypes: TransactionTypeOption[];
-    closedShiftIds: number[];
     filters: SalaryPaymentFilters;
 }
 
@@ -97,7 +94,6 @@ interface FilterOverrides {
     salaryMonth?: string;
     salaryYear?: string;
     date?: string;
-    shiftId?: string;
     transactionTypeId?: string;
     perPage?: number;
     page?: number;
@@ -131,9 +127,7 @@ export default function SalaryPaymentIndex({
     employees,
     departments,
     designations,
-    shifts,
     transactionTypes,
-    closedShiftIds,
     filters,
 }: SalaryPaymentPageProps) {
     const [search, setSearch] = useState(filters.search);
@@ -150,9 +144,6 @@ export default function SalaryPaymentIndex({
         filters.salary_year.toString(),
     );
     const [date, setDate] = useState(filters.date);
-    const [shiftId, setShiftId] = useState(
-        filters.shift_id?.toString() ?? '',
-    );
     const [transactionTypeId, setTransactionTypeId] = useState(
         filters.voucher_transaction_type_id?.toString() ?? '',
     );
@@ -175,10 +166,6 @@ export default function SalaryPaymentIndex({
     const isMonthlySalary =
         selectedTransactionType?.is_monthly_salary ?? false;
 
-    const availableShifts = useMemo(
-        () => shifts.filter((shift) => !closedShiftIds.includes(shift.id)),
-        [closedShiftIds, shifts],
-    );
     const payableEmployeeIds = useMemo(
         () =>
             employees.data
@@ -215,7 +202,6 @@ export default function SalaryPaymentIndex({
         const nextMonth = overrides.salaryMonth ?? salaryMonth;
         const nextYear = overrides.salaryYear ?? salaryYear;
         const nextDate = overrides.date ?? date;
-        const nextShift = overrides.shiftId ?? shiftId;
         const nextTransactionType =
             overrides.transactionTypeId ?? transactionTypeId;
         const nextPerPage = overrides.perPage ?? perPage;
@@ -231,7 +217,6 @@ export default function SalaryPaymentIndex({
                 salary_month: nextMonth,
                 salary_year: nextYear,
                 date: nextDate,
-                shift_id: nextShift || undefined,
                 voucher_transaction_type_id:
                     nextTransactionType || undefined,
                 per_page: nextPerPage,
@@ -303,7 +288,6 @@ export default function SalaryPaymentIndex({
             '/salary-payments',
             {
                 date,
-                shift_id: shiftId || null,
                 salary_month: Number(salaryMonth),
                 salary_year: Number(salaryYear),
                 voucher_transaction_type_id: Number(transactionTypeId),
@@ -353,7 +337,6 @@ export default function SalaryPaymentIndex({
                             processing ||
                             selectedEmployeeIds.length === 0 ||
                             !date ||
-                            !shiftId ||
                             !transactionTypeId ||
                             hasInvalidExtraAmounts
                         }
@@ -385,7 +368,7 @@ export default function SalaryPaymentIndex({
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             <div>
                                 <Label htmlFor="salary-payment-date">Date</Label>
                                 <Input
@@ -396,39 +379,12 @@ export default function SalaryPaymentIndex({
                                     onChange={(event) => {
                                         const value = event.target.value;
                                         setDate(value);
-                                        setShiftId('');
                                         visit({
                                             date: value,
-                                            shiftId: '',
                                             page: 1,
                                         });
                                     }}
                                 />
-                            </div>
-                            <div>
-                                <Label htmlFor="salary-payment-shift">Shift</Label>
-                                <Select
-                                    value={shiftId}
-                                    onValueChange={setShiftId}
-                                    disabled={!date}
-                                >
-                                    <SelectTrigger
-                                        id="salary-payment-shift"
-                                        aria-invalid={Boolean(errors.shift_id)}
-                                    >
-                                        <SelectValue placeholder="Choose shift" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableShifts.map((shift) => (
-                                            <SelectItem
-                                                key={shift.id}
-                                                value={shift.id.toString()}
-                                            >
-                                                {shift.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
                             </div>
                             <div>
                                 <Label>Salary Month</Label>
