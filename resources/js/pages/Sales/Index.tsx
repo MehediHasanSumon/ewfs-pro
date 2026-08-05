@@ -1,3 +1,7 @@
+import {
+    DocumentViewerModal,
+    type ViewerDocument,
+} from '@/components/documents/document-viewer-modal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteModal } from '@/components/ui/delete-modal';
@@ -11,6 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
@@ -22,14 +27,13 @@ import {
     FileText,
     Filter,
     Plus,
-    Trash2,
     ShoppingCart,
+    Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { usePermission } from '@/hooks/usePermission';
-import { SaleModal } from './SaleModal';
+import { useEffect, useMemo, useState } from 'react';
 import type { Sale } from './SaleModal';
+import { SaleModal } from './SaleModal';
 
 interface Account {
     id: number;
@@ -109,11 +113,23 @@ interface SalesProps {
     };
 }
 
-export default function Sales({ sales, accounts = [], groupedAccounts = {}, products = [], vehicles = [], shifts = [], closedShifts = [], uniqueCustomers = [], filters = {} }: SalesProps) {
+export default function Sales({
+    sales,
+    accounts = [],
+    groupedAccounts = {},
+    products = [],
+    vehicles = [],
+    shifts = [],
+    closedShifts = [],
+    uniqueCustomers = [],
+    filters = {},
+}: SalesProps) {
     const { can } = usePermission();
-    const hasActionPermission = can('update-sale') || can('delete-sale');
     const canFilter = can('can-sale-filter');
     const canDownload = can('can-sale-download');
+    const canViewInvoice = can('view-sale') || canDownload;
+    const hasActionPermission =
+        canViewInvoice || can('update-sale') || can('delete-sale');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
     const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
@@ -121,12 +137,54 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
     const [search, setSearch] = useState(filters.search || '');
     const [customer, setCustomer] = useState(filters.customer || 'all');
-    const [paymentStatus, setPaymentStatus] = useState(filters.payment_status || 'all');
+    const [paymentStatus, setPaymentStatus] = useState(
+        filters.payment_status || 'all',
+    );
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [sortBy, setSortBy] = useState(filters.sort_by || 'created_at');
     const [sortOrder, setSortOrder] = useState(filters.sort_order || 'desc');
     const [perPage, setPerPage] = useState(filters.per_page || 10);
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [viewerDocuments, setViewerDocuments] = useState<ViewerDocument[]>(
+        [],
+    );
+    const [initialDocumentId, setInitialDocumentId] = useState<string | null>(
+        null,
+    );
+    const invoiceDocuments = useMemo<ViewerDocument[]>(
+        () =>
+            sales.data.map((sale) => ({
+                id: `sale-invoice-${sale.id}`,
+                title: `Invoice ${sale.invoice_no}`,
+                url: `/sales/${sale.id}/pdf`,
+                kind: 'pdf',
+                fileName: `sale-invoice-${sale.invoice_no}.pdf`,
+            })),
+        [sales.data],
+    );
+
+    const openViewer = (documents: ViewerDocument[], initialId: string) => {
+        setViewerDocuments(documents);
+        setInitialDocumentId(initialId);
+        setViewerOpen(true);
+    };
+
+    const salesPdfUrl = () => {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (customer !== 'all') params.append('customer', customer);
+        if (paymentStatus !== 'all')
+            params.append('payment_status', paymentStatus);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (sortBy) params.append('sort_by', sortBy);
+        if (sortOrder) params.append('sort_order', sortOrder);
+
+        const query = params.toString();
+
+        return query ? `/sales/download-pdf?${query}` : '/sales/download-pdf';
+    };
 
     const handleEdit = (sale: Sale) => {
         setEditingSale(sale);
@@ -165,7 +223,8 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
             {
                 search: search || undefined,
                 customer: customer === 'all' ? undefined : customer,
-                payment_status: paymentStatus === 'all' ? undefined : paymentStatus,
+                payment_status:
+                    paymentStatus === 'all' ? undefined : paymentStatus,
                 start_date: startDate || undefined,
                 end_date: endDate || undefined,
                 sort_by: sortBy,
@@ -194,7 +253,8 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
     };
 
     const handleSort = (column: string) => {
-        const newOrder = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
+        const newOrder =
+            sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
         setSortBy(column);
         setSortOrder(newOrder);
         router.get(
@@ -202,7 +262,8 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
             {
                 search: search || undefined,
                 customer: customer === 'all' ? undefined : customer,
-                payment_status: paymentStatus === 'all' ? undefined : paymentStatus,
+                payment_status:
+                    paymentStatus === 'all' ? undefined : paymentStatus,
                 start_date: startDate || undefined,
                 end_date: endDate || undefined,
                 sort_by: column,
@@ -219,7 +280,8 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
             {
                 search: search || undefined,
                 customer: customer === 'all' ? undefined : customer,
-                payment_status: paymentStatus === 'all' ? undefined : paymentStatus,
+                payment_status:
+                    paymentStatus === 'all' ? undefined : paymentStatus,
                 start_date: startDate || undefined,
                 end_date: endDate || undefined,
                 sort_by: sortBy,
@@ -285,17 +347,20 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                         {canDownload && (
                             <Button
                                 variant="success"
-                                onClick={() => {
-                                    const params = new URLSearchParams();
-                                    if (search) params.append('search', search);
-                                    if (customer !== 'all') params.append('customer', customer);
-                                    if (paymentStatus !== 'all') params.append('payment_status', paymentStatus);
-                                    if (startDate) params.append('start_date', startDate);
-                                    if (endDate) params.append('end_date', endDate);
-                                    if (sortBy) params.append('sort_by', sortBy);
-                                    if (sortOrder) params.append('sort_order', sortOrder);
-                                    window.location.href = `/sales/download-pdf?${params.toString()}`;
-                                }}
+                                onClick={() =>
+                                    openViewer(
+                                        [
+                                            {
+                                                id: 'sales-report',
+                                                title: 'Sales Report',
+                                                url: salesPdfUrl(),
+                                                kind: 'pdf',
+                                                fileName: 'sales.pdf',
+                                            },
+                                        ],
+                                        'sales-report',
+                                    )
+                                }
                             >
                                 <FileText className="mr-2 h-4 w-4" />
                                 Download
@@ -311,99 +376,147 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                 </div>
 
                 {canFilter && (
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 dark:text-white">
-                            <Filter className="h-5 w-5" />
-                            Filters
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
-                            <div>
-                                <Label className="dark:text-gray-200">Search</Label>
-                                <Input
-                                    placeholder="Search sales..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                            <div>
-                                <Label className="dark:text-gray-200">Customer</Label>
-                                <Select
-                                    value={customer}
-                                    onValueChange={(value) => {
-                                        setCustomer(value);
-                                        applyFilters();
-                                    }}
-                                >
-                                    <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                        <SelectValue placeholder="All customers" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All customers</SelectItem>
-                                        {Array.from(new Set([
-                                            ...vehicles.filter(v => v.customer).map(v => v.customer!.name),
-                                            ...uniqueCustomers
-                                        ])).sort().map((name) => (
-                                            <SelectItem key={name} value={name}>
-                                                {name}
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 dark:text-white">
+                                <Filter className="h-5 w-5" />
+                                Filters
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Search
+                                    </Label>
+                                    <Input
+                                        placeholder="Search sales..."
+                                        value={search}
+                                        onChange={(e) =>
+                                            setSearch(e.target.value)
+                                        }
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Customer
+                                    </Label>
+                                    <Select
+                                        value={customer}
+                                        onValueChange={(value) => {
+                                            setCustomer(value);
+                                            applyFilters();
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All customers" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                All customers
                                             </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                            {Array.from(
+                                                new Set([
+                                                    ...vehicles
+                                                        .filter(
+                                                            (v) => v.customer,
+                                                        )
+                                                        .map(
+                                                            (v) =>
+                                                                v.customer!
+                                                                    .name,
+                                                        ),
+                                                    ...uniqueCustomers,
+                                                ]),
+                                            )
+                                                .sort()
+                                                .map((name) => (
+                                                    <SelectItem
+                                                        key={name}
+                                                        value={name}
+                                                    >
+                                                        {name}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Payment Status
+                                    </Label>
+                                    <Select
+                                        value={paymentStatus}
+                                        onValueChange={(value) => {
+                                            setPaymentStatus(value);
+                                            applyFilters();
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                All status
+                                            </SelectItem>
+                                            <SelectItem value="paid">
+                                                Paid
+                                            </SelectItem>
+                                            <SelectItem value="partial">
+                                                Partial
+                                            </SelectItem>
+                                            <SelectItem value="due">
+                                                Due
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        Start Date
+                                    </Label>
+                                    <Input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) =>
+                                            setStartDate(e.target.value)
+                                        }
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">
+                                        End Date
+                                    </Label>
+                                    <Input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) =>
+                                            setEndDate(e.target.value)
+                                        }
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div className="flex items-end gap-2">
+                                    <Button
+                                        onClick={applyFilters}
+                                        className="px-4"
+                                    >
+                                        Apply Filters
+                                    </Button>
+                                    <Button
+                                        onClick={clearFilters}
+                                        variant="secondary"
+                                        className="px-4"
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
                             </div>
-                            <div>
-                                <Label className="dark:text-gray-200">Payment Status</Label>
-                                <Select
-                                    value={paymentStatus}
-                                    onValueChange={(value) => {
-                                        setPaymentStatus(value);
-                                        applyFilters();
-                                    }}
-                                >
-                                    <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                        <SelectValue placeholder="All status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All status</SelectItem>
-                                        <SelectItem value="paid">Paid</SelectItem>
-                                        <SelectItem value="partial">Partial</SelectItem>
-                                        <SelectItem value="due">Due</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label className="dark:text-gray-200">Start Date</Label>
-                                <Input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                            <div>
-                                <Label className="dark:text-gray-200">End Date</Label>
-                                <Input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                            <div className="flex items-end gap-2">
-                                <Button onClick={applyFilters} className="px-4">
-                                    Apply Filters
-                                </Button>
-                                <Button onClick={clearFilters} variant="secondary" className="px-4">
-                                    <X className="mr-2 h-4 w-4" />
-                                    Clear
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
                 )}
 
                 <Card className="dark:border-gray-700 dark:bg-gray-800">
@@ -415,128 +528,289 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                                         <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedSales.length === sales.data.length && sales.data.length > 0}
+                                                checked={
+                                                    selectedSales.length ===
+                                                        sales.data.length &&
+                                                    sales.data.length > 0
+                                                }
                                                 onChange={toggleSelectAll}
                                                 className="rounded border-gray-300 dark:border-gray-600"
                                             />
                                         </th>
                                         <th
                                             className="cursor-pointer p-4 text-left text-[13px] font-medium dark:text-gray-300"
-                                            onClick={() => handleSort('sale_date')}
+                                            onClick={() =>
+                                                handleSort('sale_date')
+                                            }
                                         >
                                             <div className="flex items-center gap-1">
                                                 Date
-                                                {sortBy === 'sale_date' && (sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                                                {sortBy === 'sale_date' &&
+                                                    (sortOrder === 'asc' ? (
+                                                        <ChevronUp className="h-4 w-4" />
+                                                    ) : (
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    ))}
                                             </div>
                                         </th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Shift</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Invoice No</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Customer</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Vehicle</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Quantity</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Total Amount</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Paid Amount</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Payment Type</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Status</th>
-                                        {hasActionPermission && <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Actions</th>}
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Shift
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Invoice No
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Customer
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Product
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Vehicle
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Quantity
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Total Amount
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Paid Amount
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Payment Type
+                                        </th>
+                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                            Status
+                                        </th>
+                                        {hasActionPermission && (
+                                            <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">
+                                                Actions
+                                            </th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sales.data.length > 0 ? (
                                         sales.data.map((sale) => (
-                                            <tr key={sale.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <tr
+                                                key={sale.id}
+                                                className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+                                            >
                                                 <td className="p-4">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedSales.includes(sale.id)}
-                                                        onChange={() => toggleSelectSale(sale.id)}
+                                                        checked={selectedSales.includes(
+                                                            sale.id,
+                                                        )}
+                                                        onChange={() =>
+                                                            toggleSelectSale(
+                                                                sale.id,
+                                                            )
+                                                        }
                                                         className="rounded border-gray-300 dark:border-gray-600"
                                                     />
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-white">{new Date(sale.sale_date).toLocaleDateString('en-GB')}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.shift?.name || 'N/A'}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.customer || 'Walk-in Customer'}</td>
+                                                <td className="p-4 text-[13px] dark:text-white">
+                                                    {new Date(
+                                                        sale.sale_date,
+                                                    ).toLocaleDateString(
+                                                        'en-GB',
+                                                    )}
+                                                </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {sale.items?.map(item => item.product_name_snapshot).join(', ') ||
-                                                        products.find(p => p.id === sale.product_id)?.product_name ||
+                                                    {sale.shift?.name || 'N/A'}
+                                                </td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.invoice_no}
+                                                </td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.customer ||
+                                                        'Walk-in Customer'}
+                                                </td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.items
+                                                        ?.map(
+                                                            (item) =>
+                                                                item.product_name_snapshot,
+                                                        )
+                                                        .join(', ') ||
+                                                        products.find(
+                                                            (p) =>
+                                                                p.id ===
+                                                                sale.product_id,
+                                                        )?.product_name ||
                                                         'N/A'}
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.vehicle_no || 'N/A'}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
-                                                    {sale.items?.reduce((sum, item) => sum + Number(item.quantity), 0) || sale.quantity}
+                                                    {sale.vehicle_no || 'N/A'}
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.paid_amount.toLocaleString()}</td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.items?.reduce(
+                                                        (sum, item) =>
+                                                            sum +
+                                                            Number(
+                                                                item.quantity,
+                                                            ),
+                                                        0,
+                                                    ) || sale.quantity}
+                                                </td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.total_amount.toLocaleString()}
+                                                </td>
+                                                <td className="p-4 text-[13px] dark:text-gray-300">
+                                                    {sale.paid_amount.toLocaleString()}
+                                                </td>
                                                 <td className="p-4">
-                                                    <span className={`rounded px-2 py-1 text-xs font-medium ${
-                                                        (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'cash'
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'bank'
-                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'mobile_bank'
-                                                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                                            : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                    }`}>
-                                                        {(sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'cash' ? 'Cash'
-                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'bank' ? 'Bank'
-                                                            : (sale.payment_detail?.payment_method || sale.transaction?.payment_type || 'cash') === 'mobile_bank' ? 'Mobile Bank'
-                                                            : 'Cash'}
+                                                    <span
+                                                        className={`rounded px-2 py-1 text-xs font-medium ${
+                                                            (sale.payment_detail
+                                                                ?.payment_method ||
+                                                                sale.transaction
+                                                                    ?.payment_type ||
+                                                                'cash') ===
+                                                            'cash'
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                                : (sale
+                                                                        .payment_detail
+                                                                        ?.payment_method ||
+                                                                        sale
+                                                                            .transaction
+                                                                            ?.payment_type ||
+                                                                        'cash') ===
+                                                                    'bank'
+                                                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                                                  : (sale
+                                                                          .payment_detail
+                                                                          ?.payment_method ||
+                                                                          sale
+                                                                              .transaction
+                                                                              ?.payment_type ||
+                                                                          'cash') ===
+                                                                      'mobile_bank'
+                                                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                                                    : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                        }`}
+                                                    >
+                                                        {(sale.payment_detail
+                                                            ?.payment_method ||
+                                                            sale.transaction
+                                                                ?.payment_type ||
+                                                            'cash') === 'cash'
+                                                            ? 'Cash'
+                                                            : (sale
+                                                                    .payment_detail
+                                                                    ?.payment_method ||
+                                                                    sale
+                                                                        .transaction
+                                                                        ?.payment_type ||
+                                                                    'cash') ===
+                                                                'bank'
+                                                              ? 'Bank'
+                                                              : (sale
+                                                                      .payment_detail
+                                                                      ?.payment_method ||
+                                                                      sale
+                                                                          .transaction
+                                                                          ?.payment_type ||
+                                                                      'cash') ===
+                                                                  'mobile_bank'
+                                                                ? 'Mobile Bank'
+                                                                : 'Cash'}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className={`rounded px-2 py-1 text-xs ${
-                                                        parseFloat(sale.due_amount.toString()) === 0 
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                            : parseFloat(sale.paid_amount.toString()) > 0
-                                                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                    }`}>
-                                                        {parseFloat(sale.due_amount.toString()) === 0 ? 'Paid' : parseFloat(sale.paid_amount.toString()) > 0 ? 'Partial' : 'Due'}
+                                                    <span
+                                                        className={`rounded px-2 py-1 text-xs ${
+                                                            parseFloat(
+                                                                sale.due_amount.toString(),
+                                                            ) === 0
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                                : parseFloat(
+                                                                        sale.paid_amount.toString(),
+                                                                    ) > 0
+                                                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                                        }`}
+                                                    >
+                                                        {parseFloat(
+                                                            sale.due_amount.toString(),
+                                                        ) === 0
+                                                            ? 'Paid'
+                                                            : parseFloat(
+                                                                    sale.paid_amount.toString(),
+                                                                ) > 0
+                                                              ? 'Partial'
+                                                              : 'Due'}
                                                     </span>
                                                 </td>
                                                 {hasActionPermission && (
-                                                <td className="p-4">
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => window.open(`/sales/${sale.id}/pdf`, '_blank')}
-                                                            className="text-blue-600 hover:text-blue-800"
-                                                            title="Download Invoice"
-                                                        >
-                                                            <FileText className="h-4 w-4" />
-                                                        </Button>
+                                                    <td className="p-4">
+                                                        <div className="flex gap-2">
+                                                            {canViewInvoice && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        openViewer(
+                                                                            invoiceDocuments,
+                                                                            `sale-invoice-${sale.id}`,
+                                                                        )
+                                                                    }
+                                                                    className="text-blue-600 hover:text-blue-800"
+                                                                    title="View Invoice"
+                                                                >
+                                                                    <FileText className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
 
-                                                        {can('update-sale') && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleEdit(sale)}
-                                                                className="text-indigo-600 hover:text-indigo-800"
-                                                            >
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
-                                                        {can('delete-sale') && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleDelete(sale)}
-                                                                className="text-red-600 hover:text-red-800"
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </td>
+                                                            {can(
+                                                                'update-sale',
+                                                            ) && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleEdit(
+                                                                            sale,
+                                                                        )
+                                                                    }
+                                                                    className="text-indigo-600 hover:text-indigo-800"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {can(
+                                                                'delete-sale',
+                                                            ) && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleDelete(
+                                                                            sale,
+                                                                        )
+                                                                    }
+                                                                    className="text-red-600 hover:text-red-800"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                 )}
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={hasActionPermission ? 13 : 12} className="p-8 text-center text-gray-500 dark:text-gray-400">
+                                            <td
+                                                colSpan={
+                                                    hasActionPermission
+                                                        ? 13
+                                                        : 12
+                                                }
+                                                className="p-8 text-center text-gray-500 dark:text-gray-400"
+                                            >
                                                 <ShoppingCart className="mx-auto mb-4 h-12 w-12 text-gray-400" />
                                                 No sales found
                                             </td>
@@ -576,6 +850,22 @@ export default function Sales({ sales, accounts = [], groupedAccounts = {}, prod
                     shifts={shifts}
                     closedShifts={closedShifts}
                 />
+
+                {viewerOpen && (
+                    <DocumentViewerModal
+                        open
+                        documents={viewerDocuments}
+                        initialDocumentId={initialDocumentId}
+                        onOpenChange={(open) => {
+                            setViewerOpen(open);
+
+                            if (!open) {
+                                setViewerDocuments([]);
+                                setInitialDocumentId(null);
+                            }
+                        }}
+                    />
+                )}
 
                 <DeleteModal
                     isOpen={!!deletingSale}
