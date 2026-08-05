@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Database\Seeders\CategorySeeder;
+use Database\Seeders\GroupSeeder;
 use Database\Seeders\SystemVoucherCategorySeeder;
 use Database\Seeders\SystemVoucherTransactionTypeSeeder;
 use Illuminate\Console\Command;
@@ -19,6 +20,7 @@ class AppConfig extends Command
      * @var list<class-string<Seeder>>
      */
     private array $seeders = [
+        GroupSeeder::class,
         CategorySeeder::class,
         SystemVoucherCategorySeeder::class,
         SystemVoucherTransactionTypeSeeder::class,

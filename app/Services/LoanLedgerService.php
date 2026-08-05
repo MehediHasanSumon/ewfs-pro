@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\AccountGroupHelper;
 use App\Models\Account;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,7 +26,10 @@ class LoanLedgerService
             ->whereHas('group', fn (Builder $group) => $group
                 ->where('account_class', 'liability')
                 ->where(function (Builder $loanGroup) {
-                    $loanGroup->where('code', '400010002')
+                    $loanGroup->where(
+                        'code',
+                        AccountGroupHelper::code('bank_loan')
+                    )
                         ->orWhere('name', 'like', '%loan%');
                 }))
             ->when($search, fn (Builder $query) => $query

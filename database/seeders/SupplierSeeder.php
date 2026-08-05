@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Helpers\AccountGroupHelper;
 use App\Helpers\AccountHelper;
 use App\Models\Account;
 use App\Models\Group;
@@ -14,7 +15,7 @@ class SupplierSeeder extends Seeder
     public function run(): void
     {
         $groupId = Group::query()
-            ->where('code', '400010001')
+            ->where('code', AccountGroupHelper::code('account_payable'))
             ->value('id');
 
         if (! $groupId) {

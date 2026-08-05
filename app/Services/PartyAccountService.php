@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\AccountGroupHelper;
 use App\Models\Account;
 use App\Models\Group;
 
@@ -9,15 +10,14 @@ class PartyAccountService
 {
     public function __construct(
         private readonly DocumentNumberService $numbers
-    ) {
-    }
+    ) {}
 
     public function createCustomerAccount(string $name, bool $status = true): Account
     {
         return $this->create(
             $name,
             $this->resolveGroup(
-                '100020001',
+                AccountGroupHelper::code('account_receivable'),
                 'Customer Receivables',
                 'asset',
                 'debit',
@@ -32,7 +32,7 @@ class PartyAccountService
         return $this->create(
             $name,
             $this->resolveGroup(
-                '400010001',
+                AccountGroupHelper::code('account_payable'),
                 'Supplier Payables',
                 'liability',
                 'credit',
@@ -47,7 +47,7 @@ class PartyAccountService
         return $this->create(
             $name,
             $this->resolveGroup(
-                '40002',
+                AccountGroupHelper::code('employee_management'),
                 'Employee Accounts',
                 'liability',
                 'credit',

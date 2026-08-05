@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Helpers\AccountGroupHelper;
 use App\Helpers\AccountHelper;
 use App\Models\Account;
 use App\Models\Employee;
@@ -14,7 +15,10 @@ class EmployeeSeeder extends Seeder
     public function run(): void
     {
         $groupId = Group::query()
-            ->where('code', '40002')
+            ->where(
+                'code',
+                AccountGroupHelper::code('employee_management')
+            )
             ->value('id');
 
         if (! $groupId) {

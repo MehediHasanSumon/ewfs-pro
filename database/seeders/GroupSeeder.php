@@ -2,44 +2,91 @@
 
 namespace Database\Seeders;
 
+use App\Helpers\AccountGroupHelper;
 use App\Models\Group;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class GroupSeeder extends Seeder
 {
     public function run(): void
     {
-        Group::query()->delete();
+        DB::transaction(function (): void {
+            $pending = AccountGroupHelper::systemGroups();
+            $resolved = [];
 
-        $groups = [
-            [1, null, '1', 'Assets', 'asset', 'debit'],
-            [2, null, '2', 'Expenses', 'expense', 'debit'],
-            [3, null, '3', 'Income', 'revenue', 'credit'],
-            [4, null, '4', 'Liabilities', 'liability', 'credit'],
-            [5, 1, '10001', 'Fixed Asset', 'asset', 'debit'],
-            [6, 1, '10002', 'Current Asset', 'asset', 'debit'],
-            [7, 6, '100020001', 'Account Receivable', 'asset', 'debit'],
-            [9, 5, '100010001', 'Land', 'asset', 'debit'],
-            [10, 4, '40001', 'Current Liabilities', 'liability', 'credit'],
-            [11, 10, '400010001', 'Account Payable', 'liability', 'credit'],
-            [12, 10, '400010002', 'Bank Loan', 'liability', 'credit'],
-            [13, 6, '100020002', 'Cash in hand', 'asset', 'debit'],
-            [14, 6, '100020003', 'Mobile Bank', 'asset', 'debit'],
-            [15, 6, '100020004', 'Bank Account', 'asset', 'debit'],
-            [16, 4, '40002', 'Employee Management', 'liability', 'credit'],
-        ];
+            while ($pending !== []) {
+                $progress = false;
 
-        foreach ($groups as $group) {
-            Group::create([
-                'id' => $group[0],
-                'parent_id' => $group[1],
-                'code' => $group[2],
-                'name' => $group[3],
-                'account_class' => $group[4],
-                'normal_balance' => $group[5],
-                'is_system' => true,
-                'status' => true,
-            ]);
+                foreach ($pending as $key => $definition) {
+                    $parentKey = $definition['parent'];
+
+                    if ($parentKey !== null && ! isset($resolved[$parentKey])) {
+                        continue;
+                    }
+
+                    $parentId = $parentKey === null
+                        ? null
+                        : $resolved[$parentKey]->id;
+                    $this->assertNameAvailable(
+                        $definition['code'],
+                        $definition['name'],
+                        $parentId
+                    );
+
+                    $group = Group::query()
+                        ->where('code', $definition['code'])
+                        ->lockForUpdate()
+                        ->first();
+                    $attributes = [
+                        'parent_id' => $parentId,
+                        'name' => $definition['name'],
+                        'account_class' => $definition['account_class'],
+                        'normal_balance' => $definition['normal_balance'],
+                        'is_system' => true,
+                        'status' => true,
+                    ];
+
+                    if ($group) {
+                        $group->update($attributes);
+                    } else {
+                        $group = Group::query()->create([
+                            'code' => $definition['code'],
+                            ...$attributes,
+                        ]);
+                    }
+
+                    $resolved[$key] = $group;
+                    unset($pending[$key]);
+                    $progress = true;
+                }
+
+                if (! $progress) {
+                    throw new RuntimeException(
+                        'ERP account group hierarchy contains an unresolved parent or cycle.'
+                    );
+                }
+            }
+        });
+    }
+
+    private function assertNameAvailable(
+        string $code,
+        string $name,
+        ?int $parentId
+    ): void {
+        $conflict = Group::query()
+            ->where('parent_id', $parentId)
+            ->where('name', $name)
+            ->where('code', '<>', $code)
+            ->exists();
+
+        if ($conflict) {
+            throw new RuntimeException(
+                "Cannot synchronize ERP account group [{$code}]: "
+                ."the name [{$name}] is already used under the configured parent."
+            );
         }
     }
 }

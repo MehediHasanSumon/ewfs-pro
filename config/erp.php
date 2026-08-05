@@ -6,6 +6,120 @@ $productCategoryCodes = [
     'lubricant' => 1003,
 ];
 
+$accountGroups = [
+    'assets' => [
+        'code' => '1',
+        'name' => 'Assets',
+        'parent' => null,
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'expenses' => [
+        'code' => '2',
+        'name' => 'Expenses',
+        'parent' => null,
+        'account_class' => 'expense',
+        'normal_balance' => 'debit',
+    ],
+    'income' => [
+        'code' => '3',
+        'name' => 'Income',
+        'parent' => null,
+        'account_class' => 'revenue',
+        'normal_balance' => 'credit',
+    ],
+    'liabilities' => [
+        'code' => '4',
+        'name' => 'Liabilities',
+        'parent' => null,
+        'account_class' => 'liability',
+        'normal_balance' => 'credit',
+    ],
+    'fixed_asset' => [
+        'code' => '10001',
+        'name' => 'Fixed Asset',
+        'parent' => 'assets',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'current_asset' => [
+        'code' => '10002',
+        'name' => 'Current Asset',
+        'parent' => 'assets',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'account_receivable' => [
+        'code' => '100020001',
+        'name' => 'Account Receivable',
+        'parent' => 'current_asset',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'land' => [
+        'code' => '100010001',
+        'name' => 'Land',
+        'parent' => 'fixed_asset',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'current_liabilities' => [
+        'code' => '40001',
+        'name' => 'Current Liabilities',
+        'parent' => 'liabilities',
+        'account_class' => 'liability',
+        'normal_balance' => 'credit',
+    ],
+    'account_payable' => [
+        'code' => '400010001',
+        'name' => 'Account Payable',
+        'parent' => 'current_liabilities',
+        'account_class' => 'liability',
+        'normal_balance' => 'credit',
+    ],
+    'bank_loan' => [
+        'code' => '400010002',
+        'name' => 'Bank Loan',
+        'parent' => 'current_liabilities',
+        'account_class' => 'liability',
+        'normal_balance' => 'credit',
+    ],
+    'cash_in_hand' => [
+        'code' => '100020002',
+        'name' => 'Cash in hand',
+        'parent' => 'current_asset',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'mobile_bank' => [
+        'code' => '100020003',
+        'name' => 'Mobile Bank',
+        'parent' => 'current_asset',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'bank_account' => [
+        'code' => '100020004',
+        'name' => 'Bank Account',
+        'parent' => 'current_asset',
+        'account_class' => 'asset',
+        'normal_balance' => 'debit',
+    ],
+    'employee_management' => [
+        'code' => '40002',
+        'name' => 'Employee Management',
+        'parent' => 'liabilities',
+        'account_class' => 'liability',
+        'normal_balance' => 'credit',
+    ],
+];
+
+$paymentGroups = [
+    'Cash' => [$accountGroups['cash_in_hand']['code']],
+    'Mobile Bank' => [$accountGroups['mobile_bank']['code']],
+    'Bank' => [$accountGroups['bank_account']['code']],
+];
+
 $voucherCategories = [
     'prefix' => 'VC',
     'padding' => 3,
@@ -107,6 +221,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Account Groups
+    |--------------------------------------------------------------------------
+    |
+    | These codes define the permanent chart-of-accounts group hierarchy.
+    | Database IDs are intentionally excluded because codes are the stable
+    | business identifiers used by services, reports, and integrations.
+    |
+    */
+    'account_groups' => [
+        'system' => $accountGroups,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Voucher Categories
     |--------------------------------------------------------------------------
     |
@@ -140,11 +268,7 @@ return [
     'sales' => [
         'max_items' => (int) env('SALE_MAX_ITEMS', 100),
         'currency_scale' => (int) env('SALE_CURRENCY_SCALE', 2),
-        'payment_groups' => $paymentGroups = [
-            'Cash' => ['100020002'],
-            'Mobile Bank' => ['100020003'],
-            'Bank' => ['100020004'],
-        ],
+        'payment_groups' => $paymentGroups,
     ],
 
     'accounting' => [

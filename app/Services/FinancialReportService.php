@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\AccountGroupHelper;
 use App\Models\Account;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -562,13 +563,25 @@ class FinancialReportService
                 $account->whereHas('group', function ($query) use ($type) {
                     $query->where(function ($group) use ($type) {
                         if ($type === 'cash') {
-                            $group->where('code', '100020002')
+                            $group->where(
+                                'code',
+                                AccountGroupHelper::code('cash_in_hand')
+                            )
                                 ->orWhere('name', 'like', '%cash%');
                         } elseif ($type === 'bank') {
-                            $group->whereIn('code', ['100020003', '100020004'])
+                            $group->whereIn(
+                                'code',
+                                AccountGroupHelper::codes([
+                                    'mobile_bank',
+                                    'bank_account',
+                                ])
+                            )
                                 ->orWhere('name', 'like', '%bank%');
                         } else {
-                            $group->where('code', '400010002')
+                            $group->where(
+                                'code',
+                                AccountGroupHelper::code('bank_loan')
+                            )
                                 ->orWhere('name', 'like', '%loan%');
                         }
                     });

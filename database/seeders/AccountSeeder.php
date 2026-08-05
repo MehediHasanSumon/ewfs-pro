@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Helpers\AccountGroupHelper;
 use App\Helpers\AccountHelper;
 use App\Models\Account;
 use App\Models\Group;
@@ -15,25 +16,25 @@ class AccountSeeder extends Seeder
         $accounts = [
             [
                 'name' => 'Office Cash',
-                'group_code' => '100020002',
+                'group_code' => AccountGroupHelper::code('cash_in_hand'),
                 'semantic_code' => 'cash_on_hand',
                 'is_system' => true,
             ],
             [
                 'name' => 'bKash : 01755-683388',
-                'group_code' => '100020003',
+                'group_code' => AccountGroupHelper::code('mobile_bank'),
                 'semantic_code' => 'mobile_bank_bkash',
                 'is_system' => false,
             ],
             [
                 'name' => 'Exaim Bank PLC',
-                'group_code' => '100020004',
+                'group_code' => AccountGroupHelper::code('bank_account'),
                 'semantic_code' => 'bank_exaim',
                 'is_system' => false,
             ],
             [
                 'name' => 'Dutch Bangla Bank A/C: 123456',
-                'group_code' => '100020004',
+                'group_code' => AccountGroupHelper::code('bank_account'),
                 'semantic_code' => 'bank_dutch_bangla',
                 'is_system' => false,
             ],
