@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CompanySetting extends Model
 {
@@ -33,5 +34,12 @@ class CompanySetting extends Model
             'is_registration' => 'boolean',
             'status' => 'boolean',
         ];
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CompanyDocument::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 }

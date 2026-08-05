@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Edit, Building } from 'lucide-react';
+import { ArrowLeft, Building, Edit, FolderOpen } from 'lucide-react';
 
 interface CompanySetting {
     id: number;
@@ -48,37 +49,55 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Show({ companySetting }: ShowProps) {
+    const { can } = usePermission();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Company Setting" />
-            
-            <div className="p-6 space-y-6">
-                <div className="flex justify-between items-center">
+
+            <div className="space-y-6 p-6">
+                <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold dark:text-white">Company Setting Details</h1>
-                        <p className="text-gray-600 dark:text-gray-400">View company information</p>
+                        <h1 className="text-3xl font-bold dark:text-white">
+                            Company Setting Details
+                        </h1>
+                        <p className="text-gray-600 dark:text-gray-400">
+                            View company information
+                        </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href={`/company-settings/${companySetting.id}/edit`}>
+                        {can('company-document-view') && (
+                            <Link
+                                href={`/company-settings/${companySetting.id}/documents`}
+                            >
+                                <Button variant="outline">
+                                    <FolderOpen className="mr-2 h-4 w-4" />
+                                    Company Documents
+                                </Button>
+                            </Link>
+                        )}
+                        <Link
+                            href={`/company-settings/${companySetting.id}/edit`}
+                        >
                             <Button>
-                                <Edit className="h-4 w-4 mr-2" />
+                                <Edit className="mr-2 h-4 w-4" />
                                 Edit
                             </Button>
                         </Link>
                         <Link href="/company-settings">
                             <Button variant="secondary">
-                                <ArrowLeft className="h-4 w-4 mr-2" />
+                                <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to List
                             </Button>
                         </Link>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <div className="lg:col-span-2">
-                        <Card className="dark:bg-gray-800 dark:border-gray-700">
+                        <Card className="dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader>
-                                <CardTitle className="dark:text-white flex items-center gap-2">
+                                <CardTitle className="flex items-center gap-2 dark:text-white">
                                     <Building className="h-5 w-5" />
                                     Company Information
                                 </CardTitle>
@@ -86,86 +105,162 @@ export default function Show({ companySetting }: ShowProps) {
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Company Name</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_name}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Company Name
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_name}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Company Details</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_details || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Company Details
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_details ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Proprietor Name</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.proprietor_name || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Proprietor Name
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.proprietor_name ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
-                                        <span className={`inline-flex px-2 py-1 rounded text-xs ${companySetting.status == 1 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
-                                            {companySetting.status == 1 ? 'Active' : 'Disabled'}
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Status
+                                        </label>
+                                        <span
+                                            className={`inline-flex rounded px-2 py-1 text-xs ${companySetting.status == 1 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}
+                                        >
+                                            {companySetting.status == 1
+                                                ? 'Active'
+                                                : 'Disabled'}
                                         </span>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <Card className="dark:bg-gray-800 dark:border-gray-700 mt-6">
+                        <Card className="mt-6 dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader>
-                                <CardTitle className="dark:text-white">Contact Information</CardTitle>
+                                <CardTitle className="dark:text-white">
+                                    Contact Information
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Company Address</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_address || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Company Address
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_address ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Factory Address</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.factory_address || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Factory Address
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.factory_address ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Cell Number</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_mobile || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Cell Number
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_mobile ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone Number</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_phone || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Phone Number
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_phone ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.company_email || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Email
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.company_email ||
+                                                '-'}
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <Card className="dark:bg-gray-800 dark:border-gray-700 mt-6">
+                        <Card className="mt-6 dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader>
-                                <CardTitle className="dark:text-white">Legal Information</CardTitle>
+                                <CardTitle className="dark:text-white">
+                                    Legal Information
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Trade License No</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.trade_license || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Trade License No
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.trade_license ||
+                                                '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">e-TIN No</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.tin_no || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            e-TIN No
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.tin_no || '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">BIN No</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.bin_no || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            BIN No
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.bin_no || '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">VAT No</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.vat_no || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            VAT No
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.vat_no || '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">VAT Rate</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.vat_rate ? `${companySetting.vat_rate}%` : '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            VAT Rate
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.vat_rate
+                                                ? `${companySetting.vat_rate}%`
+                                                : '-'}
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Currency</label>
-                                        <p className="text-gray-900 dark:text-white">{companySetting.currency || '-'}</p>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Currency
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.currency || '-'}
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -173,37 +268,51 @@ export default function Show({ companySetting }: ShowProps) {
                     </div>
 
                     <div>
-                        <Card className="dark:bg-gray-800 dark:border-gray-700">
+                        <Card className="dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader>
-                                <CardTitle className="dark:text-white">Company Logo</CardTitle>
+                                <CardTitle className="dark:text-white">
+                                    Company Logo
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {companySetting.company_logo ? (
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Company Logo</label>
-                                        <div className="mt-2 p-4 border rounded-lg dark:border-gray-600">
-                                            <img 
-                                                src={`/storage/${companySetting.company_logo}`} 
-                                                alt="Company Logo" 
-                                                className="max-w-[200px] h-auto mx-auto"
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Company Logo
+                                        </label>
+                                        <div className="mt-2 rounded-lg border p-4 dark:border-gray-600">
+                                            <img
+                                                src={`/storage/${companySetting.company_logo}`}
+                                                alt="Company Logo"
+                                                className="mx-auto h-auto max-w-[200px]"
                                             />
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 dark:text-gray-400 text-center py-8">No logo uploaded</p>
+                                    <p className="py-8 text-center text-gray-500 dark:text-gray-400">
+                                        No logo uploaded
+                                    </p>
                                 )}
                             </CardContent>
                         </Card>
 
-                        <Card className="dark:bg-gray-800 dark:border-gray-700 mt-6">
+                        <Card className="mt-6 dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader>
-                                <CardTitle className="dark:text-white">User Registration</CardTitle>
+                                <CardTitle className="dark:text-white">
+                                    User Registration
+                                </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Registration Status</label>
-                                    <span className={`inline-flex px-2 py-1 rounded text-xs mt-2 ${companySetting.is_registration ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
-                                        {companySetting.is_registration ? 'Enabled' : 'Disabled'}
+                                    <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                        Registration Status
+                                    </label>
+                                    <span
+                                        className={`mt-2 inline-flex rounded px-2 py-1 text-xs ${companySetting.is_registration ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}
+                                    >
+                                        {companySetting.is_registration
+                                            ? 'Enabled'
+                                            : 'Disabled'}
                                     </span>
                                 </div>
                             </CardContent>

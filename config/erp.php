@@ -295,4 +295,10 @@ return [
         'image_max_kb' => (int) env('EMPLOYEE_IMAGE_MAX_KB', 5120),
         'nid_max_kb' => (int) env('EMPLOYEE_NID_MAX_KB', 10240),
     ],
+
+    'company_documents' => [
+        'disk' => env('COMPANY_DOCUMENT_DISK', 'private'),
+        'directory' => env('COMPANY_DOCUMENT_DIRECTORY', 'company-documents'),
+        'max_file_kb' => (int) env('COMPANY_DOCUMENT_MAX_FILE_KB', 10240),
+    ],
 ];

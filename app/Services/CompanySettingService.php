@@ -60,21 +60,31 @@ class CompanySettingService
     public function delete(CompanySetting $companySetting): void
     {
         $logo = $companySetting->company_logo;
+        $documentPaths = $companySetting->documents()->pluck('file_path')->all();
 
         DB::transaction(fn () => $companySetting->delete());
         $this->deleteLogo($logo);
+        $this->deleteDocumentFiles($documentPaths);
     }
 
     public function deleteMany(array $ids): int
     {
         /** @var Collection<int, CompanySetting> $settings */
-        $settings = CompanySetting::query()->whereKey($ids)->get();
+        $settings = CompanySetting::query()
+            ->with('documents:id,company_setting_id,file_path')
+            ->whereKey($ids)
+            ->get();
 
         DB::transaction(function () use ($settings): void {
             CompanySetting::query()->whereKey($settings->modelKeys())->delete();
         });
 
-        $settings->each(fn (CompanySetting $setting) => $this->deleteLogo($setting->company_logo));
+        $settings->each(function (CompanySetting $setting): void {
+            $this->deleteLogo($setting->company_logo);
+            $this->deleteDocumentFiles(
+                $setting->documents->pluck('file_path')->all()
+            );
+        });
 
         return $settings->count();
     }
@@ -94,6 +104,19 @@ class CompanySettingService
     {
         if ($path !== null && $path !== '') {
             Storage::disk('public')->delete(ltrim($path, '/'));
+        }
+    }
+
+    private function deleteDocumentFiles(array $paths): void
+    {
+        $paths = array_values(array_filter(array_map(
+            fn (?string $path): ?string => $path ? ltrim($path, '/') : null,
+            $paths
+        )));
+
+        if ($paths !== []) {
+            Storage::disk(config('erp.company_documents.disk', 'private'))
+                ->delete($paths);
         }
     }
 }

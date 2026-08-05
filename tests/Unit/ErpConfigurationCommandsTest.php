@@ -179,6 +179,12 @@ it('creates voucher master permissions through user manager setup', function () 
         ->all();
 
     $superAdmin = Role::query()->where('name', 'super-admin')->firstOrFail();
+    $companyDocumentPermissions = [
+        'company-document-view',
+        'company-document-create',
+        'company-document-update',
+        'company-document-delete',
+    ];
 
     expect($permissions)
         ->toHaveCount(count(VoucherCategoryHelper::permissionNames()))
@@ -191,5 +197,13 @@ it('creates voucher master permissions through user manager setup', function () 
         ->and($superAdmin->hasAllPermissions(
             SalaryPaymentHelper::permissionNames()
         ))
+        ->toBeTrue()
+        ->and(
+            Permission::query()
+                ->whereIn('name', $companyDocumentPermissions)
+                ->count()
+        )
+        ->toBe(count($companyDocumentPermissions))
+        ->and($superAdmin->hasAllPermissions($companyDocumentPermissions))
         ->toBeTrue();
 });
