@@ -57,7 +57,7 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 ->get(['id', 'code', 'name']),
             'voucherType' => VoucherTransactionTypeHelper::paymentVoucherType(),
             'transactionTypeOptionsUrl' => route(
-                'voucher-transaction-types.options',
+                'voucher-transaction-types.lookup',
                 absolute: false
             ),
             'filters' => $request->only([

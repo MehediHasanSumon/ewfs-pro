@@ -90,7 +90,7 @@ class VoucherTransactionTypeController extends Controller implements HasMiddlewa
         ]);
     }
 
-    public function options(VoucherTransactionTypeOptionsRequest $request)
+    public function lookup(VoucherTransactionTypeOptionsRequest $request)
     {
         $validated = $request->validated();
 

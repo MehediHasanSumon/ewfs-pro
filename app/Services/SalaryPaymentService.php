@@ -42,13 +42,20 @@ class SalaryPaymentService
                     (int) $data['salary_month'],
                     (int) $data['salary_year']
                 )
+                ->where(
+                    'voucher_transaction_type_id',
+                    (int) $data['voucher_transaction_type_id']
+                )
                 ->where('status', EmployeeSalaryPayment::STATUS_PAID)
                 ->whereIn('employee_id', $data['employee_ids'])
                 ->first();
+            $transactionType = VoucherTransactionType::query()
+                ->find((int) $data['voucher_transaction_type_id']);
 
-            if ($duplicate?->employee) {
+            if ($duplicate?->employee && $transactionType) {
                 throw $this->duplicatePaymentException(
                     $duplicate->employee,
+                    $transactionType,
                     (int) $data['salary_month'],
                     (int) $data['salary_year']
                 );
@@ -86,9 +93,15 @@ class SalaryPaymentService
 
         $month = (int) $data['salary_month'];
         $year = (int) $data['salary_year'];
+        [$category, $transactionType] = $this->salaryVoucherMasters(
+            (int) $data['voucher_transaction_type_id']
+        );
+        $isMonthlySalary = $transactionType->code
+            === VoucherTransactionTypeHelper::monthlySalaryCode();
         $existingPayments = EmployeeSalaryPayment::query()
             ->whereIn('employee_id', $employeeIds)
             ->forPeriod($month, $year)
+            ->where('voucher_transaction_type_id', $transactionType->id)
             ->with('paymentVoucher.journalEntry:id,status')
             ->lockForUpdate()
             ->get()
@@ -100,22 +113,25 @@ class SalaryPaymentService
             if ($this->isEffectivePayment($existing)) {
                 throw $this->duplicatePaymentException(
                     $employee,
+                    $transactionType,
                     $month,
                     $year
                 );
             }
         }
 
-        [$category, $transactionType] = $this->salaryVoucherMasters();
         $voucherLines = $employees
             ->map(function (Employee $employee) use (
                 $category,
                 $transactionType,
+                $isMonthlySalary,
                 $data,
                 $month,
                 $year
             ): array {
-                $salary = (float) ($employee->salaryStructure?->gross_salary ?? 0);
+                $amount = $isMonthlySalary
+                    ? (float) ($employee->salaryStructure?->gross_salary ?? 0)
+                    : (float) ($data['amounts'][$employee->id] ?? 0);
                 $paymentAccount = $employee->paymentAccount;
                 $paymentMethod = $paymentAccount
                     ? $this->paymentAccounts->methodFor($paymentAccount)
@@ -127,9 +143,15 @@ class SalaryPaymentService
                     ]);
                 }
 
-                if ($salary <= 0) {
+                if ($isMonthlySalary && $amount <= 0) {
                     throw ValidationException::withMessages([
                         'employee_ids' => "Gross salary is not configured for {$employee->employee_name}.",
+                    ]);
+                }
+
+                if (! $isMonthlySalary && $amount <= 0) {
+                    throw ValidationException::withMessages([
+                        "amounts.{$employee->id}" => "Enter a valid {$transactionType->name} amount for {$employee->employee_name}.",
                     ]);
                 }
 
@@ -141,18 +163,22 @@ class SalaryPaymentService
 
                 $remarks = trim((string) (
                     $data['remarks'][$employee->id]
-                    ?? SalaryPaymentHelper::remarks(
+                    ?? SalaryPaymentHelper::transactionRemarks(
+                        $transactionType->name,
                         $employee->employee_name,
                         $month,
-                        $year
+                        $year,
+                        $isMonthlySalary
                     )
                 ));
                 $remarks = $remarks !== ''
                     ? $remarks
-                    : SalaryPaymentHelper::remarks(
+                    : SalaryPaymentHelper::transactionRemarks(
+                        $transactionType->name,
                         $employee->employee_name,
                         $month,
-                        $year
+                        $year,
+                        $isMonthlySalary
                     );
 
                 return [
@@ -160,7 +186,7 @@ class SalaryPaymentService
                     'voucher_transaction_type_id' => $transactionType->id,
                     'from_account_id' => $paymentAccount->id,
                     'to_account_id' => $employee->account->id,
-                    'amount' => $salary,
+                    'amount' => $amount,
                     'payment_method' => $paymentMethod,
                     'description' => $remarks,
                     'remarks' => $remarks,
@@ -187,6 +213,7 @@ class SalaryPaymentService
                 $existingPayments,
                 $month,
                 $year,
+                $transactionType,
                 $postedVouchers
             ): EmployeeSalaryPayment {
                 $payment = $existingPayments->get($employee->id)
@@ -194,10 +221,12 @@ class SalaryPaymentService
                         'employee_id' => $employee->id,
                         'salary_month' => $month,
                         'salary_year' => $year,
+                        'voucher_transaction_type_id' => $transactionType->id,
                     ]);
 
                 $payment->fill([
                     'payment_voucher_id' => $postedVouchers[$index]->id,
+                    'voucher_transaction_type_id' => $transactionType->id,
                     'amount' => $postedVouchers[$index]->amount,
                     'status' => EmployeeSalaryPayment::STATUS_PAID,
                     'created_by' => auth()->id(),
@@ -211,25 +240,12 @@ class SalaryPaymentService
     /**
      * @return array{0: VoucherCategory, 1: VoucherTransactionType}
      */
-    private function salaryVoucherMasters(): array
-    {
-        $category = VoucherCategory::query()
-            ->where('code', VoucherCategoryHelper::employeeCode())
-            ->where('status', true)
-            ->first();
-
-        if (! $category) {
-            throw ValidationException::withMessages([
-                'salary_payment' => 'The Employee voucher category is not configured.',
-            ]);
-        }
-
+    private function salaryVoucherMasters(
+        int $transactionTypeId
+    ): array {
         $transactionType = VoucherTransactionType::query()
-            ->where('voucher_category_id', $category->id)
-            ->where(
-                'code',
-                VoucherTransactionTypeHelper::monthlySalaryCode()
-            )
+            ->with('voucherCategory:id,code,status')
+            ->whereKey($transactionTypeId)
             ->where(
                 'voucher_type',
                 VoucherTransactionTypeHelper::paymentVoucherType()
@@ -237,9 +253,16 @@ class SalaryPaymentService
             ->where('status', true)
             ->first();
 
-        if (! $transactionType) {
+        $category = $transactionType?->voucherCategory;
+
+        if (
+            ! $transactionType
+            || ! $category
+            || ! $category->status
+            || $category->code !== VoucherCategoryHelper::employeeCode()
+        ) {
             throw ValidationException::withMessages([
-                'salary_payment' => 'The Monthly Salary payment transaction type is not configured.',
+                'voucher_transaction_type_id' => 'The selected employee payment type is not available.',
             ]);
         }
 
@@ -255,12 +278,18 @@ class SalaryPaymentService
 
     private function duplicatePaymentException(
         Employee $employee,
+        VoucherTransactionType $transactionType,
         int $month,
         int $year
     ): ValidationException {
+        $message = $transactionType->code
+            === VoucherTransactionTypeHelper::monthlySalaryCode()
+            ? 'Salary has already been paid for this employee for %s.'
+            : "{$transactionType->name} has already been paid for this employee for %s.";
+
         return ValidationException::withMessages([
             'employee_ids' => sprintf(
-                'Salary has already been paid for this employee for %s.',
+                $message,
                 SalaryPaymentHelper::periodLabel($month, $year)
             ),
         ]);

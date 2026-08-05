@@ -9,6 +9,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class SalaryPaymentEmployeeResource extends JsonResource
 {
+    public function __construct(
+        $resource,
+        private readonly bool $isMonthlySalary
+    ) {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
         $paymentAccount = $this->paymentAccount;
@@ -23,7 +30,8 @@ class SalaryPaymentEmployeeResource extends JsonResource
         $grossSalary = (float) ($this->salaryStructure?->gross_salary ?? 0);
         $configurationError = $this->configurationError(
             $paymentMethod,
-            $grossSalary
+            $grossSalary,
+            $this->isMonthlySalary
         );
 
         return [
@@ -43,7 +51,7 @@ class SalaryPaymentEmployeeResource extends JsonResource
                 'name' => $paymentAccount->name,
             ] : null,
             'monthly_salary' => $grossSalary,
-            'pay_amount' => $grossSalary,
+            'pay_amount' => $this->isMonthlySalary ? $grossSalary : 0,
             'payment_status' => $isPaid ? 'already_paid' : 'pending',
             'can_select' => ! $isPaid && $configurationError === null,
             'configuration_error' => $configurationError,
@@ -57,13 +65,14 @@ class SalaryPaymentEmployeeResource extends JsonResource
 
     private function configurationError(
         ?string $paymentMethod,
-        float $grossSalary
+        float $grossSalary,
+        bool $isMonthlySalary
     ): ?string {
         if (! $this->account || ! $this->account->status) {
             return 'Employee ledger account is unavailable.';
         }
 
-        if ($grossSalary <= 0) {
+        if ($isMonthlySalary && $grossSalary <= 0) {
             return 'Gross salary is not configured.';
         }
 

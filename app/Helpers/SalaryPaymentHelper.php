@@ -46,4 +46,23 @@ class SalaryPaymentHelper
             self::periodLabel($month, $year)
         );
     }
+
+    public static function transactionRemarks(
+        string $transactionTypeName,
+        string $employeeName,
+        int $month,
+        int $year,
+        bool $isMonthlySalary = false
+    ): string {
+        if ($isMonthlySalary) {
+            return self::remarks($employeeName, $month, $year);
+        }
+
+        return sprintf(
+            '%s payment for %s for %s.',
+            $transactionTypeName,
+            $employeeName,
+            self::periodLabel($month, $year)
+        );
+    }
 }

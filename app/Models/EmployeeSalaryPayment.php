@@ -15,6 +15,7 @@ class EmployeeSalaryPayment extends Model
     protected $fillable = [
         'employee_id',
         'payment_voucher_id',
+        'voucher_transaction_type_id',
         'salary_month',
         'salary_year',
         'amount',
@@ -49,6 +50,11 @@ class EmployeeSalaryPayment extends Model
     public function paymentVoucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class, 'payment_voucher_id');
+    }
+
+    public function voucherTransactionType(): BelongsTo
+    {
+        return $this->belongsTo(VoucherTransactionType::class);
     }
 
     public function creator(): BelongsTo

@@ -128,7 +128,7 @@ class DispenserReadingController extends Controller implements HasMiddleware
             'paymentVoucherType' => VoucherTransactionTypeHelper::paymentVoucherType(),
             'receiptVoucherType' => VoucherTransactionTypeHelper::receiptVoucherType(),
             'transactionTypeOptionsUrl' => route(
-                'voucher-transaction-types.options',
+                'voucher-transaction-types.lookup',
                 absolute: false
             ),
         ]);

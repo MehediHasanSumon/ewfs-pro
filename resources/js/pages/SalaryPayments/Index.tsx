@@ -33,6 +33,11 @@ interface NamedOption {
     name: string;
 }
 
+interface TransactionTypeOption extends NamedOption {
+    code: string;
+    is_monthly_salary: boolean;
+}
+
 interface SalaryEmployee {
     id: number;
     employee_name: string;
@@ -63,6 +68,7 @@ interface SalaryPaymentFilters {
     salary_year: number;
     date: string;
     shift_id: number | null;
+    voucher_transaction_type_id: number | null;
     per_page: number;
 }
 
@@ -79,6 +85,7 @@ interface SalaryPaymentPageProps {
     departments: NamedOption[];
     designations: NamedOption[];
     shifts: NamedOption[];
+    transactionTypes: TransactionTypeOption[];
     closedShiftIds: number[];
     filters: SalaryPaymentFilters;
 }
@@ -91,6 +98,7 @@ interface FilterOverrides {
     salaryYear?: string;
     date?: string;
     shiftId?: string;
+    transactionTypeId?: string;
     perPage?: number;
     page?: number;
 }
@@ -124,6 +132,7 @@ export default function SalaryPaymentIndex({
     departments,
     designations,
     shifts,
+    transactionTypes,
     closedShiftIds,
     filters,
 }: SalaryPaymentPageProps) {
@@ -144,12 +153,27 @@ export default function SalaryPaymentIndex({
     const [shiftId, setShiftId] = useState(
         filters.shift_id?.toString() ?? '',
     );
+    const [transactionTypeId, setTransactionTypeId] = useState(
+        filters.voucher_transaction_type_id?.toString() ?? '',
+    );
     const [perPage, setPerPage] = useState(filters.per_page);
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>(
         [],
     );
     const [processing, setProcessing] = useState(false);
+    const [amounts, setAmounts] = useState<Record<number, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const selectedTransactionType = useMemo(
+        () =>
+            transactionTypes.find(
+                (transactionType) =>
+                    transactionType.id.toString() === transactionTypeId,
+            ) ?? null,
+        [transactionTypeId, transactionTypes],
+    );
+    const isMonthlySalary =
+        selectedTransactionType?.is_monthly_salary ?? false;
 
     const availableShifts = useMemo(
         () => shifts.filter((shift) => !closedShiftIds.includes(shift.id)),
@@ -168,6 +192,11 @@ export default function SalaryPaymentIndex({
     const somePayableSelected = payableEmployeeIds.some((id) =>
         selectedEmployeeIds.includes(id),
     );
+    const hasInvalidExtraAmounts =
+        !isMonthlySalary &&
+        selectedEmployeeIds.some(
+            (employeeId) => Number(amounts[employeeId] ?? 0) <= 0,
+        );
     const yearOptions = useMemo(() => {
         const currentYear = new Date().getFullYear();
         return Array.from(
@@ -187,6 +216,8 @@ export default function SalaryPaymentIndex({
         const nextYear = overrides.salaryYear ?? salaryYear;
         const nextDate = overrides.date ?? date;
         const nextShift = overrides.shiftId ?? shiftId;
+        const nextTransactionType =
+            overrides.transactionTypeId ?? transactionTypeId;
         const nextPerPage = overrides.perPage ?? perPage;
 
         router.get(
@@ -201,6 +232,8 @@ export default function SalaryPaymentIndex({
                 salary_year: nextYear,
                 date: nextDate,
                 shift_id: nextShift || undefined,
+                voucher_transaction_type_id:
+                    nextTransactionType || undefined,
                 per_page: nextPerPage,
                 page: overrides.page,
             },
@@ -210,6 +243,7 @@ export default function SalaryPaymentIndex({
                 replace: true,
                 onBefore: () => {
                     setSelectedEmployeeIds([]);
+                    setAmounts({});
                     setErrors({});
                 },
             },
@@ -272,12 +306,22 @@ export default function SalaryPaymentIndex({
                 shift_id: shiftId || null,
                 salary_month: Number(salaryMonth),
                 salary_year: Number(salaryYear),
+                voucher_transaction_type_id: Number(transactionTypeId),
                 employee_ids: selectedEmployeeIds,
+                ...(!isMonthlySalary && {
+                    amounts: Object.fromEntries(
+                        selectedEmployeeIds.map((employeeId) => [
+                            employeeId,
+                            Number(amounts[employeeId]),
+                        ]),
+                    ),
+                }),
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
                     setSelectedEmployeeIds([]);
+                    setAmounts({});
                     setErrors({});
                 },
                 onError: (responseErrors) =>
@@ -298,7 +342,7 @@ export default function SalaryPaymentIndex({
                             Salary Payment
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            Process employee salaries through standard payment
+                            Process employee payments through standard payment
                             vouchers
                         </p>
                     </div>
@@ -309,7 +353,9 @@ export default function SalaryPaymentIndex({
                             processing ||
                             selectedEmployeeIds.length === 0 ||
                             !date ||
-                            !shiftId
+                            !shiftId ||
+                            !transactionTypeId ||
+                            hasInvalidExtraAmounts
                         }
                     >
                         {processing ? (
@@ -326,7 +372,7 @@ export default function SalaryPaymentIndex({
 
                 {firstError && (
                     <Alert variant="destructive">
-                        <AlertTitle>Salary payment could not be processed</AlertTitle>
+                        <AlertTitle>Employee payment could not be processed</AlertTitle>
                         <AlertDescription>{firstError}</AlertDescription>
                     </Alert>
                 )}
@@ -339,7 +385,7 @@ export default function SalaryPaymentIndex({
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                             <div>
                                 <Label htmlFor="salary-payment-date">Date</Label>
                                 <Input
@@ -435,6 +481,41 @@ export default function SalaryPaymentIndex({
                                                 {year}
                                             </SelectItem>
                                         ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Payment Type</Label>
+                                <Select
+                                    value={transactionTypeId}
+                                    onValueChange={(value) => {
+                                        setTransactionTypeId(value);
+                                        setAmounts({});
+                                        visit({
+                                            transactionTypeId: value,
+                                            page: 1,
+                                        });
+                                    }}
+                                    disabled={transactionTypes.length === 0}
+                                >
+                                    <SelectTrigger
+                                        aria-invalid={Boolean(
+                                            errors.voucher_transaction_type_id,
+                                        )}
+                                    >
+                                        <SelectValue placeholder="Choose payment type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {transactionTypes.map(
+                                            (transactionType) => (
+                                                <SelectItem
+                                                    key={transactionType.id}
+                                                    value={transactionType.id.toString()}
+                                                >
+                                                    {transactionType.name}
+                                                </SelectItem>
+                                            ),
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -646,8 +727,47 @@ export default function SalaryPaymentIndex({
                                                         )}
                                                     </td>
                                                     <td className="p-3 text-right text-[13px] font-semibold whitespace-nowrap tabular-nums dark:text-white">
-                                                        {formatAmount(
-                                                            employee.pay_amount,
+                                                        {isMonthlySalary ? (
+                                                            formatAmount(
+                                                                employee.pay_amount,
+                                                            )
+                                                        ) : (
+                                                            <Input
+                                                                type="number"
+                                                                min="0.01"
+                                                                step="0.01"
+                                                                value={
+                                                                    amounts[
+                                                                        employee
+                                                                            .id
+                                                                    ] ?? ''
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    setAmounts(
+                                                                        (
+                                                                            current,
+                                                                        ) => ({
+                                                                            ...current,
+                                                                            [employee.id]:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        }),
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    !employee.can_select
+                                                                }
+                                                                error={Boolean(
+                                                                    errors[
+                                                                        `amounts.${employee.id}`
+                                                                    ],
+                                                                )}
+                                                                aria-label={`${selectedTransactionType?.name ?? 'Extra payment'} amount for ${employee.employee_name}`}
+                                                                className="min-w-32 text-right"
+                                                            />
                                                         )}
                                                     </td>
                                                     <td className="p-3">

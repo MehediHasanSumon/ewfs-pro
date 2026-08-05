@@ -386,7 +386,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Voucher Transaction Type routes
     Route::get('voucher-transaction-types', [VoucherTransactionTypeController::class, 'index'])->name('voucher-transaction-types.index');
-    Route::get('voucher-transaction-types/options', [VoucherTransactionTypeController::class, 'options'])->name('voucher-transaction-types.options');
+    Route::get('voucher-transaction-types/options', [VoucherTransactionTypeController::class, 'lookup'])->name('voucher-transaction-types.lookup');
     Route::get('voucher-transaction-types/download-pdf', [VoucherTransactionTypeController::class, 'downloadPdf'])->name('voucher-transaction-types.download.pdf');
     Route::delete('voucher-transaction-types/bulk/delete', [VoucherTransactionTypeController::class, 'bulkDelete'])->name('voucher-transaction-types.bulk.delete');
     Route::post('voucher-transaction-types', [VoucherTransactionTypeController::class, 'store'])->name('voucher-transaction-types.store');

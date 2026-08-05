@@ -10,6 +10,7 @@ use App\Models\EmployeeSalaryPayment;
 use App\Models\Group;
 use App\Models\JournalEntry;
 use App\Models\Voucher;
+use App\Models\VoucherTransactionType;
 use App\Services\AccountingService;
 use App\Services\CustomerSecurityDepositService;
 use App\Services\DocumentNumberService;
@@ -221,13 +222,19 @@ beforeEach(function () {
         $table->id();
         $table->foreignId('employee_id');
         $table->foreignId('payment_voucher_id')->nullable()->unique();
+        $table->foreignId('voucher_transaction_type_id');
         $table->unsignedTinyInteger('salary_month');
         $table->unsignedSmallInteger('salary_year');
         $table->decimal('amount', 24, 4);
         $table->string('status');
         $table->unsignedBigInteger('created_by')->nullable();
         $table->timestamps();
-        $table->unique(['employee_id', 'salary_year', 'salary_month']);
+        $table->unique([
+            'employee_id',
+            'salary_year',
+            'salary_month',
+            'voucher_transaction_type_id',
+        ]);
     });
 });
 
@@ -341,8 +348,27 @@ function salaryPaymentPayload(array $employeeIds): array
         'shift_id' => 1,
         'salary_month' => 8,
         'salary_year' => 2026,
+        'voucher_transaction_type_id' => VoucherTransactionType::query()
+            ->where('code', VoucherTransactionTypeHelper::monthlySalaryCode())
+            ->value('id'),
         'employee_ids' => $employeeIds,
     ];
+}
+
+function salaryExtraPaymentType(
+    string $name = 'Festival Bonus',
+    string $code = '1090'
+): VoucherTransactionType {
+    return VoucherTransactionType::query()->create([
+        'voucher_category_id' => DB::table('voucher_categories')
+            ->where('code', VoucherCategoryHelper::employeeCode())
+            ->value('id'),
+        'code' => $code,
+        'name' => $name,
+        'voucher_type' => VoucherTransactionTypeHelper::paymentVoucherType(),
+        'status' => true,
+        'is_system' => false,
+    ]);
 }
 
 it('creates standard payment vouchers and journals from employee payroll data', function () {
@@ -373,6 +399,8 @@ it('creates standard payment vouchers and journals from employee payroll data', 
         ->and($payment->employee_id)->toBe($employee->id)
         ->and($payment->amount)->toBe('21000.0000')
         ->and($payment->status)->toBe(EmployeeSalaryPayment::STATUS_PAID)
+        ->and($payment->voucher_transaction_type_id)
+        ->toBe($voucher->voucher_transaction_type_id)
         ->and($voucher->voucher_type)
         ->toBe(VoucherTransactionTypeHelper::paymentVoucherType())
         ->and($voucher->voucherCategory?->code)
@@ -403,7 +431,10 @@ it('creates standard payment vouchers and journals from employee payroll data', 
         'salaryStructure',
         'salaryPayments.paymentVoucher.journalEntry',
     ]);
-    $resource = (new SalaryPaymentEmployeeResource($employee))->resolve();
+    $resource = (new SalaryPaymentEmployeeResource(
+        $employee,
+        true
+    ))->resolve();
 
     expect($resource['payment_method'])->toBe('Cash')
         ->and($resource['monthly_salary'])->toBe(21000.0)
@@ -471,6 +502,79 @@ it('rejects a duplicate employee salary for the same month and year', function (
     expect(Voucher::query()->count())->toBe(1)
         ->and(JournalEntry::query()->count())->toBe(1)
         ->and(EmployeeSalaryPayment::query()->count())->toBe(1);
+});
+
+it('creates separate salary and bonus vouchers for the same employee period', function () {
+    salaryPaymentMasters();
+    $bonusType = salaryExtraPaymentType();
+    $accounts = salaryPaymentAccounts();
+    $employee = salaryPaymentEmployee(
+        'John Doe',
+        'E001',
+        $accounts['cash'],
+        $accounts['employeeGroup'],
+        21000
+    );
+    $service = salaryPaymentService();
+
+    $service->pay(salaryPaymentPayload([$employee->id]));
+    $bonusPayload = salaryPaymentPayload([$employee->id]);
+    $bonusPayload['voucher_transaction_type_id'] = $bonusType->id;
+    $bonusPayload['amounts'] = [$employee->id => 5000];
+    $bonusPayment = $service->pay($bonusPayload)->first();
+    $bonusVoucher = Voucher::query()
+        ->where('voucher_transaction_type_id', $bonusType->id)
+        ->firstOrFail();
+
+    expect(Voucher::query()->count())->toBe(2)
+        ->and(EmployeeSalaryPayment::query()->count())->toBe(2)
+        ->and($bonusPayment->amount)->toBe('5000.0000')
+        ->and($bonusPayment->voucher_transaction_type_id)->toBe($bonusType->id)
+        ->and($bonusVoucher->amount)->toBe(5000.0)
+        ->and($bonusVoucher->remarks)
+        ->toBe('Festival Bonus payment for John Doe for August 2026.')
+        ->and($bonusVoucher->journalEntry?->status)->toBe('posted');
+
+    try {
+        $service->pay($bonusPayload);
+        $this->fail('Expected duplicate bonus payment validation.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors()['employee_ids'][0])
+            ->toBe(
+                'Festival Bonus has already been paid for this employee for August 2026.'
+            );
+    }
+
+    expect(Voucher::query()->count())->toBe(2)
+        ->and(EmployeeSalaryPayment::query()->count())->toBe(2);
+});
+
+it('requires employee amounts for non-salary payment types', function () {
+    salaryPaymentMasters();
+    $bonusType = salaryExtraPaymentType();
+    $accounts = salaryPaymentAccounts();
+    $employee = salaryPaymentEmployee(
+        'John Doe',
+        'E001',
+        $accounts['cash'],
+        $accounts['employeeGroup'],
+        21000
+    );
+    $payload = salaryPaymentPayload([$employee->id]);
+    $payload['voucher_transaction_type_id'] = $bonusType->id;
+
+    try {
+        salaryPaymentService()->pay($payload);
+        $this->fail('Expected an extra payment amount validation error.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors()["amounts.{$employee->id}"][0])
+            ->toBe(
+                'Enter a valid Festival Bonus amount for John Doe.'
+            );
+    }
+
+    expect(Voucher::query()->count())->toBe(0)
+        ->and(EmployeeSalaryPayment::query()->count())->toBe(0);
 });
 
 it('rolls back the complete salary batch when voucher posting fails', function () {

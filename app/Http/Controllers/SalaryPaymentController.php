@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\SalaryPaymentHelper;
+use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\SalaryPaymentRequest;
 use App\Http\Resources\SalaryPaymentEmployeeResource;
 use App\Models\EmpDepartment;
@@ -10,12 +12,14 @@ use App\Models\EmpDesignation;
 use App\Models\Employee;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
+use App\Models\VoucherTransactionType;
 use App\Services\SalaryPaymentService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class SalaryPaymentController extends Controller implements HasMiddleware
@@ -43,6 +47,13 @@ class SalaryPaymentController extends Controller implements HasMiddleware
         $month = $this->month($request);
         $year = $this->year($request);
         $date = $this->date($request);
+        $transactionTypes = $this->paymentTransactionTypes();
+        $selectedTransactionType = $this->selectedTransactionType(
+            $request,
+            $transactionTypes
+        );
+        $isMonthlySalary = $selectedTransactionType?->code
+            === VoucherTransactionTypeHelper::monthlySalaryCode();
         $query = Employee::query()
             ->where('status', true)
             ->with([
@@ -51,7 +62,14 @@ class SalaryPaymentController extends Controller implements HasMiddleware
                 'salaryStructure',
                 'department:id,name',
                 'designation:id,name',
-                'salaryPayments' => fn ($salaryPayments) => $salaryPayments
+                'salaryPayments' => fn ($salaryPayments) => (
+                    $selectedTransactionType
+                        ? $salaryPayments->where(
+                            'voucher_transaction_type_id',
+                            $selectedTransactionType->id
+                        )
+                        : $salaryPayments->whereRaw('1 = 0')
+                )
                     ->forPeriod($month, $year)
                     ->with([
                         'paymentVoucher:id,voucher_no,voucher_date,journal_entry_id',
@@ -90,7 +108,10 @@ class SalaryPaymentController extends Controller implements HasMiddleware
             ->withQueryString()
             ->through(
                 fn (Employee $employee) => (
-                    new SalaryPaymentEmployeeResource($employee)
+                    new SalaryPaymentEmployeeResource(
+                        $employee,
+                        $isMonthlySalary
+                    )
                 )->resolve($request)
             );
 
@@ -113,6 +134,15 @@ class SalaryPaymentController extends Controller implements HasMiddleware
                 ->posted()
                 ->whereDate('business_date', $date)
                 ->pluck('shift_id'),
+            'transactionTypes' => $transactionTypes
+                ->map(fn (VoucherTransactionType $transactionType) => [
+                    'id' => $transactionType->id,
+                    'code' => $transactionType->code,
+                    'name' => $transactionType->name,
+                    'is_monthly_salary' => $transactionType->code
+                        === VoucherTransactionTypeHelper::monthlySalaryCode(),
+                ])
+                ->values(),
             'filters' => [
                 'search' => (string) $request->input('search', ''),
                 'department_id' => $request->integer('department_id') ?: null,
@@ -121,6 +151,7 @@ class SalaryPaymentController extends Controller implements HasMiddleware
                 'salary_year' => $year,
                 'date' => $date,
                 'shift_id' => $request->integer('shift_id') ?: null,
+                'voucher_transaction_type_id' => $selectedTransactionType?->id,
                 'per_page' => $this->perPage($request),
             ],
         ]);
@@ -132,8 +163,49 @@ class SalaryPaymentController extends Controller implements HasMiddleware
 
         return back()->with(
             'success',
-            "{$payments->count()} salary payment voucher(s) created successfully."
+            "{$payments->count()} employee payment voucher(s) created successfully."
         );
+    }
+
+    /**
+     * @return Collection<int, VoucherTransactionType>
+     */
+    private function paymentTransactionTypes(): Collection
+    {
+        return VoucherTransactionType::query()
+            ->whereHas(
+                'voucherCategory',
+                fn (Builder $query) => $query
+                    ->where('code', VoucherCategoryHelper::employeeCode())
+                    ->where('status', true)
+            )
+            ->active()
+            ->forVoucherType(
+                VoucherTransactionTypeHelper::paymentVoucherType()
+            )
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'sort_order']);
+    }
+
+    /**
+     * @param  Collection<int, VoucherTransactionType>  $transactionTypes
+     */
+    private function selectedTransactionType(
+        Request $request,
+        Collection $transactionTypes
+    ): ?VoucherTransactionType {
+        $selected = $transactionTypes->firstWhere(
+            'id',
+            $request->integer('voucher_transaction_type_id')
+        );
+
+        return $selected
+            ?? $transactionTypes->firstWhere(
+                'code',
+                VoucherTransactionTypeHelper::monthlySalaryCode()
+            )
+            ?? $transactionTypes->first();
     }
 
     private function month(Request $request): int
