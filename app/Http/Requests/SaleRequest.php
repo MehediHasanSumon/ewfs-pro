@@ -66,7 +66,12 @@ class SaleRequest extends FormRequest
             'memo_no' => $this->input(
                 'memo_no',
                 $legacyLine['memo_no'] ?? null
-            ),
+            ) === null
+                ? null
+                : trim((string) $this->input(
+                    'memo_no',
+                    $legacyLine['memo_no'] ?? null
+                )),
             'payment_type' => $this->input(
                 'payment_type',
                 $legacyLine['payment_type'] ?? null
@@ -122,7 +127,12 @@ class SaleRequest extends FormRequest
         return [
             ...self::headerRules(),
             ...self::transactionRules(),
-            'memo_no' => ['nullable', 'string', 'max:150'],
+            'memo_no' => [
+                'required',
+                'string',
+                'max:150',
+                Rule::unique('sales', 'memo_no')->ignore($this->route('sale')),
+            ],
             'items' => ['required', 'array', 'min:1', 'max:'.$maxItems],
             'items.*.product_id' => [
                 'required',
@@ -223,6 +233,8 @@ class SaleRequest extends FormRequest
         return [
             'customer_name.required_without' => 'Customer name is required for a walk-in customer.',
             'customer_mobile.required' => 'Mobile number is required.',
+            'memo_no.required' => 'Memo number is required.',
+            'memo_no.unique' => 'This memo number has already been used.',
             'shift_id.exists' => 'The selected shift is unavailable or inactive.',
             'items.required' => 'Add at least one product to the cart.',
             'items.min' => 'Add at least one product to the cart.',

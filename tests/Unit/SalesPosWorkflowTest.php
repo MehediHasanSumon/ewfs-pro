@@ -544,7 +544,7 @@ function regularPosPayload(array $fixture, array $overrides = []): array
         'customer_mobile' => $fixture['customer']->mobile,
         'vehicle_id' => $fixture['vehicle']->id,
         'vehicle_no' => $fixture['vehicle']->vehicle_number,
-        'memo_no' => null,
+        'memo_no' => 'M-REG-001',
         'payment_type' => 'Cash',
         'to_account_id' => $fixture['cash']->id,
         'remarks' => null,
@@ -586,6 +586,7 @@ function batchPosPayload(array $fixture, array $overrides = []): array
                 'customer_mobile' => $fixture['customer']->mobile,
                 'vehicle_id' => null,
                 'vehicle_no' => null,
+                'memo_no' => 'M-000101',
                 'product_id' => $fixture['products'][0]->id,
                 'quantity' => 1,
                 'discount' => 0,
@@ -599,6 +600,7 @@ function batchPosPayload(array $fixture, array $overrides = []): array
                 'customer_mobile' => $fixture['otherCustomer']->mobile,
                 'vehicle_id' => $fixture['vehicle']->id,
                 'vehicle_no' => $fixture['vehicle']->vehicle_number,
+                'memo_no' => 'M-000102',
                 'product_id' => $fixture['products'][1]->id,
                 'quantity' => 2,
                 'discount' => 0,
@@ -614,6 +616,7 @@ function batchPosPayload(array $fixture, array $overrides = []): array
                 'customer_mobile' => '01922222222',
                 'vehicle_id' => null,
                 'vehicle_no' => 'WALK-100',
+                'memo_no' => 'M-000103',
                 'product_id' => $fixture['products'][2]->id,
                 'quantity' => 3,
                 'discount' => 0,
@@ -654,6 +657,23 @@ it('validates independent payment requirements for every batch row', function ()
     expect($validator->fails())->toBeTrue()
         ->and($validator->errors()->has('rows.1.bank_name'))->toBeTrue()
         ->and($validator->errors()->has('rows.0.bank_name'))->toBeFalse();
+});
+
+it('requires a distinct manual memo number for every batch row', function () {
+    $fixture = makeSalesPosFixture();
+    $payload = batchPosPayload($fixture);
+    $payload['rows'][1]['memo_no'] = $payload['rows'][0]['memo_no'];
+    unset($payload['rows'][2]['memo_no']);
+
+    $validator = Validator::make(
+        $payload,
+        (new SaleBatchRequest)->rules(),
+        (new SaleBatchRequest)->messages()
+    );
+
+    expect($validator->fails())->toBeTrue()
+        ->and($validator->errors()->has('rows.1.memo_no'))->toBeTrue()
+        ->and($validator->errors()->has('rows.2.memo_no'))->toBeTrue();
 });
 
 it('looks up a normalized mobile with active vehicles', function () {
@@ -743,10 +763,8 @@ it('posts each POS cart row as an independent atomic sale', function () {
         ->and($sales->pluck('sale_date')->map->format('Y-m-d')->unique()->all())
         ->toBe(['2026-07-28'])
         ->and($sales->pluck('shift_id')->unique()->all())->toBe([1])
-        ->and($sales->pluck('memo_no')->unique()->count())->toBe(3)
-        ->and($sales->pluck('memo_no')->every(
-            fn (string $memo) => str_starts_with($memo, 'M-')
-        ))->toBeTrue()
+        ->and($sales->pluck('memo_no')->all())
+        ->toBe(['M-000101', 'M-000102', 'M-000103'])
         ->and($sales->pluck('invoice_no')->unique()->count())->toBe(3)
         ->and($sales->pluck('customer_name_snapshot')->all())
         ->toBe(['Rahim', 'Karim', 'Walk In'])

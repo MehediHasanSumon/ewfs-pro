@@ -47,7 +47,6 @@ class SalePostingService
                 ...$row,
                 'sale_date' => $data['sale_date'],
                 'shift_id' => $data['shift_id'],
-                'memo_no' => null,
                 'items' => [[
                     'product_id' => $row['product_id'],
                     'quantity' => $row['quantity'],
@@ -419,14 +418,12 @@ class SalePostingService
                 'to_account_id'
             );
         $businessDate = $data['sale_date'] ?? now()->toDateString();
-        $memoNo = $sale?->memo_no ?: ($data['memo_no'] ?? null);
+        $memoNo = trim((string) ($data['memo_no'] ?? $sale?->memo_no ?? ''));
 
-        if (! $memoNo) {
-            $memoNo = $this->numbers->nextGlobal(
-                'sale_memo',
-                'M-',
-                6
-            );
+        if ($memoNo === '') {
+            throw ValidationException::withMessages([
+                'memo_no' => 'Memo number is required.',
+            ]);
         }
 
         $mobile = $this->customers->normalizeMobile($data['customer_mobile']);

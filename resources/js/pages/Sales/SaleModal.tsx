@@ -357,6 +357,20 @@ export function SaleModal({
             nextErrors.draft_customer_mobile = 'Mobile number is required.';
         }
 
+        if (!draft.memo_no.trim()) {
+            nextErrors.draft_memo_no = 'Memo number is required.';
+        } else if (
+            cart.some(
+                (row) =>
+                    row.key !== editingRowKey &&
+                    row.memo_no.trim().toLowerCase() ===
+                        draft.memo_no.trim().toLowerCase(),
+            )
+        ) {
+            nextErrors.draft_memo_no =
+                'Each sale row must have a different memo number.';
+        }
+
         if (!product) {
             nextErrors.draft_product_id = 'Select a product.';
         } else if (product.sales_price === null || product.sales_price <= 0) {
@@ -414,6 +428,7 @@ export function SaleModal({
             ...draft,
             key: editingRowKey || rowKey(),
             unit_price: product.sales_price,
+            memo_no: draft.memo_no.trim(),
         };
 
         setCart((current) => {
@@ -476,6 +491,7 @@ export function SaleModal({
             draft.product_id ||
             draft.quantity ||
             draft.to_account_id ||
+            draft.memo_no ||
             draft.remarks,
         );
 
@@ -562,6 +578,7 @@ export function SaleModal({
                     customer_mobile: row.customer_mobile,
                     vehicle_id: row.vehicle_id || null,
                     vehicle_no: row.vehicle_no || null,
+                    memo_no: row.memo_no,
                     product_id: row.product_id,
                     quantity: row.quantity,
                     discount: row.discount || 0,
@@ -783,7 +800,7 @@ export function SaleModal({
             processing={processing}
             submitText={editingSale ? 'Update Sale' : 'Create Sale'}
             errors={errors}
-            className="w-[calc(100vw-2rem)] max-w-[90vw] max-md:max-w-[calc(100vw-2rem)]"
+            className="w-[calc(100vw-2rem)] max-w-[80vw] max-md:max-w-[calc(100vw-2rem)]"
         >
             <div className="space-y-4">
                 <InputError message={errors.sale || errors.rows} />
@@ -844,15 +861,21 @@ export function SaleModal({
                     </div>
 
                     <div>
-                        <Label>Memo No</Label>
+                        <Label>
+                            Memo No <span className="text-red-500">*</span>
+                        </Label>
                         <Input
-                            value={
-                                editingSale
-                                    ? draft.memo_no || cart[0]?.memo_no || ''
-                                    : 'Auto-generated on save'
+                            name="memo_no"
+                            value={draft.memo_no}
+                            onChange={(event) =>
+                                updateDraft({
+                                    memo_no: event.target.value,
+                                })
                             }
-                            readOnly
-                            className="bg-gray-100 dark:bg-gray-600"
+                            placeholder="Enter memo number"
+                        />
+                        <InputError
+                            message={errors.draft_memo_no || errors.memo_no}
                         />
                     </div>
 
@@ -1236,7 +1259,7 @@ export function SaleModal({
                                                 {index + 1}
                                             </td>
                                             <td className="p-2 text-sm whitespace-nowrap">
-                                                {row.memo_no || 'Auto on save'}
+                                                {row.memo_no || '-'}
                                             </td>
                                             <td className="p-2 text-sm">
                                                 {row.customer_name ||

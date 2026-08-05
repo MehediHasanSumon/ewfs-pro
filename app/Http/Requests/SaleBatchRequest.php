@@ -22,6 +22,9 @@ class SaleBatchRequest extends FormRequest
                         'customer_mobile' => trim(
                             (string) ($row['customer_mobile'] ?? '')
                         ),
+                        'memo_no' => trim(
+                            (string) ($row['memo_no'] ?? '')
+                        ),
                     ]
                     : $row)
                 ->all(),
@@ -36,6 +39,13 @@ class SaleBatchRequest extends FormRequest
             ...SaleRequest::headerRules(),
             'rows' => ['required', 'array', 'min:1', 'max:'.$maxRows],
             ...SaleRequest::transactionRules('rows.*.'),
+            'rows.*.memo_no' => [
+                'required',
+                'string',
+                'max:150',
+                'distinct',
+                Rule::unique('sales', 'memo_no'),
+            ],
             'rows.*.product_id' => [
                 'required',
                 'integer',
@@ -54,6 +64,9 @@ class SaleBatchRequest extends FormRequest
             'rows.max' => 'A sales session may contain at most :max rows.',
             'rows.*.customer_name.required_without' => 'Customer name is required for a walk-in customer.',
             'rows.*.customer_mobile.required' => 'Mobile number is required.',
+            'rows.*.memo_no.required' => 'Memo number is required.',
+            'rows.*.memo_no.distinct' => 'Each sale row must have a different memo number.',
+            'rows.*.memo_no.unique' => 'This memo number has already been used.',
             'rows.*.product_id.required' => 'Select a product.',
             'rows.*.product_id.exists' => 'The selected product is unavailable or inactive.',
             'rows.*.quantity.gt' => 'Quantity must be greater than zero.',
