@@ -4,13 +4,14 @@ namespace App\Services;
 
 use App\Helpers\AccountGroupHelper;
 use App\Models\Account;
+use App\Models\Customer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class FinancialReportService
 {
     public function __construct(
-        private readonly CustomerSecurityDepositService $securityDeposits
+        private readonly PartyLedgerService $partyLedger
     ) {}
 
     public function balanceSheet(string $asOfDate, string $startDate, string $endDate): array
@@ -246,39 +247,20 @@ class FinancialReportService
 
     public function outstandingCustomers(int $limit = 5, ?string $asOfDate = null): Collection
     {
-        return DB::table('customers as c')
-            ->join('accounts as a', 'a.id', '=', 'c.account_id')
-            ->leftJoin('journal_lines as jl', 'jl.account_id', '=', 'a.id')
-            ->leftJoin('journal_entries as je', function ($join) use ($asOfDate) {
-                $join->on('je.id', '=', 'jl.journal_entry_id')
-                    ->whereIn('je.status', ['posted', 'reversed']);
+        $customers = Customer::query()
+            ->get(['id', 'account_id', 'name', 'mobile']);
+        $metrics = $this->partyLedger->customerMetrics($customers, $asOfDate);
 
-                if ($asOfDate) {
-                    $join->whereDate('je.business_date', '<=', $asOfDate);
-                }
-            })
-            ->groupBy('c.id', 'c.name', 'c.mobile')
-            ->selectRaw(
-                'c.id,
-                 c.name AS customer,
-                 c.mobile AS mobile_number,
-                 COALESCE(
-                    SUM(
-                        CASE
-                            WHEN je.event_type LIKE \'credit_sale%\'
-                                OR je.event_type LIKE \'receipt_voucher%\'
-                                THEN jl.debit_amount - jl.credit_amount
-                            ELSE 0
-                        END
-                    ),
-                    0
-                 ) AS balance'
-            )
-            ->get()
-            ->map(function (object $row) {
-                $row->balance = (float) $row->balance;
+        return $customers
+            ->map(function (Customer $customer) use ($metrics) {
+                $metric = $metrics->get($customer->id);
 
-                return $row;
+                return (object) [
+                    'id' => $customer->id,
+                    'customer' => $customer->name,
+                    'mobile_number' => $customer->mobile,
+                    'balance' => (float) ($metric['current_due'] ?? 0),
+                ];
             })
             ->filter(fn (object $row) => $row->balance > 0.0001)
             ->sortByDesc('balance')
@@ -431,47 +413,13 @@ class FinancialReportService
 
     private function customerPosition(string $asOfDate): array
     {
-        $balances = DB::table('customers as c')
-            ->join('accounts as a', 'a.id', '=', 'c.account_id')
-            ->leftJoin('journal_lines as jl', 'jl.account_id', '=', 'a.id')
-            ->leftJoin('journal_entries as je', function ($join) use ($asOfDate) {
-                $join->on('je.id', '=', 'jl.journal_entry_id')
-                    ->whereIn('je.status', ['posted', 'reversed'])
-                    ->whereDate('je.business_date', '<=', $asOfDate);
-            })
-            ->groupBy('c.id', 'a.id')
-            ->selectRaw(
-                'c.id,
-                 a.id AS account_id,
-                 COALESCE(
-                    SUM(
-                        CASE
-                            WHEN je.event_type LIKE \'credit_sale%\'
-                                OR je.event_type LIKE \'receipt_voucher%\'
-                                THEN jl.debit_amount - jl.credit_amount
-                            ELSE 0
-                        END
-                    ),
-                    0
-                 ) AS balance'
-            )
-            ->get();
-        $depositBalances = $this->securityDeposits->balancesByAccountIds(
-            $balances->pluck('account_id'),
-            $asOfDate
-        );
+        $position = $this->partyLedger->customerPosition($asOfDate);
 
-        $due = 0.0;
-        $advance = 0.0;
-        $security = (float) $depositBalances->sum();
-
-        foreach ($balances as $balance) {
-            $operationalBalance = (float) $balance->balance;
-            $due += max(0, $operationalBalance);
-            $advance += max(0, -$operationalBalance);
-        }
-
-        return compact('due', 'advance', 'security');
+        return [
+            'due' => (float) $position['due'],
+            'advance' => (float) $position['advance'],
+            'security' => (float) $position['security'],
+        ];
     }
 
     private function supplierDue(string $asOfDate): float

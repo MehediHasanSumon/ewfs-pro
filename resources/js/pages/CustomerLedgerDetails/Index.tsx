@@ -14,7 +14,9 @@ import { usePermission } from '@/hooks/usePermission';
 interface Transaction {
     date: string;
     shift: string;
+    event_type?: string;
     transaction_id: string;
+    transaction_type_name?: string;
     vehicle_no?: string;
     memo_no?: string;
     debit: number;
@@ -190,6 +192,7 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">SL</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Invoice no</th>
+                                                    <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction Type</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Vehicle No</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Memo No</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Debit</th>
@@ -206,6 +209,7 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                         <td className="p-2 text-[13px] dark:text-white">{transactionIndex + 1}</td>
                                                         <td className="p-2 text-[13px] dark:text-white">{transaction.date}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{transaction.transaction_id}</td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">{transaction.transaction_type_name || transaction.event_type || '-'}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{transaction.vehicle_no || '-'}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{transaction.memo_no || 'N/A'}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(transaction.debit).toFixed(2)}</td>
@@ -215,7 +219,7 @@ export default function CustomerLedgerDetails({ ledgers = [], filters = {} }: Cu
                                                     </tr>
                                                 ))}
                                                 <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                    <td colSpan={5} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                    <td colSpan={6} className="p-2 text-[13px] dark:text-white">Total:</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_debit).toFixed(2)}</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_credit).toFixed(2)}</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{Number(ledger.total_due).toFixed(2)}</td>

@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\CreditSale;
 use App\Models\Customer;
 use App\Models\Voucher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class CustomerReportService
 {
@@ -15,10 +18,29 @@ class CustomerReportService
         string $endDate,
         ?int $customerId = null
     ): Collection {
+        $customerCategoryId = $this->customerCategoryId() ?? 0;
+        $duePaidCode = VoucherTransactionTypeHelper::customerDuePaidCode();
+        $receiptType = VoucherTransactionTypeHelper::receiptVoucherType();
+        $duePaidCondition = '(vtt.id IS NULL OR (
+            vtt.voucher_category_id = ?
+            AND vtt.code = ?
+            AND vtt.voucher_type = ?
+        ))';
+
         return DB::table('customers as c')
             ->join('accounts as a', 'a.id', '=', 'c.account_id')
             ->join('journal_lines as jl', 'jl.account_id', '=', 'a.id')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
+            ->leftJoin('vouchers as v', function ($join) {
+                $join->on('v.id', '=', 'je.source_id')
+                    ->where('je.source_type', Voucher::class);
+            })
+            ->leftJoin(
+                'voucher_transaction_types as vtt',
+                'vtt.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
             ->whereIn('je.status', ['posted', 'reversed'])
             ->whereBetween('je.business_date', [$startDate, $endDate])
             ->when($customerId, fn ($query) => $query
@@ -26,34 +48,43 @@ class CustomerReportService
             ->groupBy('c.id', 'c.name', 'c.mobile', 'c.address')
             ->orderBy('c.name')
             ->selectRaw(
-                'c.id AS customer_id,
+                "c.id AS customer_id,
                  c.name AS customer_name,
                  c.mobile AS customer_mobile,
                  c.address AS customer_address,
                  SUM(
                     CASE
-                        WHEN je.event_type LIKE \'credit_sale%\'
-                            OR je.event_type LIKE \'receipt_voucher%\'
-                            THEN jl.credit_amount
+                        WHEN je.event_type LIKE 'receipt_voucher%'
+                            AND {$duePaidCondition}
+                            THEN jl.credit_amount - jl.debit_amount
                         ELSE 0
                     END
                  ) AS debit,
                  SUM(
                     CASE
-                        WHEN je.event_type LIKE \'credit_sale%\'
-                            OR je.event_type LIKE \'receipt_voucher%\'
-                            THEN jl.debit_amount
+                        WHEN je.event_type LIKE 'credit_sale%'
+                            THEN jl.debit_amount - jl.credit_amount
                         ELSE 0
                     END
                  ) AS credit,
                  SUM(
                     CASE
-                        WHEN je.event_type LIKE \'credit_sale%\'
-                            OR je.event_type LIKE \'receipt_voucher%\'
+                        WHEN je.event_type LIKE 'credit_sale%'
+                            THEN jl.debit_amount - jl.credit_amount
+                        WHEN je.event_type LIKE 'receipt_voucher%'
+                            AND {$duePaidCondition}
                             THEN jl.debit_amount - jl.credit_amount
                         ELSE 0
                     END
-                 ) AS due'
+                 ) AS due",
+                [
+                    $customerCategoryId,
+                    $duePaidCode,
+                    $receiptType,
+                    $customerCategoryId,
+                    $duePaidCode,
+                    $receiptType,
+                ]
             )
             ->get()
             ->map(function (object $ledger) {
@@ -84,6 +115,12 @@ class CustomerReportService
                 $join->on('v.id', '=', 'je.source_id')
                     ->where('je.source_type', Voucher::class);
             })
+            ->leftJoin(
+                'voucher_transaction_types as vtt',
+                'vtt.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
             ->leftJoin('credit_sale_customers as csc', function ($join) {
                 $join->on('csc.journal_entry_id', '=', 'je.id')
                     ->where('je.source_type', CreditSale::class);
@@ -134,7 +171,10 @@ class CustomerReportService
                     je.reference_no,
                     'N/A'
                  ) AS memo_no,
-                 COALESCE(v.remarks, jl.description, je.description) AS remarks"
+                 COALESCE(v.remarks, jl.description, je.description) AS remarks,
+                 vtt.code AS transaction_type_code,
+                 vtt.name AS transaction_type_name,
+                 vtt.voucher_category_id AS transaction_category_id"
             )
             ->get();
 
@@ -148,7 +188,7 @@ class CustomerReportService
             $row->credit = (float) $row->credit;
             $row->balance = (float) $row->balance;
 
-            if ($this->isCustomerOperationalEvent($row->event_type)) {
+            if ($this->customerDueDelta($row)) {
                 $runningBalance += $row->credit - $row->debit;
             }
 
@@ -157,9 +197,7 @@ class CustomerReportService
             return $row;
         });
         $operationalTransactions = $transactions->filter(
-            fn (object $row) => $this->isCustomerOperationalEvent(
-                $row->event_type
-            )
+            fn (object $row) => $this->customerDueDelta($row)
         );
 
         return [[
@@ -272,9 +310,41 @@ class CustomerReportService
             });
     }
 
-    private function isCustomerOperationalEvent(string $eventType): bool
+    private function customerDueDelta(object $row): bool
     {
-        return str_starts_with($eventType, 'credit_sale')
-            || str_starts_with($eventType, 'receipt_voucher');
+        if (str_starts_with($row->event_type, 'credit_sale')) {
+            return true;
+        }
+
+        return str_starts_with($row->event_type, 'receipt_voucher')
+            && (
+                $row->transaction_type_code === null
+                || (
+                    (int) ($row->transaction_category_id ?? 0)
+                        === (int) ($this->customerCategoryId() ?? -1)
+                    && $row->transaction_type_code
+                        === VoucherTransactionTypeHelper::customerDuePaidCode()
+                )
+            );
+    }
+
+    private function customerCategoryId(): ?int
+    {
+        if (! Schema::hasTable('voucher_categories')) {
+            return null;
+        }
+
+        $query = DB::table('voucher_categories');
+
+        if (Schema::hasColumn('voucher_categories', 'code')) {
+            $query->where('code', VoucherCategoryHelper::customerCode());
+        } else {
+            $query->where(
+                'name',
+                VoucherCategoryHelper::getCategoryDefaultName('customer')
+            );
+        }
+
+        return $query->value('id');
     }
 }

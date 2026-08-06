@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\EmployeeSalaryPayment;
@@ -17,7 +18,8 @@ class VoucherPostingService
         private readonly AccountingService $accounting,
         private readonly SystemAccountService $systemAccounts,
         private readonly DocumentNumberService $numbers,
-        private readonly CustomerSecurityDepositService $securityDeposits
+        private readonly CustomerSecurityDepositService $securityDeposits,
+        private readonly PartyLedgerService $partyLedger
     ) {}
 
     public function createMany(string $type, array $data): array
@@ -176,6 +178,22 @@ class VoucherPostingService
         $isSecurityDepositRefund = $type
                 === VoucherTransactionTypeHelper::paymentVoucherType()
             && $this->securityDeposits->isRefundSubType($transactionType);
+        $isSecurityDepositReceipt = $type
+                === VoucherTransactionTypeHelper::receiptVoucherType()
+            && $this->securityDeposits->isDepositSubType($transactionType);
+        $isCustomerAdvanceReturn = $type
+                === VoucherTransactionTypeHelper::paymentVoucherType()
+            && $transactionType->code
+                === VoucherTransactionTypeHelper::customerAdvanceReturnCode()
+            && (
+                $transactionType->voucherCategory?->code
+                    === VoucherCategoryHelper::customerCode()
+                || (
+                    $transactionType->voucherCategory?->code === null
+                    && $transactionType->voucherCategory?->name
+                        === VoucherCategoryHelper::getCategoryDefaultName('customer')
+                )
+            );
 
         if ($isSecurityDepositRefund) {
             $this->securityDeposits->assertRefundAllowed(
@@ -183,6 +201,25 @@ class VoucherPostingService
                 $amount,
                 $errorPrefix.'amount'
             );
+        }
+
+        if ($isCustomerAdvanceReturn) {
+            $customer = $toAccount->customer;
+
+            if (! $customer) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'to_account_id' => 'Advance Return must be posted to a customer account.',
+                ]);
+            }
+
+            $availableAdvance = $this->partyLedger
+                ->customerCurrentAdvance($customer->id, $businessDate);
+
+            if (round($amount, 4) > round($availableAdvance, 4)) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'amount' => 'Return amount cannot exceed the customer\'s available advance.',
+                ]);
+            }
         }
 
         $description = $lineData['description']
@@ -247,7 +284,9 @@ class VoucherPostingService
             'business_date' => $voucher->voucher_date,
             'event_type' => $isSecurityDepositRefund
                 ? CustomerSecurityDepositService::REFUND_EVENT_TYPE
-                : $type.'_voucher',
+                : ($isSecurityDepositReceipt
+                    ? 'customer_security_deposit'
+                    : $type.'_voucher'),
             'source_type' => Voucher::class,
             'source_id' => $voucher->id,
             'reference_no' => $voucher->voucher_no,

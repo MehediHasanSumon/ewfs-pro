@@ -435,10 +435,10 @@ it('excludes security deposits from paid and advance calculations', function () 
     expect($metric['security_deposit'])->toBe(40000.0)
         ->and($metric['total_sales'])->toBe(2220.0)
         ->and($metric['total_paid'])->toBe(4544.0)
-        ->and($metric['current_due'])->toBe(-2324.0)
-        ->and($metric['current_advance'])->toBe(2324.0)
+        ->and($metric['current_due'])->toBe(0.0)
+        ->and($metric['current_advance'])->toBe(0.0)
         ->and($position['due'])->toBe(0.0)
-        ->and($position['advance'])->toBe(2324.0)
+        ->and($position['advance'])->toBe(0.0)
         ->and($position['security'])->toBe(40000.0);
 });
 

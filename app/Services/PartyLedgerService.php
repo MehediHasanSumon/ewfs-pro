@@ -2,16 +2,19 @@
 
 namespace App\Services;
 
+use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Voucher;
+use App\Models\VoucherCategory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PartyLedgerService
 {
@@ -19,18 +22,83 @@ class PartyLedgerService
         private readonly CustomerSecurityDepositService $securityDeposits
     ) {}
 
-    public function customerMetrics(Collection $customers): Collection
-    {
+    public function customerMetrics(
+        Collection $customers,
+        ?string $asOfDate = null
+    ): Collection {
         $accountMap = $customers->pluck('id', 'account_id');
         $depositBalances = $this->securityDeposits
-            ->balancesByAccountIds($accountMap->keys());
-        $activity = DB::table('journal_lines as jl')
+            ->balancesByAccountIds($accountMap->keys(), $asOfDate);
+        $customerCategoryId = $this->customerCategoryId();
+        $duePaidCode = VoucherTransactionTypeHelper::customerDuePaidCode();
+        $advancePaymentCode = VoucherTransactionTypeHelper::customerAdvancePaymentCode();
+        $advanceReturnCode = VoucherTransactionTypeHelper::customerAdvanceReturnCode();
+        $hasVoucherTypes = Schema::hasTable('vouchers')
+            && Schema::hasTable('voucher_transaction_types');
+        $activityQuery = DB::table('journal_lines as jl')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
             ->whereIn('jl.account_id', $accountMap->keys())
             ->whereIn('je.status', ['posted', 'reversed'])
-            ->groupBy('jl.account_id')
-            ->selectRaw(
-                "jl.account_id,
+            ->when($asOfDate, fn ($query) => $query
+                ->whereDate('je.business_date', '<=', $asOfDate))
+            ->groupBy('jl.account_id');
+
+        if ($hasVoucherTypes) {
+            $activityQuery
+                ->leftJoin('vouchers as v', function ($join) {
+                    $join->on('v.id', '=', 'je.source_id')
+                        ->where('je.source_type', Voucher::class);
+                })
+                ->leftJoin(
+                    'voucher_transaction_types as vtt',
+                    'vtt.id',
+                    '=',
+                    'v.voucher_transaction_type_id'
+                );
+        }
+
+        $typedReceipt = $hasVoucherTypes
+            ? '(vtt.voucher_category_id = ? AND vtt.code IN (?, ?)
+                AND vtt.voucher_type = ?)'
+            : '1 = 1';
+        $typedDue = $hasVoucherTypes
+            ? '(vtt.voucher_category_id = ? AND vtt.code = ?
+                AND vtt.voucher_type = ?)'
+            : '1 = 1';
+        $typedAdvance = $hasVoucherTypes
+            ? '(vtt.voucher_category_id = ? AND vtt.code = ?
+                AND vtt.voucher_type = ?)'
+            : '1 = 0';
+        $typedReturn = $hasVoucherTypes
+            ? '(vtt.voucher_category_id = ? AND vtt.code = ?
+                AND vtt.voucher_type = ?)'
+            : '1 = 0';
+        $legacyReceipt = $hasVoucherTypes
+            ? "(vtt.id IS NULL OR {$typedReceipt})"
+            : '1 = 1';
+        $legacyDue = $hasVoucherTypes
+            ? "(vtt.id IS NULL OR {$typedDue})"
+            : '1 = 1';
+        $bindings = $hasVoucherTypes
+            ? [
+                $customerCategoryId ?? 0,
+                $duePaidCode,
+                $advancePaymentCode,
+                VoucherTransactionTypeHelper::receiptVoucherType(),
+                $customerCategoryId ?? 0,
+                $duePaidCode,
+                VoucherTransactionTypeHelper::receiptVoucherType(),
+                $customerCategoryId ?? 0,
+                $advancePaymentCode,
+                VoucherTransactionTypeHelper::receiptVoucherType(),
+                $customerCategoryId ?? 0,
+                $advanceReturnCode,
+                VoucherTransactionTypeHelper::paymentVoucherType(),
+            ]
+            : [];
+
+        $activity = $activityQuery->selectRaw(
+            "jl.account_id,
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'credit_sale%'
@@ -49,10 +117,35 @@ class PartyLedgerService
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'receipt_voucher%'
+                            AND {$legacyReceipt}
                             THEN jl.credit_amount - jl.debit_amount
                         ELSE 0
                     END
                  ) AS total_paid,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'receipt_voucher%'
+                            AND {$legacyDue}
+                            THEN jl.credit_amount - jl.debit_amount
+                        ELSE 0
+                    END
+                 ) AS due_paid,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'receipt_voucher%'
+                            AND {$typedAdvance}
+                            THEN jl.credit_amount - jl.debit_amount
+                        ELSE 0
+                    END
+                 ) AS advance_payment,
+                 SUM(
+                    CASE
+                        WHEN je.event_type LIKE 'payment_voucher%'
+                            AND {$typedReturn}
+                            THEN jl.debit_amount - jl.credit_amount
+                        ELSE 0
+                    END
+                 ) AS advance_return,
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'customer_opening_balance%'
@@ -62,15 +155,9 @@ class PartyLedgerService
                         ELSE 0
                     END
                  ) AS previous_due,
-                 SUM(
-                    CASE
-                        WHEN je.event_type LIKE 'credit_sale%'
-                            OR je.event_type LIKE 'receipt_voucher%'
-                            THEN jl.debit_amount - jl.credit_amount
-                        ELSE 0
-                    END
-                 ) AS current_due"
-            )
+                 0 AS current_due",
+            $bindings
+        )
             ->get()
             ->keyBy('account_id');
 
@@ -79,21 +166,74 @@ class PartyLedgerService
             $depositBalances
         ) {
             $accountActivity = $activity->get($customer->account_id);
+            $totalSales = (float) ($accountActivity->total_sales ?? 0);
+            $duePaid = (float) ($accountActivity->due_paid ?? 0);
+            $advancePayment = (float) ($accountActivity->advance_payment ?? 0);
+            $advanceReturn = (float) ($accountActivity->advance_return ?? 0);
+            $previousDue = (float) ($accountActivity->previous_due ?? 0);
+            $currentDue = $totalSales - $duePaid;
+            $currentAdvance = $advancePayment - $advanceReturn;
 
             return [$customer->id => [
-                'total_sales' => (float) ($accountActivity->total_sales ?? 0),
+                'total_sales' => $totalSales,
                 'sales_count' => (int) ($accountActivity->sales_count ?? 0),
                 'total_paid' => (float) ($accountActivity->total_paid ?? 0),
-                'current_due' => (float) ($accountActivity->current_due ?? 0),
-                'current_advance' => max(
-                    0.0,
-                    -(float) ($accountActivity->current_due ?? 0)
-                ),
-                'previous_due' => (float) ($accountActivity->previous_due ?? 0),
+                'current_due' => max(0.0, $currentDue),
+                'current_advance' => max(0.0, $currentAdvance),
+                'previous_due' => $previousDue,
+                'due_paid' => $duePaid,
+                'advance_payment' => $advancePayment,
+                'advance_return' => $advanceReturn,
                 'security_deposit' => (float) $depositBalances
                     ->get($customer->account_id, 0),
             ]];
         });
+    }
+
+    public function customerCurrentDue(
+        int $customerId,
+        ?string $asOfDate = null
+    ): float {
+        $customer = Customer::query()->find($customerId);
+
+        if (! $customer) {
+            return 0.0;
+        }
+
+        return (float) ($this->customerMetrics(
+            collect([$customer]),
+            $asOfDate
+        )->get($customerId)['current_due'] ?? 0);
+    }
+
+    public function customerCurrentAdvance(
+        int $customerId,
+        ?string $asOfDate = null
+    ): float {
+        $customer = Customer::query()->find($customerId);
+
+        if (! $customer) {
+            return 0.0;
+        }
+
+        return (float) ($this->customerMetrics(
+            collect([$customer]),
+            $asOfDate
+        )->get($customerId)['current_advance'] ?? 0);
+    }
+
+    public function customerPosition(?string $asOfDate = null): array
+    {
+        $metrics = $this->customerMetrics(
+            Customer::query()->get(['id', 'account_id']),
+            $asOfDate
+        );
+
+        return [
+            'due' => (float) $metrics->sum('current_due'),
+            'advance' => (float) $metrics->sum('current_advance'),
+            'security' => (float) $metrics->sum('security_deposit'),
+        ];
     }
 
     public function customerPaymentCount(int $customerId): int
@@ -214,6 +354,12 @@ class PartyLedgerService
                 $join->on('v.id', '=', 'je.source_id')
                     ->where('je.source_type', Voucher::class);
             })
+            ->leftJoin(
+                'voucher_transaction_types as vtt',
+                'vtt.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
             ->where('jl.account_id', $account->id)
             ->whereIn('je.status', ['posted', 'reversed'])
             ->orderBy('je.business_date')
@@ -229,6 +375,9 @@ class PartyLedgerService
                 'jl.debit_amount',
                 'jl.credit_amount',
                 'v.voucher_no',
+                'vtt.code as transaction_type_code',
+                'vtt.name as transaction_type_name',
+                'vtt.voucher_category_id as transaction_category_id',
             ])
             ->get();
 
@@ -240,17 +389,17 @@ class PartyLedgerService
             $debit = $perspective === 'supplier' ? $journalCredit : $journalDebit;
             $credit = $perspective === 'supplier' ? $journalDebit : $journalCredit;
 
-            if (
-                $perspective !== 'customer'
-                || $this->isCustomerOperationalEvent($row->event_type)
-            ) {
-                $balance += $debit - $credit;
-            }
+            $balance += $perspective === 'customer'
+                ? $this->customerDueDelta($row, $debit, $credit)
+                : $debit - $credit;
 
             return [
                 'id' => $row->id,
                 'date' => $row->date,
-                'type' => str($row->event_type)->headline()->toString(),
+                'type' => $row->transaction_type_name
+                    ?? str($row->event_type)->headline()->toString(),
+                'transaction_type_code' => $row->transaction_type_code,
+                'transaction_type_name' => $row->transaction_type_name,
                 'description' => $row->description ?? $row->entry_description,
                 'debit' => $debit,
                 'credit' => $credit,
@@ -392,6 +541,13 @@ class PartyLedgerService
                         $startDate,
                         $endDate
                     )
+                )
+                ->unionAll(
+                    $this->customerAdvanceReturnQuery(
+                        $customerId,
+                        $startDate,
+                        $endDate
+                    )
                 ),
             'customer_payments'
         );
@@ -406,7 +562,8 @@ class PartyLedgerService
             ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
             ->join('voucher_lines as customer_line', function ($join) use ($customerId) {
                 $join->on('customer_line.voucher_id', '=', 'v.id')
-                    ->where('customer_line.customer_id', $customerId);
+                    ->where('customer_line.customer_id', $customerId)
+                    ->where('customer_line.entry_side', 'credit');
             })
             ->leftJoin('voucher_lines as payment_line', function ($join) {
                 $join->on('payment_line.voucher_id', '=', 'v.id')
@@ -424,7 +581,6 @@ class PartyLedgerService
                 '=',
                 'v.voucher_transaction_type_id'
             )
-            ->leftJoin('voucher_categories as category', 'category.id', '=', 'v.voucher_category_id')
             ->where('v.voucher_type', 'receipt')
             ->where('v.status', 'posted')
             ->where('je.status', 'posted')
@@ -439,8 +595,9 @@ class PartyLedgerService
                  v.voucher_date AS date,
                  customer_line.amount,
                  COALESCE(payment.payment_method, 'Cash') AS payment_type,
-                 COALESCE(subtype.name, category.name, 'Receipt') AS sub_type,
+                 COALESCE(subtype.name, 'Receipt') AS sub_type,
                  COALESCE(payment.payment_method, 'Cash') AS type,
+                 subtype.code AS transaction_type_code,
                  COALESCE(v.remarks, v.description, customer_line.description)
                     AS remarks,
                  'Received' AS status"
@@ -471,6 +628,7 @@ class PartyLedgerService
                  'Security Deposit' AS payment_type,
                  'Security Deposit' AS sub_type,
                  'Security Deposit' AS type,
+                 NULL AS transaction_type_code,
                  COALESCE(je.description, 'Opening Security Deposit') AS remarks,
                  'Completed' AS status"
             );
@@ -515,8 +673,57 @@ class PartyLedgerService
                  v.voucher_date AS date,
                  customer_line.amount,
                  COALESCE(payment.payment_method, 'Cash') AS payment_type,
-                 'Security Deposit Refund' AS sub_type,
-                 'Security Deposit Refund' AS type,
+                 subtype.name AS sub_type,
+                 subtype.name AS type,
+                 subtype.code AS transaction_type_code,
+                 COALESCE(v.remarks, v.description, customer_line.description)
+                    AS remarks,
+                 'Completed' AS status"
+            );
+    }
+
+    private function customerAdvanceReturnQuery(
+        int $customerId,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): QueryBuilder {
+        return DB::table('vouchers as v')
+            ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
+            ->join('voucher_transaction_types as subtype', function ($join) {
+                $join->on('subtype.id', '=', 'v.voucher_transaction_type_id')
+                    ->where(
+                        'subtype.code',
+                        VoucherTransactionTypeHelper::customerAdvanceReturnCode()
+                    );
+            })
+            ->join('voucher_lines as customer_line', function ($join) use ($customerId) {
+                $join->on('customer_line.voucher_id', '=', 'v.id')
+                    ->where('customer_line.customer_id', $customerId)
+                    ->where('customer_line.entry_side', 'debit');
+            })
+            ->leftJoin(
+                'voucher_payment_details as payment',
+                'payment.voucher_line_id',
+                '=',
+                'customer_line.id'
+            )
+            ->where('v.voucher_type', 'payment')
+            ->where('v.status', 'posted')
+            ->where('je.status', 'posted')
+            ->when($startDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '>=', $startDate))
+            ->when($endDate, fn (QueryBuilder $query) => $query
+                ->whereDate('v.voucher_date', '<=', $endDate))
+            ->selectRaw(
+                "'advance_return' AS source_type,
+                 v.id AS source_id,
+                 v.voucher_no,
+                 v.voucher_date AS date,
+                 customer_line.amount,
+                 COALESCE(payment.payment_method, 'Cash') AS payment_type,
+                 subtype.name AS sub_type,
+                 subtype.name AS type,
+                 subtype.code AS transaction_type_code,
                  COALESCE(v.remarks, v.description, customer_line.description)
                     AS remarks,
                  'Completed' AS status"
@@ -536,15 +743,57 @@ class PartyLedgerService
             'type' => $row->type,
             'sub_type' => $row->sub_type,
             'sub_type_name' => $row->sub_type,
+            'transaction_type_code' => $row->transaction_type_code ?? null,
             'description' => $row->remarks,
             'remarks' => $row->remarks,
             'status' => $row->status,
         ];
     }
 
-    private function isCustomerOperationalEvent(string $eventType): bool
+    private function customerDueDelta(
+        object $row,
+        float $debit,
+        float $credit
+    ): float {
+        if (str_starts_with($row->event_type, 'credit_sale')) {
+            return $debit - $credit;
+        }
+
+        if (
+            str_starts_with($row->event_type, 'receipt_voucher')
+            && (
+                $row->transaction_type_code === null
+                || (
+                    (int) ($row->transaction_category_id ?? 0)
+                        === (int) ($this->customerCategoryId() ?? -1)
+                    && $row->transaction_type_code
+                        === VoucherTransactionTypeHelper::customerDuePaidCode()
+                )
+            )
+        ) {
+            return $debit - $credit;
+        }
+
+        return 0.0;
+    }
+
+    private function customerCategoryId(): ?int
     {
-        return str_starts_with($eventType, 'credit_sale')
-            || str_starts_with($eventType, 'receipt_voucher');
+        if (! Schema::hasTable('voucher_categories')) {
+            return null;
+        }
+
+        $query = VoucherCategory::query();
+
+        if (Schema::hasColumn('voucher_categories', 'code')) {
+            $query->where('code', VoucherCategoryHelper::customerCode());
+        } else {
+            $query->where(
+                'name',
+                VoucherCategoryHelper::getCategoryDefaultName('customer')
+            );
+        }
+
+        return $query->value('id');
     }
 }

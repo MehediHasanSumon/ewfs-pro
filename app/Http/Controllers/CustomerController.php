@@ -210,7 +210,6 @@ class CustomerController extends Controller implements HasMiddleware
                 ->select(['products.id', 'products.product_name']),
         ]);
 
-        $paymentCount = $this->partyLedger->customerPaymentCount($customer->id);
         $recentPayments = $this->partyLedger->customerPayments(
             $customer->id,
             limit: 5
@@ -263,10 +262,9 @@ class CustomerController extends Controller implements HasMiddleware
             'recentPayments' => $recentPayments,
             'recentSales' => $recentSales,
             'totalSales' => $metric['total_sales'],
-            'salesCount' => $metric['sales_count'],
             'totalPaid' => $metric['total_paid'],
-            'paymentCount' => $paymentCount,
             'currentDue' => $metric['current_due'],
+            'currentAdvance' => $metric['current_advance'],
             'smsTemplates' => $smsTemplates,
             'products' => Product::query()
                 ->active()

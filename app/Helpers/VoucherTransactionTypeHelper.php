@@ -58,6 +58,26 @@ class VoucherTransactionTypeHelper
         return self::getCode('customer', 'security_deposit_refund');
     }
 
+    public static function customerAdvanceReturnCode(): string
+    {
+        return self::getCode('customer', 'advance_return');
+    }
+
+    public static function customerSecurityDepositCode(): string
+    {
+        return self::getCode('customer', 'security_deposit');
+    }
+
+    public static function customerDuePaidCode(): string
+    {
+        return self::getCode('customer', 'due_paid');
+    }
+
+    public static function customerAdvancePaymentCode(): string
+    {
+        return self::getCode('customer', 'advance_payment');
+    }
+
     public static function monthlySalaryCode(): string
     {
         return self::getCode('employee', 'monthly_salary');

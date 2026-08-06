@@ -324,7 +324,8 @@ function makeRefundFixture(): array
         $accounting,
         Mockery::mock(SystemAccountService::class),
         $numbers,
-        app(CustomerSecurityDepositService::class)
+        app(CustomerSecurityDepositService::class),
+        app(PartyLedgerService::class)
     );
 
     return compact(
@@ -404,11 +405,11 @@ it('posts a security deposit refund through the payment voucher workflow', funct
         ->and($statement->pluck('type')->all())
         ->toBe([
             'Customer Security Deposit',
-            'Customer Security Deposit Refund',
+            'Refund Given',
         ])
         ->and($statement->last()['balance'])->toBe(0.0)
         ->and($payments)->toHaveCount(2)
-        ->and($payments->firstWhere('sub_type', 'Security Deposit Refund')['amount'])
+        ->and($payments->firstWhere('sub_type', 'Refund Given')['amount'])
         ->toBe(10000.0)
         ->and($position['security'])->toBe(30000.0)
         ->and($position['due'])->toBe(0.0)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\ReceivedVoucherRequest;
 use App\Models\Account;
@@ -10,6 +11,7 @@ use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
+use App\Services\CustomerSettlementService;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -20,7 +22,8 @@ use Inertia\Inertia;
 class ReceivedVoucherController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly VoucherPostingService $vouchers
+        private readonly VoucherPostingService $vouchers,
+        private readonly CustomerSettlementService $customerSettlements
     ) {}
 
     public static function middleware(): array
@@ -74,10 +77,7 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
 
     public function store(ReceivedVoucherRequest $request)
     {
-        $this->vouchers->createMany(
-            VoucherTransactionTypeHelper::receiptVoucherType(),
-            $request->validated()
-        );
+        $this->customerSettlements->createMany($request->validated());
 
         return back()->with('success', 'Received voucher created successfully.');
     }
@@ -89,7 +89,31 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::receiptVoucherType(),
             404
         );
-        $this->vouchers->replace($voucher, $request->validated());
+        $validated = $request->validated();
+        $transactionType = $voucher->voucherTransactionType()
+            ->with('voucherCategory:id,code,name')
+            ->first();
+
+        $isCustomerSettlement = $transactionType
+            && in_array($transactionType->code, [
+                VoucherTransactionTypeHelper::customerDuePaidCode(),
+                VoucherTransactionTypeHelper::customerAdvancePaymentCode(),
+            ], true)
+            && (
+                $transactionType->voucherCategory?->code
+                    === VoucherCategoryHelper::customerCode()
+                || (
+                    $transactionType->voucherCategory?->code === null
+                    && $transactionType->voucherCategory?->name
+                        === VoucherCategoryHelper::getCategoryDefaultName('customer')
+                )
+            );
+
+        if ($isCustomerSettlement) {
+            $this->customerSettlements->replace($voucher, $validated);
+        } else {
+            $this->vouchers->replace($voucher, $validated);
+        }
 
         return back()->with('success', 'Received voucher updated successfully.');
     }

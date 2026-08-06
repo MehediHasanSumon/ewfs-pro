@@ -14,6 +14,7 @@ use App\Models\VoucherTransactionType;
 use App\Services\AccountingService;
 use App\Services\CustomerSecurityDepositService;
 use App\Services\DocumentNumberService;
+use App\Services\PartyLedgerService;
 use App\Services\PaymentAccountService;
 use App\Services\SalaryPaymentService;
 use App\Services\SystemAccountService;
@@ -254,7 +255,8 @@ function salaryPaymentService(): SalaryPaymentService
         $accounting,
         Mockery::mock(SystemAccountService::class),
         $numbers,
-        app(CustomerSecurityDepositService::class)
+        app(CustomerSecurityDepositService::class),
+        app(PartyLedgerService::class)
     );
 
     return new SalaryPaymentService(

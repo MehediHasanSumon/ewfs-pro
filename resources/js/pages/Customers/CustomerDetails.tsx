@@ -97,10 +97,9 @@ interface CustomerDetailsProps {
     recentPayments: RecentPayment[];
     recentSales: RecentSale[];
     totalSales: number;
-    salesCount: number;
     totalPaid: number;
-    paymentCount: number;
     currentDue: number;
+    currentAdvance: number;
     smsTemplates: Array<{
         id: number;
         title: string;
@@ -119,10 +118,9 @@ export default function CustomerDetails({
     recentPayments,
     recentSales,
     totalSales,
-    salesCount,
     totalPaid,
-    paymentCount,
     currentDue,
+    currentAdvance,
     smsTemplates = [],
     products = [],
     vehicleProductLimit,
@@ -230,7 +228,7 @@ export default function CustomerDetails({
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-5">
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
@@ -257,9 +255,6 @@ export default function CustomerDetails({
                                     <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                                         {totalSales.toLocaleString()}
                                     </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {salesCount} sales
-                                    </p>
                                 </div>
                             </div>
                         </CardContent>
@@ -275,8 +270,22 @@ export default function CustomerDetails({
                                     <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                                         {totalPaid.toLocaleString()}
                                     </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {paymentCount} payments
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                        Current Due
+                                    </p>
+                                    <p
+                                        className="text-2xl font-bold text-red-600 dark:text-red-400"
+                                    >
+                                        {currentDue.toLocaleString()}
                                     </p>
                                 </div>
                             </div>
@@ -288,34 +297,11 @@ export default function CustomerDetails({
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                        {currentDue > 0
-                                            ? 'Current Due'
-                                            : currentDue < 0
-                                              ? 'Current Advanced'
-                                              : 'Balanced'}
+                                        Current Advance
                                     </p>
-                                    <p
-                                        className={`text-2xl font-bold ${
-                                            currentDue > 0
-                                                ? 'text-red-600 dark:text-red-400'
-                                                : currentDue < 0
-                                                  ? 'text-green-600 dark:text-green-400'
-                                                  : 'text-gray-900 dark:text-white'
-                                        }`}
-                                    >
-                                        {currentDue < 0 ? '-' : ''}
-                                        {Math.abs(currentDue).toLocaleString()}
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                        {currentAdvance.toLocaleString()}
                                     </p>
-                                    {currentDue > 0 && (
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Outstanding
-                                        </p>
-                                    )}
-                                    {currentDue < 0 && (
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Advance Paid
-                                        </p>
-                                    )}
                                 </div>
                             </div>
                         </CardContent>
