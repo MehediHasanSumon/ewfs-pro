@@ -191,7 +191,6 @@ $voucherTransactionTypes = [
         ],
         'security_deposit' => ['code' => '1031', 'name' => 'Security Deposit', 'voucher_type' => 'receipt'],
         'due_paid' => ['code' => '1032', 'name' => 'Due Paid', 'voucher_type' => 'receipt'],
-        'advance_payment' => ['code' => '1033', 'name' => 'Advance Payment', 'voucher_type' => 'receipt'],
     ],
     'finance' => [
         'owner_withdrawal' => ['code' => '1071', 'name' => 'Owner Withdrawal', 'voucher_type' => 'payment'],
@@ -264,6 +263,11 @@ return [
         'transaction_types' => [
             'code_padding' => 4,
             'system' => $voucherTransactionTypes,
+            'legacy' => [
+                'customer' => [
+                    'advance_payment' => '1033',
+                ],
+            ],
         ],
     ],
 

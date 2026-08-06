@@ -73,9 +73,19 @@ class VoucherTransactionTypeHelper
         return self::getCode('customer', 'due_paid');
     }
 
-    public static function customerAdvancePaymentCode(): string
+    public static function legacyCustomerAdvancePaymentCode(): string
     {
-        return self::getCode('customer', 'advance_payment');
+        $code = config(
+            'app.erp.voucher.transaction_types.legacy.customer.advance_payment'
+        );
+
+        if (! is_string($code) || $code === '') {
+            throw new RuntimeException(
+                'Legacy customer advance payment transaction code is missing.'
+            );
+        }
+
+        return $code;
     }
 
     public static function monthlySalaryCode(): string

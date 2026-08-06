@@ -31,7 +31,7 @@ class PartyLedgerService
             ->balancesByAccountIds($accountMap->keys(), $asOfDate);
         $customerCategoryId = $this->customerCategoryId();
         $duePaidCode = VoucherTransactionTypeHelper::customerDuePaidCode();
-        $advancePaymentCode = VoucherTransactionTypeHelper::customerAdvancePaymentCode();
+        $legacyAdvancePaymentCode = VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode();
         $advanceReturnCode = VoucherTransactionTypeHelper::customerAdvanceReturnCode();
         $hasVoucherTypes = Schema::hasTable('vouchers')
             && Schema::hasTable('voucher_transaction_types');
@@ -61,14 +61,6 @@ class PartyLedgerService
             ? '(vtt.voucher_category_id = ? AND vtt.code IN (?, ?)
                 AND vtt.voucher_type = ?)'
             : '1 = 1';
-        $typedDue = $hasVoucherTypes
-            ? '(vtt.voucher_category_id = ? AND vtt.code = ?
-                AND vtt.voucher_type = ?)'
-            : '1 = 1';
-        $typedAdvance = $hasVoucherTypes
-            ? '(vtt.voucher_category_id = ? AND vtt.code = ?
-                AND vtt.voucher_type = ?)'
-            : '1 = 0';
         $typedReturn = $hasVoucherTypes
             ? '(vtt.voucher_category_id = ? AND vtt.code = ?
                 AND vtt.voucher_type = ?)'
@@ -76,20 +68,11 @@ class PartyLedgerService
         $legacyReceipt = $hasVoucherTypes
             ? "(vtt.id IS NULL OR {$typedReceipt})"
             : '1 = 1';
-        $legacyDue = $hasVoucherTypes
-            ? "(vtt.id IS NULL OR {$typedDue})"
-            : '1 = 1';
         $bindings = $hasVoucherTypes
             ? [
                 $customerCategoryId ?? 0,
                 $duePaidCode,
-                $advancePaymentCode,
-                VoucherTransactionTypeHelper::receiptVoucherType(),
-                $customerCategoryId ?? 0,
-                $duePaidCode,
-                VoucherTransactionTypeHelper::receiptVoucherType(),
-                $customerCategoryId ?? 0,
-                $advancePaymentCode,
+                $legacyAdvancePaymentCode,
                 VoucherTransactionTypeHelper::receiptVoucherType(),
                 $customerCategoryId ?? 0,
                 $advanceReturnCode,
@@ -121,23 +104,7 @@ class PartyLedgerService
                             THEN jl.credit_amount - jl.debit_amount
                         ELSE 0
                     END
-                 ) AS total_paid,
-                 SUM(
-                    CASE
-                        WHEN je.event_type LIKE 'receipt_voucher%'
-                            AND {$legacyDue}
-                            THEN jl.credit_amount - jl.debit_amount
-                        ELSE 0
-                    END
-                 ) AS due_paid,
-                 SUM(
-                    CASE
-                        WHEN je.event_type LIKE 'receipt_voucher%'
-                            AND {$typedAdvance}
-                            THEN jl.credit_amount - jl.debit_amount
-                        ELSE 0
-                    END
-                 ) AS advance_payment,
+                 ) AS total_received,
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'payment_voucher%'
@@ -167,22 +134,21 @@ class PartyLedgerService
         ) {
             $accountActivity = $activity->get($customer->account_id);
             $totalSales = (float) ($accountActivity->total_sales ?? 0);
-            $duePaid = (float) ($accountActivity->due_paid ?? 0);
-            $advancePayment = (float) ($accountActivity->advance_payment ?? 0);
+            $totalReceived = (float) ($accountActivity->total_received ?? 0);
             $advanceReturn = (float) ($accountActivity->advance_return ?? 0);
             $previousDue = (float) ($accountActivity->previous_due ?? 0);
-            $currentDue = $totalSales - $duePaid;
-            $currentAdvance = $advancePayment - $advanceReturn;
+            $totalPaid = $totalReceived - $advanceReturn;
+            $currentBalance = $totalSales - $totalPaid;
 
             return [$customer->id => [
                 'total_sales' => $totalSales,
                 'sales_count' => (int) ($accountActivity->sales_count ?? 0),
-                'total_paid' => (float) ($accountActivity->total_paid ?? 0),
-                'current_due' => max(0.0, $currentDue),
-                'current_advance' => max(0.0, $currentAdvance),
+                'total_paid' => $totalPaid,
+                'current_balance' => $currentBalance,
+                'current_due' => max(0.0, $currentBalance),
+                'current_advance' => max(0.0, -$currentBalance),
                 'previous_due' => $previousDue,
-                'due_paid' => $duePaid,
-                'advance_payment' => $advancePayment,
+                'total_received' => $totalReceived,
                 'advance_return' => $advanceReturn,
                 'security_deposit' => (float) $depositBalances
                     ->get($customer->account_id, 0),
@@ -766,10 +732,22 @@ class PartyLedgerService
                 || (
                     (int) ($row->transaction_category_id ?? 0)
                         === (int) ($this->customerCategoryId() ?? -1)
-                    && $row->transaction_type_code
-                        === VoucherTransactionTypeHelper::customerDuePaidCode()
+                    && in_array($row->transaction_type_code, [
+                        VoucherTransactionTypeHelper::customerDuePaidCode(),
+                        VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode(),
+                    ], true)
                 )
             )
+        ) {
+            return $debit - $credit;
+        }
+
+        if (
+            str_starts_with($row->event_type, 'payment_voucher')
+            && (int) ($row->transaction_category_id ?? 0)
+                === (int) ($this->customerCategoryId() ?? -1)
+            && $row->transaction_type_code
+                === VoucherTransactionTypeHelper::customerAdvanceReturnCode()
         ) {
             return $debit - $credit;
         }

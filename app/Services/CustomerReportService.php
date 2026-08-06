@@ -20,12 +20,20 @@ class CustomerReportService
     ): Collection {
         $customerCategoryId = $this->customerCategoryId() ?? 0;
         $duePaidCode = VoucherTransactionTypeHelper::customerDuePaidCode();
+        $legacyAdvancePaymentCode = VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode();
+        $advanceReturnCode = VoucherTransactionTypeHelper::customerAdvanceReturnCode();
         $receiptType = VoucherTransactionTypeHelper::receiptVoucherType();
-        $duePaidCondition = '(vtt.id IS NULL OR (
+        $paymentType = VoucherTransactionTypeHelper::paymentVoucherType();
+        $ordinaryReceiptCondition = '(vtt.id IS NULL OR (
+            vtt.voucher_category_id = ?
+            AND vtt.code IN (?, ?)
+            AND vtt.voucher_type = ?
+        ))';
+        $advanceReturnCondition = '(
             vtt.voucher_category_id = ?
             AND vtt.code = ?
             AND vtt.voucher_type = ?
-        ))';
+        )';
 
         return DB::table('customers as c')
             ->join('accounts as a', 'a.id', '=', 'c.account_id')
@@ -55,7 +63,10 @@ class CustomerReportService
                  SUM(
                     CASE
                         WHEN je.event_type LIKE 'receipt_voucher%'
-                            AND {$duePaidCondition}
+                            AND {$ordinaryReceiptCondition}
+                            THEN jl.credit_amount - jl.debit_amount
+                        WHEN je.event_type LIKE 'payment_voucher%'
+                            AND {$advanceReturnCondition}
                             THEN jl.credit_amount - jl.debit_amount
                         ELSE 0
                     END
@@ -72,7 +83,10 @@ class CustomerReportService
                         WHEN je.event_type LIKE 'credit_sale%'
                             THEN jl.debit_amount - jl.credit_amount
                         WHEN je.event_type LIKE 'receipt_voucher%'
-                            AND {$duePaidCondition}
+                            AND {$ordinaryReceiptCondition}
+                            THEN jl.debit_amount - jl.credit_amount
+                        WHEN je.event_type LIKE 'payment_voucher%'
+                            AND {$advanceReturnCondition}
                             THEN jl.debit_amount - jl.credit_amount
                         ELSE 0
                     END
@@ -80,10 +94,18 @@ class CustomerReportService
                 [
                     $customerCategoryId,
                     $duePaidCode,
+                    $legacyAdvancePaymentCode,
                     $receiptType,
                     $customerCategoryId,
+                    $advanceReturnCode,
+                    $paymentType,
+                    $customerCategoryId,
                     $duePaidCode,
+                    $legacyAdvancePaymentCode,
                     $receiptType,
+                    $customerCategoryId,
+                    $advanceReturnCode,
+                    $paymentType,
                 ]
             )
             ->get()
@@ -322,9 +344,18 @@ class CustomerReportService
                 || (
                     (int) ($row->transaction_category_id ?? 0)
                         === (int) ($this->customerCategoryId() ?? -1)
-                    && $row->transaction_type_code
-                        === VoucherTransactionTypeHelper::customerDuePaidCode()
+                    && in_array($row->transaction_type_code, [
+                        VoucherTransactionTypeHelper::customerDuePaidCode(),
+                        VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode(),
+                    ], true)
                 )
+            )
+            || (
+                str_starts_with($row->event_type, 'payment_voucher')
+                && (int) ($row->transaction_category_id ?? 0)
+                    === (int) ($this->customerCategoryId() ?? -1)
+                && $row->transaction_type_code
+                    === VoucherTransactionTypeHelper::customerAdvanceReturnCode()
             );
     }
 

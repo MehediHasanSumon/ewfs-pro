@@ -103,8 +103,7 @@ class CustomerController extends Controller implements HasMiddleware
                     'account' => $customer->account,
                     'total_sales' => $metric['total_sales'],
                     'total_paid' => $metric['total_paid'],
-                    'current_due' => $metric['current_due'],
-                    'current_advance' => $metric['current_advance'],
+                    'current_due' => $metric['current_balance'],
                     'previous_due' => $metric['previous_due'],
                     'created_at' => $customer->created_at->format('Y-m-d'),
                 ];
@@ -255,7 +254,6 @@ class CustomerController extends Controller implements HasMiddleware
                 (new CustomerResource($customer))->resolve(),
                 [
                     'security_deposit' => $metric['security_deposit'],
-                    'current_advance' => $metric['current_advance'],
                     'previous_due' => $metric['previous_due'],
                 ]
             ),
@@ -263,8 +261,7 @@ class CustomerController extends Controller implements HasMiddleware
             'recentSales' => $recentSales,
             'totalSales' => $metric['total_sales'],
             'totalPaid' => $metric['total_paid'],
-            'currentDue' => $metric['current_due'],
-            'currentAdvance' => $metric['current_advance'],
+            'currentBalance' => $metric['current_balance'],
             'smsTemplates' => $smsTemplates,
             'products' => Product::query()
                 ->active()
@@ -312,7 +309,7 @@ class CustomerController extends Controller implements HasMiddleware
                 'account' => $customer->account,
             ],
             'transactions' => $transactions,
-            'currentBalance' => $metric['current_due'],
+            'currentBalance' => $metric['current_balance'],
             'monthlySales' => $monthlySales,
             'availableYears' => $availableYears,
             'recentPayments' => $recentPayments,
@@ -442,7 +439,7 @@ class CustomerController extends Controller implements HasMiddleware
             $customer->setAttribute('security_deposit', $metric['security_deposit']);
             $customer->setAttribute('total_sales', $metric['total_sales']);
             $customer->setAttribute('total_paid', $metric['total_paid']);
-            $customer->setAttribute('current_due', $metric['current_due']);
+            $customer->setAttribute('current_due', $metric['current_balance']);
 
             return $customer;
         });

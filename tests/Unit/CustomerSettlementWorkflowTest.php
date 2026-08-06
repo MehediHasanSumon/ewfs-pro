@@ -6,7 +6,6 @@ use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Services\AccountingService;
 use App\Services\CustomerSecurityDepositService;
-use App\Services\CustomerSettlementService;
 use App\Services\DocumentNumberService;
 use App\Services\PartyLedgerService;
 use App\Services\SystemAccountService;
@@ -194,9 +193,12 @@ function settlementFixture(float $creditSale = 0): array
         'due_paid' => 'receipt',
         'advance_payment' => 'receipt',
     ] as $key => $voucherType) {
+        $code = $key === 'advance_payment'
+            ? VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode()
+            : VoucherTransactionTypeHelper::getCode('customer', $key);
         $typeIds[$key] = DB::table('voucher_transaction_types')->insertGetId([
             'voucher_category_id' => $categoryId,
-            'code' => VoucherTransactionTypeHelper::getCode('customer', $key),
+            'code' => $code,
             'name' => str($key)->replace('_', ' ')->title()->toString(),
             'voucher_type' => $voucherType,
             'status' => true,
@@ -304,7 +306,6 @@ function settlementFixture(float $creditSale = 0): array
     );
 
     return [
-        'service' => new CustomerSettlementService($voucherPosting, $ledger),
         'vouchers' => $voucherPosting,
         'ledger' => $ledger,
         'customer' => $customer,
@@ -335,7 +336,10 @@ function receiptPayload(array $fixture, float $amount, string $type = 'due_paid'
 it('allocates an exact customer payment entirely to due paid', function () {
     $fixture = settlementFixture(1000);
 
-    $created = $fixture['service']->createMany(receiptPayload($fixture, 1000));
+    $created = $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
+        receiptPayload($fixture, 1000)
+    );
     $metric = $fixture['ledger']
         ->customerMetrics(collect([$fixture['customer']]))
         ->get($fixture['customer']->id);
@@ -348,11 +352,13 @@ it('allocates an exact customer payment entirely to due paid', function () {
         ->and($metric['current_advance'])->toBe(0.0);
 });
 
-it('splits a customer overpayment into due paid and advance payment vouchers', function () {
+it('posts an overpayment as one receipt and derives advance from the net balance', function () {
     $fixture = settlementFixture(1000);
 
-    $created = $fixture['service']->createMany(receiptPayload($fixture, 1500));
-    $created = collect($created)->sortBy('id')->values();
+    $created = $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
+        receiptPayload($fixture, 1500)
+    );
     $metric = $fixture['ledger']
         ->customerMetrics(collect([$fixture['customer']]))
         ->get($fixture['customer']->id);
@@ -362,48 +368,49 @@ it('splits a customer overpayment into due paid and advance payment vouchers', f
         'customer'
     );
 
-    expect($created)->toHaveCount(2)
-        ->and($created->pluck('voucherTransactionType.code')->all())
-        ->toBe([
-            VoucherTransactionTypeHelper::customerDuePaidCode(),
-            VoucherTransactionTypeHelper::customerAdvancePaymentCode(),
-        ])
-        ->and($created->map->amount->all())->toBe([1000.0, 500.0])
-        ->and($created->pluck('voucher_no')->unique())->toHaveCount(2)
+    expect($created)->toHaveCount(1)
+        ->and($created[0]->voucherTransactionType->code)
+        ->toBe(VoucherTransactionTypeHelper::customerDuePaidCode())
+        ->and($created[0]->amount)->toBe(1500.0)
         ->and(DB::table('journal_entries')
             ->where('event_type', 'receipt_voucher')
-            ->count())->toBe(2)
+            ->count())->toBe(1)
         ->and($payments->pluck('transaction_type_code')->all())
-        ->toBe([
-            VoucherTransactionTypeHelper::customerAdvancePaymentCode(),
-            VoucherTransactionTypeHelper::customerDuePaidCode(),
-        ])
-        ->and($payments->pluck('voucher_no')->unique())->toHaveCount(2)
+        ->toBe([VoucherTransactionTypeHelper::customerDuePaidCode()])
+        ->and($payments->pluck('voucher_no')->unique())->toHaveCount(1)
         ->and($statement->pluck('type')->all())
-        ->toBe(['Credit Sale', 'Due Paid', 'Advance Payment'])
+        ->toBe(['Credit Sale', 'Due Paid'])
         ->and($metric['total_paid'])->toBe(1500.0)
+        ->and($metric['current_balance'])->toBe(-500.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['current_advance'])->toBe(500.0);
 });
 
-it('allocates a payment to advance when the customer has no due', function () {
+it('derives advance from a regular receipt when the customer has no due', function () {
     $fixture = settlementFixture();
 
-    $created = $fixture['service']->createMany(receiptPayload($fixture, 1000));
+    $created = $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
+        receiptPayload($fixture, 1000)
+    );
     $metric = $fixture['ledger']
         ->customerMetrics(collect([$fixture['customer']]))
         ->get($fixture['customer']->id);
 
     expect($created)->toHaveCount(1)
         ->and($created[0]->voucherTransactionType->code)
-        ->toBe(VoucherTransactionTypeHelper::customerAdvancePaymentCode())
+        ->toBe(VoucherTransactionTypeHelper::customerDuePaidCode())
+        ->and($metric['current_balance'])->toBe(-1000.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['current_advance'])->toBe(1000.0);
 });
 
 it('reduces only customer advance and rejects an excessive advance return', function () {
     $fixture = settlementFixture();
-    $fixture['service']->createMany(receiptPayload($fixture, 1000));
+    $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
+        receiptPayload($fixture, 1000)
+    );
 
     $payload = [
         'date' => '2026-08-06',
@@ -422,7 +429,9 @@ it('reduces only customer advance and rejects an excessive advance return', func
         ->customerMetrics(collect([$fixture['customer']]))
         ->get($fixture['customer']->id);
 
-    expect($metric['current_advance'])->toBe(700.0)
+    expect($metric['total_paid'])->toBe(700.0)
+        ->and($metric['current_balance'])->toBe(-700.0)
+        ->and($metric['current_advance'])->toBe(700.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['security_deposit'])->toBe(0.0);
 
@@ -434,7 +443,8 @@ it('reduces only customer advance and rejects an excessive advance return', func
 
 it('keeps security deposit receipts and refunds separate from due and advance', function () {
     $fixture = settlementFixture();
-    $fixture['service']->createMany(
+    $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
         receiptPayload($fixture, 5000, 'security_deposit')
     );
 
@@ -459,4 +469,47 @@ it('keeps security deposit receipts and refunds separate from due and advance', 
         ->and($metric['total_paid'])->toBe(0.0)
         ->and($metric['current_due'])->toBe(0.0)
         ->and($metric['current_advance'])->toBe(0.0);
+});
+
+it('keeps historical advance payment receipts in net paid without exposing a system option', function () {
+    $fixture = settlementFixture(1000);
+    $fixture['vouchers']->createMany(
+        VoucherTransactionTypeHelper::receiptVoucherType(),
+        receiptPayload($fixture, 1500, 'advance_payment')
+    );
+
+    $metric = $fixture['ledger']
+        ->customerMetrics(collect([$fixture['customer']]))
+        ->get($fixture['customer']->id);
+    $configuredCustomerCodes = collect(
+        VoucherTransactionTypeHelper::systemTypes()['customer']
+    )->pluck('code');
+
+    expect($configuredCustomerCodes)
+        ->not->toContain(
+            VoucherTransactionTypeHelper::legacyCustomerAdvancePaymentCode()
+        )
+        ->and($metric['total_paid'])->toBe(1500.0)
+        ->and($metric['current_balance'])->toBe(-500.0)
+        ->and($metric['current_advance'])->toBe(500.0);
+});
+
+it('retires the legacy customer advance payment transaction type', function () {
+    $fixture = settlementFixture();
+    $migration = require database_path(
+        'migrations/2026_08_06_000021_retire_customer_advance_payment_transaction_type.php'
+    );
+
+    $migration->up();
+
+    expect(
+        DB::table('voucher_transaction_types')
+            ->where('id', $fixture['typeIds']['advance_payment'])
+            ->value('status')
+    )->toBe(0)
+        ->and(fn () => $fixture['vouchers']->createMany(
+            VoucherTransactionTypeHelper::receiptVoucherType(),
+            receiptPayload($fixture, 100, 'advance_payment')
+        ))
+        ->toThrow(ValidationException::class);
 });
