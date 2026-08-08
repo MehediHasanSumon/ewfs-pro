@@ -29,6 +29,7 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\MonthlyDispenserReportController;
 use App\Http\Controllers\OfficePaymentController;
 use App\Http\Controllers\PaymentVoucherController;
+use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductRateController;
@@ -269,6 +270,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Salary Payment routes
     Route::get('salary-payments', [SalaryPaymentController::class, 'index'])->name('salary-payments.index');
     Route::post('salary-payments', [SalaryPaymentController::class, 'store'])->name('salary-payments.store');
+
+    // Payroll routes
+    Route::get('payroll', [PayrollPeriodController::class, 'index'])->name('payroll.periods.index');
+    Route::post('payroll', [PayrollPeriodController::class, 'store'])->name('payroll.periods.store');
+    Route::get('payroll/history', [PayrollPeriodController::class, 'history'])->name('payroll.history');
+    Route::get('payroll/{period}/processing', [PayrollPeriodController::class, 'processing'])->name('payroll.processing');
+    Route::post('payroll/{period}/start', [PayrollPeriodController::class, 'start'])->name('payroll.periods.start');
+    Route::post('payroll/{period}/process', [PayrollPeriodController::class, 'process'])->name('payroll.periods.process');
+    Route::post('payroll/{period}/lock', [PayrollPeriodController::class, 'lock'])->name('payroll.periods.lock');
 
     // Supplier routes
     Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');

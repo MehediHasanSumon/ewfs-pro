@@ -6,6 +6,7 @@ use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\PaymentVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
+use App\Models\PayrollItem;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
@@ -89,6 +90,13 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 'voucher' => 'Salary payment vouchers cannot be edited from Payment Voucher. Reverse the voucher and process the salary again.',
             ]);
         }
+        if (PayrollItem::query()
+            ->where('advance_adjustment_voucher_id', $voucher->id)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'voucher' => 'Payroll adjustment vouchers cannot be edited. Reverse the payroll period if a correction is required.',
+            ]);
+        }
         $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Payment voucher updated successfully.');
@@ -100,6 +108,15 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             $voucher->voucher_type
                 === VoucherTransactionTypeHelper::paymentVoucherType(),
             404
+        );
+        abort_unless(
+            ! PayrollItem::query()
+                ->where(fn ($query) => $query
+                    ->where('payment_voucher_id', $voucher->id)
+                    ->orWhere('advance_adjustment_voucher_id', $voucher->id))
+                ->exists(),
+            422,
+            'Payroll adjustment vouchers cannot be deleted independently.'
         );
         $this->vouchers->reverse($voucher);
 
@@ -121,7 +138,18 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             ->whereIn('id', $validated['ids'])
             ->with('journalEntry')
             ->get()
-            ->each(fn (Voucher $voucher) => $this->vouchers->reverse($voucher));
+            ->each(function (Voucher $voucher): void {
+                abort_unless(
+                    ! PayrollItem::query()
+                        ->where(fn ($query) => $query
+                            ->where('payment_voucher_id', $voucher->id)
+                            ->orWhere('advance_adjustment_voucher_id', $voucher->id))
+                        ->exists(),
+                    422,
+                    'Payroll adjustment vouchers cannot be deleted independently.'
+                );
+                $this->vouchers->reverse($voucher);
+            });
 
         return back()->with('success', 'Payment vouchers deleted successfully.');
     }

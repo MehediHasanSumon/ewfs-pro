@@ -228,6 +228,18 @@ const mainNavItems = [
         children: [
             { title: 'Employees', href: '/employees', icon: UserCheck, permission: 'view-employee' },
             {
+                title: 'Payroll Periods',
+                href: '/payroll',
+                icon: DollarSign,
+                permission: 'payroll-view',
+            },
+            {
+                title: 'Payroll History',
+                href: '/payroll/history',
+                icon: FileText,
+                permission: 'payroll-history',
+            },
+            {
                 title: 'Salary Payment',
                 href: '/salary-payments',
                 icon: DollarSign,

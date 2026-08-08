@@ -171,6 +171,11 @@ class SalaryPaymentController extends Controller implements HasMiddleware
             ->forVoucherType(
                 VoucherTransactionTypeHelper::paymentVoucherType()
             )
+            ->where(
+                'code',
+                '!=',
+                VoucherTransactionTypeHelper::monthlySalaryCode()
+            )
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'sort_order']);

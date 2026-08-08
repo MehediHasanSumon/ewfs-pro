@@ -6,6 +6,7 @@ use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\ReceivedVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
+use App\Models\PayrollItem;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
@@ -89,6 +90,13 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::receiptVoucherType(),
             404
         );
+        abort_unless(
+            ! PayrollItem::query()
+                ->where('advance_adjustment_voucher_id', $voucher->id)
+                ->exists(),
+            422,
+            'Payroll adjustment vouchers cannot be edited independently.'
+        );
         $this->vouchers->replace($voucher, $request->validated());
 
         return back()->with('success', 'Received voucher updated successfully.');
@@ -100,6 +108,13 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
             $voucher->voucher_type
                 === VoucherTransactionTypeHelper::receiptVoucherType(),
             404
+        );
+        abort_unless(
+            ! PayrollItem::query()
+                ->where('advance_adjustment_voucher_id', $voucher->id)
+                ->exists(),
+            422,
+            'Payroll adjustment vouchers cannot be deleted independently.'
         );
         $this->vouchers->reverse($voucher);
 
@@ -121,7 +136,16 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
             ->whereIn('id', $validated['ids'])
             ->with('journalEntry')
             ->get()
-            ->each(fn (Voucher $voucher) => $this->vouchers->reverse($voucher));
+            ->each(function (Voucher $voucher): void {
+                abort_unless(
+                    ! PayrollItem::query()
+                        ->where('advance_adjustment_voucher_id', $voucher->id)
+                        ->exists(),
+                    422,
+                    'Payroll adjustment vouchers cannot be deleted independently.'
+                );
+                $this->vouchers->reverse($voucher);
+            });
 
         return back()->with('success', 'Received vouchers deleted successfully.');
     }

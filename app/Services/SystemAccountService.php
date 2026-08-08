@@ -10,8 +10,7 @@ class SystemAccountService
 {
     public function __construct(
         private readonly DocumentNumberService $numbers
-    ) {
-    }
+    ) {}
 
     public function salesRevenue(): Account
     {
@@ -31,6 +30,21 @@ class SystemAccountService
     public function officeExpense(): Account
     {
         return $this->resolve('office_expense', 'Office Expense', 'expense', 'debit');
+    }
+
+    public function payrollSalaryExpense(): Account
+    {
+        return $this->resolve(
+            'payroll_salary_expense',
+            'Payroll Salary Expense',
+            'expense',
+            'debit'
+        );
+    }
+
+    public function payrollAdvanceAdjustment(): Account
+    {
+        return $this->payrollSalaryExpense();
     }
 
     public function inventoryAdjustment(): Account

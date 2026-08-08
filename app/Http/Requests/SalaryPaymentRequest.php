@@ -91,12 +91,10 @@ class SalaryPaymentRequest extends FormRequest
             === VoucherTransactionTypeHelper::monthlySalaryCode();
 
         if ($isMonthlySalary) {
-            if ($this->has('amounts')) {
-                $validator->errors()->add(
-                    'amounts',
-                    'Monthly Salary amounts are loaded from employee salary structures.'
-                );
-            }
+            $validator->errors()->add(
+                'voucher_transaction_type_id',
+                'Monthly Salary must be processed through a Payroll Period.'
+            );
 
             return;
         }

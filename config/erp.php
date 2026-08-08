@@ -306,6 +306,10 @@ return [
         'nid_max_kb' => (int) env('EMPLOYEE_NID_MAX_KB', 10240),
     ],
 
+    'payroll' => [
+        'queue_threshold' => (int) env('PAYROLL_QUEUE_THRESHOLD', 100),
+    ],
+
     'company_documents' => [
         'disk' => env('COMPANY_DOCUMENT_DISK', 'private'),
         'directory' => env('COMPANY_DOCUMENT_DIRECTORY', 'company-documents'),

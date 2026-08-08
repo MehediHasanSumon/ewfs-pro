@@ -6,6 +6,9 @@ use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\Employee;
+use App\Models\PayrollItem;
+use App\Models\PayrollPeriod;
 use App\Models\Supplier;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
@@ -205,6 +208,139 @@ class PartyLedgerService
     public function customerPaymentCount(int $customerId): int
     {
         return $this->customerReceiptQuery($customerId)->count();
+    }
+
+    public function employeeFinancialMetrics(
+        Collection $employees,
+        ?string $asOfDate = null
+    ): Collection {
+        $employeeIds = $employees->pluck('id')->map(fn ($id): int => (int) $id);
+
+        if ($employeeIds->isEmpty()) {
+            return collect();
+        }
+
+        $employeeCategory = VoucherCategoryHelper::employeeCode();
+        $monthlySalary = VoucherTransactionTypeHelper::monthlySalaryCode();
+        $salaryAdvance = VoucherTransactionTypeHelper::employeeSalaryAdvanceCode();
+        $personalLoan = VoucherTransactionTypeHelper::employeePersonalLoanCode();
+        $advanceReturn = VoucherTransactionTypeHelper::employeeAdvanceReturnCode();
+        $loanRecovery = VoucherTransactionTypeHelper::employeeLoanRecoveryCode();
+
+        $activity = DB::table('voucher_lines as vl')
+            ->join('vouchers as v', 'v.id', '=', 'vl.voucher_id')
+            ->join('journal_entries as je', 'je.id', '=', 'v.journal_entry_id')
+            ->leftJoin(
+                'voucher_transaction_types as vtt',
+                'vtt.id',
+                '=',
+                'v.voucher_transaction_type_id'
+            )
+            ->leftJoin(
+                'voucher_categories as vc',
+                'vc.id',
+                '=',
+                'vtt.voucher_category_id'
+            )
+            ->whereIn('vl.employee_id', $employeeIds)
+            ->where('v.status', 'posted')
+            ->where('je.status', 'posted')
+            ->when($asOfDate, fn ($query) => $query
+                ->whereDate('v.voucher_date', '<=', $asOfDate))
+            ->groupBy('vl.employee_id')
+            ->selectRaw(
+                'vl.employee_id,
+                 SUM(CASE WHEN v.voucher_type = ? AND vc.code = ? AND vtt.code = ? THEN vl.amount ELSE 0 END) AS monthly_salary_paid,
+                 SUM(CASE WHEN v.voucher_type = ? AND vc.code = ? AND vtt.code = ? THEN vl.amount ELSE 0 END) AS salary_advance,
+                 SUM(CASE WHEN v.voucher_type = ? AND vc.code = ? AND vtt.code = ? THEN vl.amount ELSE 0 END) AS personal_loan,
+                 SUM(CASE WHEN v.voucher_type = ? AND vc.code = ? AND vtt.code = ? THEN vl.amount ELSE 0 END) AS advance_return,
+                 SUM(CASE WHEN v.voucher_type = ? AND vc.code = ? AND vtt.code = ? THEN vl.amount ELSE 0 END) AS loan_recovery',
+                [
+                    VoucherTransactionTypeHelper::paymentVoucherType(),
+                    $employeeCategory,
+                    $monthlySalary,
+                    VoucherTransactionTypeHelper::paymentVoucherType(),
+                    $employeeCategory,
+                    $salaryAdvance,
+                    VoucherTransactionTypeHelper::paymentVoucherType(),
+                    $employeeCategory,
+                    $personalLoan,
+                    VoucherTransactionTypeHelper::receiptVoucherType(),
+                    $employeeCategory,
+                    $advanceReturn,
+                    VoucherTransactionTypeHelper::receiptVoucherType(),
+                    $employeeCategory,
+                    $loanRecovery,
+                ]
+            )
+            ->get()
+            ->keyBy('employee_id');
+
+        $legacyAppliedAdvances = PayrollItem::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', PayrollItem::STATUS_PAID)
+            ->whereNull('advance_adjustment_voucher_id')
+            ->when($asOfDate, fn ($query) => $query
+                ->whereDate('processed_at', '<=', $asOfDate))
+            ->groupBy('employee_id')
+            ->select('employee_id')
+            ->selectRaw('SUM(advance_applied) AS applied_advances')
+            ->pluck('applied_advances', 'employee_id');
+
+        $salaryDue = PayrollItem::query()
+            ->join('payroll_periods as pp', 'pp.id', '=', 'payroll_items.payroll_period_id')
+            ->whereIn('payroll_items.employee_id', $employeeIds)
+            ->whereIn('pp.status', [
+                PayrollPeriod::STATUS_PROCESSING,
+                PayrollPeriod::STATUS_COMPLETED,
+                PayrollPeriod::STATUS_LOCKED,
+            ])
+            ->where('payroll_items.status', PayrollItem::STATUS_PENDING)
+            ->when($asOfDate, fn ($query) => $query
+                ->whereDate('pp.payable_date', '<=', $asOfDate))
+            ->groupBy('payroll_items.employee_id')
+            ->select('payroll_items.employee_id')
+            ->selectRaw('SUM(payroll_items.net_payable) AS salary_due')
+            ->pluck('salary_due', 'payroll_items.employee_id');
+
+        return $employees->mapWithKeys(function (Employee $employee) use (
+            $activity,
+            $legacyAppliedAdvances,
+            $salaryDue
+        ) {
+            $row = $activity->get($employee->id);
+            $salaryAdvance = (float) ($row->salary_advance ?? 0);
+            $advanceReturn = (float) ($row->advance_return ?? 0);
+            $advanceApplied = (float) ($legacyAppliedAdvances->get($employee->id, 0));
+            $loan = (float) ($row->personal_loan ?? 0);
+            $loanRecovery = (float) ($row->loan_recovery ?? 0);
+
+            return [$employee->id => [
+                'monthly_salary' => (float) ($employee->salaryStructure?->net_salary
+                    ?? $employee->salaryStructure?->gross_salary
+                    ?? $employee->salary
+                    ?? 0),
+                'paid_salary' => (float) ($row->monthly_salary_paid ?? 0),
+                'salary_due' => (float) ($salaryDue->get($employee->id, 0)),
+                'salary_advance' => $salaryAdvance,
+                'advance_return' => $advanceReturn,
+                'advance_applied' => $advanceApplied,
+                'net_advance' => max(0.0, $salaryAdvance - $advanceReturn - $advanceApplied),
+                'personal_loan' => $loan,
+                'loan_recovery' => $loanRecovery,
+                'loan_balance' => max(0.0, $loan - $loanRecovery),
+            ]];
+        });
+    }
+
+    public function employeeFinancialMetric(
+        Employee $employee,
+        ?string $asOfDate = null
+    ): array {
+        return $this->employeeFinancialMetrics(
+            collect([$employee->loadMissing('salaryStructure')]),
+            $asOfDate
+        )->get($employee->id, []);
     }
 
     public function customerPayments(

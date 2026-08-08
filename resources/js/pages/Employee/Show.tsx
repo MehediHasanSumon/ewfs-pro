@@ -126,30 +126,20 @@ interface ShowEmployeeProps {
     employee: Employee;
     recentSalaryPayments: RecentSalaryPayment[];
     recentAdvancedPayments: RecentAdvancedPayment[];
-    totalPaidSalary: number;
-    salaryPaymentCount: number;
-    totalAdvanced: number;
-    advancedCount: number;
-    totalAdvancedReturns: number;
-    advancedReturnCount: number;
-    netAdvanced: number;
-    salaryDue: number;
-    netBalance: number;
-    monthsWorked: number;
+    financialMetrics: {
+        monthly_salary: number;
+        paid_salary: number;
+        salary_due: number;
+        net_advance: number;
+        loan_balance: number;
+    };
 }
 
 export default function ShowEmployee({ 
     employee, 
     recentSalaryPayments, 
     recentAdvancedPayments, 
-    totalPaidSalary, 
-    salaryPaymentCount, 
-    totalAdvanced, 
-    totalAdvancedReturns,
-    netAdvanced,
-    salaryDue,
-    netBalance,
-    monthsWorked
+    financialMetrics,
 }: ShowEmployeeProps) {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [initialDocumentId, setInitialDocumentId] = useState<string | null>(
@@ -281,93 +271,77 @@ export default function ShowEmployee({
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-5">
+                    <button type="button" className="text-left" onClick={() => router.get(`/employees/${employee.id}/statement?view=salary`)}>
+                    <Card className="h-full cursor-pointer dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Salary</p>
-                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatAmount(employee.salary)}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{monthsWorked} months worked</p>
+                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatAmount(financialMetrics.monthly_salary)}</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+                    </button>
                     
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                    <button type="button" className="text-left" onClick={() => router.get(`/employees/${employee.id}/statement?view=salary`)}>
+                    <Card className="h-full cursor-pointer dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Salary</p>
-                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatAmount(totalPaidSalary)}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{salaryPaymentCount} payments</p>
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatAmount(financialMetrics.paid_salary)}</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+                    </button>
                     
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Net Advanced</p>
-                                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{formatAmount(netAdvanced)}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Given: {formatAmount(totalAdvanced)}, Returned: {formatAmount(totalAdvancedReturns)}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Loan</p>
-                                    <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{formatAmount(0)}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                    <button type="button" className="text-left" onClick={() => router.get(`/payroll?employee_id=${employee.id}`)}>
+                    <Card className="h-full cursor-pointer dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Salary Due</p>
                                     <p className={`text-2xl font-bold ${
-                                        salaryDue > 0 
-                                            ? 'text-red-600 dark:text-red-400' 
-                                            : salaryDue < 0 
-                                                ? 'text-green-600 dark:text-green-400' 
-                                                : 'text-gray-900 dark:text-white'
+                                        financialMetrics.salary_due > 0
+                                            ? 'text-red-600 dark:text-red-400'
+                                            : 'text-gray-900 dark:text-white'
                                     }`}>
-                                        {formatAmount(salaryDue)}
+                                        {formatAmount(financialMetrics.salary_due)}
                                     </p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
-                    
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                    </button>
+
+                    <button type="button" className="text-left" onClick={() => router.get(`/employees/${employee.id}/statement?view=advance`)}>
+                    <Card className="h-full cursor-pointer dark:border-gray-700 dark:bg-gray-800">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                        {netBalance > 0 ? 'Employee Will Get' : netBalance < 0 ? 'Employee Owes' : 'Balanced'}
-                                    </p>
-                                    <p className={`text-2xl font-bold ${
-                                        netBalance > 0 
-                                            ? 'text-blue-600 dark:text-blue-400' 
-                                            : netBalance < 0 
-                                                ? 'text-red-600 dark:text-red-400' 
-                                                : 'text-gray-900 dark:text-white'
-                                    }`}>
-                                        {formatAmount(Math.abs(Number(netBalance)))}
-                                    </p>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Net Advance</p>
+                                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{formatAmount(financialMetrics.net_advance)}</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+                    </button>
+                    
+                    <button type="button" className="text-left" onClick={() => router.get(`/employees/${employee.id}/statement?view=loan`)}>
+                    <Card className="h-full cursor-pointer dark:border-gray-700 dark:bg-gray-800">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Loan Balance</p>
+                                    <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{formatAmount(financialMetrics.loan_balance)}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\EmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\CompanySetting;
@@ -24,12 +25,6 @@ use Inertia\Inertia;
 
 class EmployeeController extends Controller implements HasMiddleware
 {
-    private const SALARY_CODES = ['1001', '1004', '1005', '1006', '1007', '1014'];
-
-    private const ADVANCE_CODES = ['1002', '1003'];
-
-    private const ADVANCE_RETURN_CODES = ['1002', '1003', '1008'];
-
     public function __construct(
         private readonly PartyLedgerService $partyLedger,
         private readonly EmployeeProfileService $employeeProfiles,
@@ -133,20 +128,17 @@ class EmployeeController extends Controller implements HasMiddleware
             'salaryStructure'
         );
 
-        $salaryQuery = $this->employeeVouchers($employee, 'payment', self::SALARY_CODES);
-        $advanceQuery = $this->employeeVouchers($employee, 'payment', self::ADVANCE_CODES);
-        $returnQuery = $this->employeeVouchers($employee, 'receipt', self::ADVANCE_RETURN_CODES);
-
-        $salaryPaymentCount = (clone $salaryQuery)->count();
-        $advancedCount = (clone $advanceQuery)->count();
-        $advancedReturnCount = (clone $returnQuery)->count();
-        $totalPaidSalary = $this->voucherTotal($employee, 'payment', self::SALARY_CODES);
-        $totalAdvanced = $this->voucherTotal($employee, 'payment', self::ADVANCE_CODES);
-        $totalAdvancedReturns = $this->voucherTotal(
+        $salaryQuery = $this->employeeVouchers(
             $employee,
-            'receipt',
-            self::ADVANCE_RETURN_CODES
+            'payment',
+            [VoucherTransactionTypeHelper::monthlySalaryCode()]
         );
+        $advanceQuery = $this->employeeVouchers(
+            $employee,
+            'payment',
+            [VoucherTransactionTypeHelper::employeeSalaryAdvanceCode()]
+        );
+        $metrics = $this->partyLedger->employeeFinancialMetric($employee);
 
         $recentSalaryPayments = $this->partyLedger->voucherRows(
             $salaryQuery->orderByDesc('voucher_date')->orderByDesc('id')->limit(5)->get(),
@@ -157,24 +149,11 @@ class EmployeeController extends Controller implements HasMiddleware
             'Given'
         );
 
-        $monthsWorked = $this->monthsWorked($employee);
-        $netAdvanced = $totalAdvanced - $totalAdvancedReturns;
-        $salaryDue = max(0, (float) ($employee->salary ?? 0) * $monthsWorked - $totalPaidSalary);
-
         return Inertia::render('Employee/Show', [
             'employee' => EmployeeResource::make($employee)->resolve(),
             'recentSalaryPayments' => $recentSalaryPayments,
             'recentAdvancedPayments' => $recentAdvancedPayments,
-            'totalPaidSalary' => $totalPaidSalary,
-            'salaryPaymentCount' => $salaryPaymentCount,
-            'totalAdvanced' => $totalAdvanced,
-            'advancedCount' => $advancedCount,
-            'totalAdvancedReturns' => $totalAdvancedReturns,
-            'advancedReturnCount' => $advancedReturnCount,
-            'netAdvanced' => $netAdvanced,
-            'salaryDue' => $salaryDue,
-            'netBalance' => $salaryDue - $netAdvanced,
-            'monthsWorked' => $monthsWorked,
+            'financialMetrics' => $metrics,
         ]);
     }
 
@@ -244,11 +223,26 @@ class EmployeeController extends Controller implements HasMiddleware
     public function statement(Request $request, Employee $employee)
     {
         $employee->load('account:id,name,ac_number');
+        [$paymentCodes, $receiptCodes] = match ((string) $request->input('view')) {
+            'salary' => [
+                [VoucherTransactionTypeHelper::monthlySalaryCode()],
+                [],
+            ],
+            'advance' => [
+                [VoucherTransactionTypeHelper::employeeSalaryAdvanceCode()],
+                [VoucherTransactionTypeHelper::employeeAdvanceReturnCode()],
+            ],
+            'loan' => [
+                [VoucherTransactionTypeHelper::employeePersonalLoanCode()],
+                [VoucherTransactionTypeHelper::employeeLoanRecoveryCode()],
+            ],
+            default => [null, null],
+        };
         $payments = $this->partyLedger->paginatedVoucherRows(
             $this->employeeVouchers(
                 $employee,
                 'payment',
-                null,
+                $paymentCodes,
                 $request->start_date,
                 $request->end_date
             ),
@@ -259,7 +253,7 @@ class EmployeeController extends Controller implements HasMiddleware
             $this->employeeVouchers(
                 $employee,
                 'receipt',
-                null,
+                $receiptCodes,
                 $request->start_date,
                 $request->end_date
             )
@@ -279,8 +273,11 @@ class EmployeeController extends Controller implements HasMiddleware
             ],
             'payments' => $payments,
             'receipts' => $receipts,
-            'currentBalance' => $this->voucherTotal($employee, 'payment')
-                - $this->voucherTotal($employee, 'receipt'),
+            'currentBalance' => $this->statementBalance(
+                $employee,
+                (string) $request->input('view')
+            ),
+            'view' => (string) $request->input('view', 'all'),
         ]);
     }
 
@@ -355,9 +352,22 @@ class EmployeeController extends Controller implements HasMiddleware
     ): Builder {
         return $this->partyLedger
             ->vouchers('employee_id', $employee->id, $type, $startDate, $endDate)
-            ->when($subTypeCodes, fn (Builder $query) => $query
+            ->when($subTypeCodes !== null, fn (Builder $query) => $query
                 ->whereHas('voucherTransactionType', fn (Builder $subType) => $subType
                     ->whereIn('code', $subTypeCodes)));
+    }
+
+    private function statementBalance(Employee $employee, string $view): float
+    {
+        $metrics = $this->partyLedger->employeeFinancialMetric($employee);
+
+        return match ($view) {
+            'salary' => (float) ($metrics['paid_salary'] ?? 0),
+            'advance' => (float) ($metrics['net_advance'] ?? 0),
+            'loan' => (float) ($metrics['loan_balance'] ?? 0),
+            default => $this->voucherTotal($employee, 'payment')
+                - $this->voucherTotal($employee, 'receipt'),
+        };
     }
 
     private function voucherTotal(
@@ -406,13 +416,6 @@ class EmployeeController extends Controller implements HasMiddleware
         ) ? $request->get('sort_by') : 'created_at';
 
         return [$sortBy, $request->get('sort_order') === 'asc' ? 'asc' : 'desc'];
-    }
-
-    private function monthsWorked(Employee $employee): int
-    {
-        $startedAt = $employee->joining_date ?? $employee->created_at;
-
-        return max(0, (int) $startedAt->diffInMonths(now()));
     }
 
     private function deleteEmployee(Employee $employee): void

@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Helpers\VoucherCategoryHelper;
 use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
+use App\Models\Employee;
 use App\Models\EmployeeSalaryPayment;
+use App\Models\PayrollItem;
 use App\Models\Voucher;
 use App\Models\VoucherTransactionType;
 use Illuminate\Support\Facades\DB;
@@ -84,6 +86,19 @@ class VoucherPostingService
     public function reverse(Voucher $voucher, string $reason = 'Voucher deleted from the workflow.'): void
     {
         DB::transaction(function () use ($voucher, $reason): void {
+            if (
+                Schema::hasTable('payroll_items')
+                && PayrollItem::query()
+                    ->where(fn ($query) => $query
+                        ->where('payment_voucher_id', $voucher->id)
+                        ->orWhere('advance_adjustment_voucher_id', $voucher->id))
+                    ->exists()
+            ) {
+                throw ValidationException::withMessages([
+                    'voucher' => 'Payroll vouchers are immutable and cannot be reversed independently.',
+                ]);
+            }
+
             $voucher->loadMissing('journalEntry');
 
             if ($voucher->journalEntry?->status === 'posted') {
@@ -173,6 +188,44 @@ class VoucherPostingService
             ]);
         }
 
+        $taggedEmployee = null;
+
+        if (isset($lineData['employee_id'])) {
+            if (
+                $transactionType->voucherCategory?->code
+                    !== VoucherCategoryHelper::employeeCode()
+            ) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'employee_id' => 'Employee attribution is only available for Employee vouchers.',
+                ]);
+            }
+
+            $taggedEmployee = Employee::query()
+                ->whereKey((int) $lineData['employee_id'])
+                ->where('status', true)
+                ->first();
+
+            if (! $taggedEmployee) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'employee_id' => 'The selected employee is unavailable.',
+                ]);
+            }
+
+            $accountEmployeeIds = collect([
+                $fromAccount->employee?->id,
+                $toAccount->employee?->id,
+            ])->filter()->unique();
+
+            if (
+                $accountEmployeeIds->isNotEmpty()
+                && ! $accountEmployeeIds->contains($taggedEmployee->id)
+            ) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'employee_id' => 'The selected employee does not match the voucher accounts.',
+                ]);
+            }
+        }
+
         $amount = (float) $lineData['amount'];
         $paymentMethod = $this->normalizePaymentMethod($lineData);
         $isSecurityDepositRefund = $type
@@ -194,6 +247,18 @@ class VoucherPostingService
                         === VoucherCategoryHelper::getCategoryDefaultName('customer')
                 )
             );
+        $isEmployeeAdvanceReturn = $type
+                === VoucherTransactionTypeHelper::receiptVoucherType()
+            && $transactionType->code
+                === VoucherTransactionTypeHelper::employeeAdvanceReturnCode()
+            && $transactionType->voucherCategory?->code
+                === VoucherCategoryHelper::employeeCode();
+        $isEmployeeLoanRecovery = $type
+                === VoucherTransactionTypeHelper::receiptVoucherType()
+            && $transactionType->code
+                === VoucherTransactionTypeHelper::employeeLoanRecoveryCode()
+            && $transactionType->voucherCategory?->code
+                === VoucherCategoryHelper::employeeCode();
 
         if ($isSecurityDepositRefund) {
             $this->securityDeposits->assertRefundAllowed(
@@ -222,6 +287,32 @@ class VoucherPostingService
             }
         }
 
+        if ($isEmployeeAdvanceReturn || $isEmployeeLoanRecovery) {
+            $employee = $fromAccount->employee;
+
+            if (! $employee) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'from_account_id' => 'Employee recovery must be posted from an employee account.',
+                ]);
+            }
+
+            $metric = $this->partyLedger->employeeFinancialMetric(
+                $employee,
+                $businessDate
+            );
+            $available = $isEmployeeAdvanceReturn
+                ? (float) ($metric['net_advance'] ?? 0)
+                : (float) ($metric['loan_balance'] ?? 0);
+
+            if (round($amount, 4) > round($available, 4)) {
+                throw ValidationException::withMessages([
+                    $errorPrefix.'amount' => $isEmployeeAdvanceReturn
+                        ? 'Advance return cannot exceed the employee net advance.'
+                        : 'Loan recovery cannot exceed the employee loan balance.',
+                ]);
+            }
+        }
+
         $description = $lineData['description']
             ?? ($isSecurityDepositRefund
                 ? 'Security Deposit Refund'
@@ -243,6 +334,9 @@ class VoucherPostingService
 
         $debitAccount = $toAccount;
         $creditAccount = $fromAccount;
+        $debitEmployeeId = $debitAccount->employee?->id
+            ?? $taggedEmployee?->id;
+        $creditEmployeeId = $creditAccount->employee?->id;
 
         $debitLine = $voucher->lines()->create([
             'line_no' => 1,
@@ -251,7 +345,7 @@ class VoucherPostingService
             'amount' => $amount,
             'customer_id' => $debitAccount->customer?->id,
             'supplier_id' => $debitAccount->supplier?->id,
-            'employee_id' => $debitAccount->employee?->id,
+            'employee_id' => $debitEmployeeId,
             'description' => $description,
         ]);
 
@@ -262,7 +356,7 @@ class VoucherPostingService
             'amount' => $amount,
             'customer_id' => $creditAccount->customer?->id,
             'supplier_id' => $creditAccount->supplier?->id,
-            'employee_id' => $creditAccount->employee?->id,
+            'employee_id' => $creditEmployeeId,
             'description' => $description,
         ]);
 
@@ -299,7 +393,7 @@ class VoucherPostingService
                 'credit_amount' => 0,
                 'customer_id' => $debitAccount->customer?->id,
                 'supplier_id' => $debitAccount->supplier?->id,
-                'employee_id' => $debitAccount->employee?->id,
+                'employee_id' => $debitEmployeeId,
                 'payment_method' => $paymentMethod,
                 'description' => $description,
             ],
@@ -309,7 +403,7 @@ class VoucherPostingService
                 'credit_amount' => $amount,
                 'customer_id' => $creditAccount->customer?->id,
                 'supplier_id' => $creditAccount->supplier?->id,
-                'employee_id' => $creditAccount->employee?->id,
+                'employee_id' => $creditEmployeeId,
                 'payment_method' => $paymentMethod,
                 'description' => $description,
             ],
@@ -346,7 +440,11 @@ class VoucherPostingService
             return 'bank';
         }
 
-        return strtolower($method) === 'online' ? 'online' : 'cash';
+        return match (strtolower($method)) {
+            'journal' => 'journal',
+            'online' => 'online',
+            default => 'cash',
+        };
     }
 
     private function transactionTypeId(array $data): ?int

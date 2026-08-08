@@ -93,6 +93,26 @@ class VoucherTransactionTypeHelper
         return self::getCode('employee', 'monthly_salary');
     }
 
+    public static function employeeSalaryAdvanceCode(): string
+    {
+        return self::getCode('employee', 'salary_advance');
+    }
+
+    public static function employeePersonalLoanCode(): string
+    {
+        return self::getCode('employee', 'personal_loan');
+    }
+
+    public static function employeeAdvanceReturnCode(): string
+    {
+        return self::getCode('employee', 'advance_return');
+    }
+
+    public static function employeeLoanRecoveryCode(): string
+    {
+        return self::getCode('employee', 'loan_recovery');
+    }
+
     public static function voucherTypes(): array
     {
         $types = config('app.erp.voucher.types');

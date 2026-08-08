@@ -21,12 +21,36 @@ class SalaryPaymentHelper
         return 'salary-payment-history';
     }
 
+    public static function payrollViewPermission(): string
+    {
+        return 'payroll-view';
+    }
+
+    public static function payrollCreatePermission(): string
+    {
+        return 'payroll-create';
+    }
+
+    public static function payrollProcessPermission(): string
+    {
+        return 'payroll-process';
+    }
+
+    public static function payrollHistoryPermission(): string
+    {
+        return 'payroll-history';
+    }
+
     public static function permissionNames(): array
     {
         return [
             self::viewPermission(),
             self::createPermission(),
             self::historyPermission(),
+            self::payrollViewPermission(),
+            self::payrollCreatePermission(),
+            self::payrollProcessPermission(),
+            self::payrollHistoryPermission(),
         ];
     }
 

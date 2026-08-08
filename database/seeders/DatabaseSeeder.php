@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AccountSeeder::class);
         $this->call(SystemVoucherCategorySeeder::class);
         $this->call(SystemVoucherTransactionTypeSeeder::class);
+        $this->call(SalaryPaymentPermissionSeeder::class);
         $this->call(SMSTemplateSeeder::class);
     }
 }
