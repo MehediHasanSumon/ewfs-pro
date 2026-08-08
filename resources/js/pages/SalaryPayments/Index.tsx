@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Banknote, CalendarDays, Users } from 'lucide-react';
-import { useMemo } from 'react';
+import { Banknote, CalendarDays, Filter, Users, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface Payroll {
     id: number;
@@ -37,11 +38,29 @@ interface Item {
     status: string;
 }
 
+interface ItemPaginator {
+    data: Item[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number;
+    to: number;
+}
+
 interface Props {
     payrolls: Payroll[];
     payroll: { id: number; label: string; status: string } | null;
-    items: Item[];
-    filters: { payroll_id: number | null; date: string };
+    items: ItemPaginator;
+    departments: string[];
+    filters: {
+        payroll_id: number | null;
+        date: string;
+        search?: string;
+        department?: string;
+        status?: string;
+        per_page?: number;
+    };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -55,22 +74,67 @@ const amount = (value: number) =>
         maximumFractionDigits: 2,
     });
 
-export default function SalaryPaymentIndex({ payrolls, payroll, items, filters }: Props) {
+export default function SalaryPaymentIndex({
+    payrolls,
+    payroll,
+    items,
+    departments = [],
+    filters,
+}: Props) {
     const form = useForm({
         payroll_id: filters.payroll_id ?? 0,
         date: filters.date,
         employee_ids: [] as number[],
     });
+    const [search, setSearch] = useState(filters.search ?? '');
+    const [department, setDepartment] = useState(filters.department ?? 'all');
+    const [status, setStatus] = useState(filters.status ?? 'all');
+    const [perPage, setPerPage] = useState(filters.per_page ?? items.per_page ?? 10);
     const pendingIds = useMemo(
-        () => items.filter((item) => item.status === 'pending').map((item) => item.employee_id),
-        [items],
+        () => items.data.filter((item) => item.status === 'pending').map((item) => item.employee_id),
+        [items.data],
     );
     const allSelected = pendingIds.length > 0 && pendingIds.every((id) => form.data.employee_ids.includes(id));
 
+    const query = (page?: number, overrides: Record<string, string | number | undefined> = {}) => ({
+        payroll_id: overrides.payroll_id ?? (form.data.payroll_id || undefined),
+        search: overrides.search ?? (search || undefined),
+        department: overrides.department ?? (department === 'all' ? undefined : department),
+        status: overrides.status ?? (status === 'all' ? undefined : status),
+        per_page: overrides.per_page ?? perPage,
+        date: form.data.date,
+        page,
+    });
+
     const selectPayroll = (value: string) => {
-        router.get('/salary-payments', { payroll_id: Number(value) }, { preserveState: true, preserveScroll: true });
-        form.setData('payroll_id', Number(value));
+        const payrollId = Number(value);
+        form.setData('payroll_id', payrollId);
         form.setData('employee_ids', []);
+        router.get('/salary-payments', query(1, { payroll_id: payrollId }), {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const applyFilters = () => {
+        router.get('/salary-payments', query(1), {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const clearFilters = () => {
+        setSearch('');
+        setDepartment('all');
+        setStatus('all');
+        router.get('/salary-payments', query(1, {
+            search: '',
+            department: 'all',
+            status: 'all',
+        }), {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const submit = (event: React.FormEvent) => {
@@ -86,7 +150,7 @@ export default function SalaryPaymentIndex({ payrolls, payroll, items, filters }
                     <h1 className="text-3xl font-bold dark:text-white">Salary Payment</h1>
                     <p className="text-gray-600 dark:text-gray-400">Pay only generated payrolls through the existing Payment Voucher workflow.</p>
                 </div>
-                <Card>
+                <Card className="dark:border-gray-700 dark:bg-gray-800">
                     <CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Select Generated Payroll</CardTitle></CardHeader>
                     <CardContent className="grid gap-4 md:grid-cols-[1fr_220px_auto]">
                         <Select value={form.data.payroll_id ? form.data.payroll_id.toString() : ''} onValueChange={selectPayroll} disabled={payrolls.length === 0}>
@@ -99,19 +163,84 @@ export default function SalaryPaymentIndex({ payrolls, payroll, items, filters }
                         <div className="flex items-end"><Button type="button" onClick={submit} disabled={!payroll || form.processing || form.data.employee_ids.length === 0}><Banknote className="mr-2 h-4 w-4" />Pay Selected ({form.data.employee_ids.length})</Button></div>
                     </CardContent>
                 </Card>
-                <Card>
+                {payroll && (
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 dark:text-white">
+                                <Filter className="h-5 w-5" />
+                                Employee Filters
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                                <div>
+                                    <Label className="dark:text-gray-200">Search</Label>
+                                    <Input
+                                        placeholder="Search employee..."
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Department</Label>
+                                    <Select value={department} onValueChange={setDepartment}>
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All departments" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All departments</SelectItem>
+                                            {departments.map((name) => (
+                                                <SelectItem key={name} value={name}>{name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Payment Status</Label>
+                                    <Select value={status} onValueChange={setStatus}>
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All statuses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All statuses</SelectItem>
+                                            <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="paid">Paid</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-end gap-2">
+                                    <Button type="button" onClick={applyFilters} className="px-4">
+                                        Apply Filters
+                                    </Button>
+                                    <Button type="button" onClick={clearFilters} variant="secondary" className="px-4">
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+                <Card className="dark:border-gray-700 dark:bg-gray-800">
                     <CardContent className="p-0">
                         {payroll ? (
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1350px]">
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[1350px]">
                                     <thead><tr className="border-b text-left text-sm text-gray-500 dark:border-gray-700">
-                                        <th className="w-12 p-4"><Checkbox checked={allSelected} disabled={pendingIds.length === 0} onCheckedChange={() => form.setData('employee_ids', allSelected ? [] : pendingIds)} aria-label="Select all pending employees" /></th>
+                                        <th className="w-12 p-4"><Checkbox checked={allSelected} disabled={pendingIds.length === 0} onCheckedChange={() => form.setData(
+                                            'employee_ids',
+                                            allSelected
+                                                ? form.data.employee_ids.filter((id) => !pendingIds.includes(id))
+                                                : Array.from(new Set([...form.data.employee_ids, ...pendingIds])),
+                                        )} aria-label="Select all pending employees on this page" /></th>
                                         <th className="p-4">Employee</th><th className="p-4">Department</th><th className="p-4 text-right">Monthly Salary</th><th className="p-4 text-right">Deduction</th><th className="p-4 text-right">Advance Adjustment</th><th className="p-4 text-right">Bonus</th><th className="p-4 text-right">Net Salary</th><th className="p-4">Payment Method</th><th className="p-4">Account</th><th className="p-4">Status</th>
                                     </tr></thead>
                                     <tbody>
-                                        {items.map((item) => {
+                                        {items.data.map((item) => {
                                             const selected = form.data.employee_ids.includes(item.employee_id);
-                                            return <tr key={item.id} className="border-b dark:border-gray-700">
+                                            return <tr key={item.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                 <td className="p-4"><Checkbox checked={selected} disabled={item.status !== 'pending'} onCheckedChange={() => form.setData('employee_ids', selected ? form.data.employee_ids.filter((id) => id !== item.employee_id) : [...form.data.employee_ids, item.employee_id])} aria-label={`Select ${item.employee_name}`} /></td>
                                                 <td className="p-4 dark:text-white"><div className="font-medium">{item.employee_name}</div><div className="text-xs text-gray-500">{item.employee_code}</div></td>
                                                 <td className="p-4 text-sm dark:text-gray-300">{item.department ?? 'N/A'}</td>
@@ -125,9 +254,38 @@ export default function SalaryPaymentIndex({ payrolls, payroll, items, filters }
                                                 <td className="p-4"><Badge variant={item.status === 'paid' ? 'success' : 'warning'}>{item.status}</Badge></td>
                                             </tr>;
                                         })}
+                                        {items.data.length === 0 && (
+                                            <tr>
+                                                <td colSpan={11} className="p-10 text-center text-gray-500 dark:text-gray-400">
+                                                    No payroll employees match the selected filters.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
-                                </table>
-                            </div>
+                                    </table>
+                                </div>
+                                <div className="px-4 pb-4">
+                                    <Pagination
+                                        currentPage={items.current_page}
+                                        lastPage={items.last_page}
+                                        from={items.from}
+                                        to={items.to}
+                                        total={items.total}
+                                        perPage={perPage}
+                                        onPageChange={(page) => router.get('/salary-payments', query(page), {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                        })}
+                                        onPerPageChange={(value) => {
+                                            setPerPage(value);
+                                            router.get('/salary-payments', query(1, { per_page: value }), {
+                                                preserveState: true,
+                                                preserveScroll: true,
+                                            });
+                                        }}
+                                    />
+                                </div>
+                            </>
                         ) : <div className="p-12 text-center text-gray-500"><Users className="mx-auto mb-3 h-10 w-10" />No Generated payroll is available for payment.</div>}
                     </CardContent>
                 </Card>

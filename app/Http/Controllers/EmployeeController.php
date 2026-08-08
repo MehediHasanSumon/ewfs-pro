@@ -223,7 +223,15 @@ class EmployeeController extends Controller implements HasMiddleware
     public function statement(Request $request, Employee $employee)
     {
         $employee->load('account:id,name,ac_number');
-        [$paymentCodes, $receiptCodes] = match ((string) $request->input('view')) {
+        $view = in_array($request->input('view'), [
+            'salary',
+            'advance',
+            'loan',
+        ], true)
+            ? (string) $request->input('view')
+            : 'all';
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+        [$paymentCodes, $receiptCodes] = match ($view) {
             'salary' => [
                 [VoucherTransactionTypeHelper::monthlySalaryCode()],
                 [],
@@ -246,21 +254,21 @@ class EmployeeController extends Controller implements HasMiddleware
                 $request->start_date,
                 $request->end_date
             ),
-            10,
-            'Paid'
+            $perPage,
+            'Paid',
+            'payment_page'
         );
-        $receipts = $this->partyLedger->voucherRows(
+        $receipts = $this->partyLedger->paginatedVoucherRows(
             $this->employeeVouchers(
                 $employee,
                 'receipt',
                 $receiptCodes,
                 $request->start_date,
                 $request->end_date
-            )
-                ->orderByDesc('voucher_date')
-                ->orderByDesc('id')
-                ->get(),
-            'Received'
+            ),
+            $perPage,
+            'Received',
+            'receipt_page'
         );
 
         return Inertia::render('Employee/EmployeeStatement', [
@@ -275,9 +283,14 @@ class EmployeeController extends Controller implements HasMiddleware
             'receipts' => $receipts,
             'currentBalance' => $this->statementBalance(
                 $employee,
-                (string) $request->input('view')
+                $view
             ),
-            'view' => (string) $request->input('view', 'all'),
+            'view' => $view,
+            'filters' => [
+                'start_date' => (string) $request->input('start_date', ''),
+                'end_date' => (string) $request->input('end_date', ''),
+                'per_page' => $perPage,
+            ],
         ]);
     }
 

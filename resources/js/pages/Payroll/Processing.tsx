@@ -5,11 +5,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormModal } from '@/components/ui/form-modal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
+import { dashboard } from '@/routes';
+import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, Calculator, Plus, Receipt, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calculator, Plus, Receipt, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface EmployeeOption {
@@ -94,6 +97,11 @@ export default function Processing({
     extraTypes: ExtraType[];
     canGenerate: boolean;
 }) {
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Dashboard', href: dashboard().url },
+        { title: 'Payroll', href: '/payroll' },
+        { title: period.label, href: `/payroll/${period.id}/processing` },
+    ];
     const revisingGenerated = period.status === 'generated';
     const [selectedIds, setSelectedIds] = useState<number[]>(
         revisingGenerated ? employees.map((employee) => employee.id) : [],
@@ -101,6 +109,14 @@ export default function Processing({
     const [generationOpen, setGenerationOpen] = useState(false);
     const [bonusOpen, setBonusOpen] = useState(false);
     const [bonusEmployeeId, setBonusEmployeeId] = useState<number | null>(null);
+    const [employeeSearch, setEmployeeSearch] = useState('');
+    const [employeeDepartment, setEmployeeDepartment] = useState('all');
+    const [employeePage, setEmployeePage] = useState(1);
+    const [employeePerPage, setEmployeePerPage] = useState(10);
+    const [itemSearch, setItemSearch] = useState('');
+    const [itemStatus, setItemStatus] = useState('all');
+    const [itemPage, setItemPage] = useState(1);
+    const [itemPerPage, setItemPerPage] = useState(10);
     const [drafts, setDrafts] = useState<Record<number, Draft>>(() =>
         Object.fromEntries(
             employees.map((employee) => [
@@ -123,7 +139,51 @@ export default function Processing({
         () => employees.filter((employee) => selectedIds.includes(employee.id)),
         [employees, selectedIds],
     );
-    const allSelected = employees.length > 0 && selectedIds.length === employees.length;
+    const departments = useMemo(
+        () => Array.from(new Set(employees.map((employee) => employee.department).filter(Boolean) as string[])).sort(),
+        [employees],
+    );
+    const filteredEmployees = useMemo(() => {
+        const normalizedSearch = employeeSearch.trim().toLowerCase();
+
+        return employees.filter((employee) => {
+            const matchesSearch = normalizedSearch === ''
+                || employee.employee_name.toLowerCase().includes(normalizedSearch)
+                || (employee.employee_code ?? '').toLowerCase().includes(normalizedSearch);
+            const matchesDepartment = employeeDepartment === 'all'
+                || employee.department === employeeDepartment;
+
+            return matchesSearch && matchesDepartment;
+        });
+    }, [employeeDepartment, employeeSearch, employees]);
+    const employeeLastPage = Math.max(1, Math.ceil(filteredEmployees.length / employeePerPage));
+    const visibleEmployees = filteredEmployees.slice(
+        (employeePage - 1) * employeePerPage,
+        employeePage * employeePerPage,
+    );
+    const employeeFrom = filteredEmployees.length === 0 ? 0 : (employeePage - 1) * employeePerPage + 1;
+    const employeeTo = Math.min(employeePage * employeePerPage, filteredEmployees.length);
+    const allSelected = filteredEmployees.length > 0
+        && filteredEmployees.every((employee) => selectedIds.includes(employee.id));
+    const filteredItems = useMemo(() => {
+        const normalizedSearch = itemSearch.trim().toLowerCase();
+
+        return items.filter((item) => {
+            const matchesSearch = normalizedSearch === ''
+                || item.employee_name.toLowerCase().includes(normalizedSearch)
+                || (item.employee_code ?? '').toLowerCase().includes(normalizedSearch);
+            const matchesStatus = itemStatus === 'all' || item.status === itemStatus;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [itemSearch, itemStatus, items]);
+    const itemLastPage = Math.max(1, Math.ceil(filteredItems.length / itemPerPage));
+    const visibleItems = filteredItems.slice(
+        (itemPage - 1) * itemPerPage,
+        itemPage * itemPerPage,
+    );
+    const itemFrom = filteredItems.length === 0 ? 0 : (itemPage - 1) * itemPerPage + 1;
+    const itemTo = Math.min(itemPage * itemPerPage, filteredItems.length);
 
     const ensureDraft = (employeeId: number): Draft =>
         drafts[employeeId] ?? { deductions: [], extras: [] };
@@ -285,13 +345,13 @@ export default function Processing({
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Payroll - ${period.label}`} />
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-semibold dark:text-white">{period.label}</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <h1 className="text-3xl font-bold dark:text-white">{period.label}</h1>
+                        <p className="text-gray-600 dark:text-gray-400">
                             {period.payroll_code} · Status: <span className="capitalize">{period.status}</span>
                         </p>
                     </div>
@@ -302,11 +362,61 @@ export default function Processing({
                 </div>
 
                 {canGenerate && (
-                    <Card>
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
                             <CardTitle>
                                 {revisingGenerated ? 'Revise Generated Payroll' : 'Select Employees'}
                             </CardTitle>
+                            <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-[1fr_260px_auto]">
+                                <div>
+                                    <Label className="dark:text-gray-200">Search</Label>
+                                    <Input
+                                        placeholder="Search employee..."
+                                        value={employeeSearch}
+                                        onChange={(event) => {
+                                            setEmployeeSearch(event.target.value);
+                                            setEmployeePage(1);
+                                        }}
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Department</Label>
+                                    <Select
+                                        value={employeeDepartment}
+                                        onValueChange={(value) => {
+                                            setEmployeeDepartment(value);
+                                            setEmployeePage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All departments" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All departments</SelectItem>
+                                            {departments.map((department) => (
+                                                <SelectItem key={department} value={department}>
+                                                    {department}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-end">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={() => {
+                                            setEmployeeSearch('');
+                                            setEmployeeDepartment('all');
+                                            setEmployeePage(1);
+                                        }}
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
@@ -317,8 +427,14 @@ export default function Processing({
                                                 <Checkbox
                                                     checked={allSelected}
                                                     disabled={revisingGenerated}
-                                                    onCheckedChange={() => setSelectedIds(allSelected ? [] : employees.map((employee) => employee.id))}
-                                                    aria-label="Select all employees"
+                                                    onCheckedChange={() => setSelectedIds((current) => {
+                                                        const filteredIds = filteredEmployees.map((employee) => employee.id);
+
+                                                        return allSelected
+                                                            ? current.filter((id) => !filteredIds.includes(id))
+                                                            : Array.from(new Set([...current, ...filteredIds]));
+                                                    })}
+                                                    aria-label="Select all filtered employees"
                                                 />
                                             </th>
                                             <th className="p-4">Employee</th>
@@ -330,8 +446,8 @@ export default function Processing({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {employees.map((employee) => (
-                                            <tr key={employee.id} className="border-b dark:border-gray-700">
+                                        {visibleEmployees.map((employee) => (
+                                            <tr key={employee.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                 <td className="p-4">
                                                     <Checkbox
                                                         checked={selectedIds.includes(employee.id)}
@@ -351,8 +467,30 @@ export default function Processing({
                                                 <td className="p-4 text-right tabular-nums dark:text-white">{amount(employee.monthly_salary)}</td>
                                             </tr>
                                         ))}
+                                        {visibleEmployees.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="p-10 text-center text-gray-500 dark:text-gray-400">
+                                                    No employees match the selected filters.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="px-4">
+                                <Pagination
+                                    currentPage={employeePage}
+                                    lastPage={employeeLastPage}
+                                    from={employeeFrom}
+                                    to={employeeTo}
+                                    total={filteredEmployees.length}
+                                    perPage={employeePerPage}
+                                    onPageChange={setEmployeePage}
+                                    onPerPageChange={(value) => {
+                                        setEmployeePerPage(value);
+                                        setEmployeePage(1);
+                                    }}
+                                />
                             </div>
                             <div className="flex justify-end p-4">
                                 <Button type="button" disabled={!canGenerate || selectedIds.length === 0} onClick={openGeneration}>
@@ -365,9 +503,57 @@ export default function Processing({
                 )}
 
                 {period.status !== 'draft' && (
-                    <Card>
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" />Generated Payroll Details</CardTitle>
+                            <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-[1fr_220px_auto]">
+                                <div>
+                                    <Label className="dark:text-gray-200">Search</Label>
+                                    <Input
+                                        placeholder="Search payroll employee..."
+                                        value={itemSearch}
+                                        onChange={(event) => {
+                                            setItemSearch(event.target.value);
+                                            setItemPage(1);
+                                        }}
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Payment Status</Label>
+                                    <Select
+                                        value={itemStatus}
+                                        onValueChange={(value) => {
+                                            setItemStatus(value);
+                                            setItemPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All statuses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All statuses</SelectItem>
+                                            <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="paid">Paid</SelectItem>
+                                            <SelectItem value="skipped">Skipped</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-end">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={() => {
+                                            setItemSearch('');
+                                            setItemStatus('all');
+                                            setItemPage(1);
+                                        }}
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
@@ -385,8 +571,8 @@ export default function Processing({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {items.map((item) => (
-                                            <tr key={item.id} className="border-b dark:border-gray-700">
+                                        {visibleItems.map((item) => (
+                                            <tr key={item.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                 <td className="p-4 dark:text-white"><div className="font-medium">{item.employee_name}</div><div className="text-xs text-gray-500">{item.employee_code}</div></td>
                                                 <td className="p-4 text-sm dark:text-gray-300">{item.department ?? 'N/A'}</td>
                                                 <td className="p-4 text-right tabular-nums dark:text-gray-300">{amount(item.monthly_salary)}</td>
@@ -397,8 +583,30 @@ export default function Processing({
                                                 <td className="p-4"><Badge variant={item.status === 'paid' ? 'success' : 'warning'}>{item.status}</Badge></td>
                                             </tr>
                                         ))}
+                                        {visibleItems.length === 0 && (
+                                            <tr>
+                                                <td colSpan={8} className="p-10 text-center text-gray-500 dark:text-gray-400">
+                                                    No payroll items match the selected filters.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="px-4 pb-4">
+                                <Pagination
+                                    currentPage={itemPage}
+                                    lastPage={itemLastPage}
+                                    from={itemFrom}
+                                    to={itemTo}
+                                    total={filteredItems.length}
+                                    perPage={itemPerPage}
+                                    onPageChange={setItemPage}
+                                    onPerPageChange={(value) => {
+                                        setItemPerPage(value);
+                                        setItemPage(1);
+                                    }}
+                                />
                             </div>
                         </CardContent>
                     </Card>

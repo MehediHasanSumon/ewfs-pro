@@ -557,12 +557,13 @@ class PartyLedgerService
     public function paginatedVoucherRows(
         Builder $query,
         int $perPage,
-        string $status
+        string $status,
+        string $pageName = 'page'
     ): LengthAwarePaginator {
         $paginator = $query
             ->orderByDesc('voucher_date')
             ->orderByDesc('id')
-            ->paginate($perPage)
+            ->paginate($perPage, ['*'], $pageName)
             ->withQueryString();
 
         $paginator->setCollection(

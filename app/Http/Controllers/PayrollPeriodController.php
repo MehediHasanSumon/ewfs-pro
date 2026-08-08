@@ -53,7 +53,31 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
     public function index(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+        $status = in_array($request->input('status'), [
+            PayrollPeriod::STATUS_DRAFT,
+            PayrollPeriod::STATUS_PROCESSING,
+            PayrollPeriod::STATUS_GENERATED,
+            PayrollPeriod::STATUS_PAID,
+            PayrollPeriod::STATUS_CANCELLED,
+        ], true)
+            ? (string) $request->input('status')
+            : 'all';
+        $month = $request->integer('month');
+        $month = $month >= 1 && $month <= 12 ? $month : null;
+        $year = $request->integer('year');
+        $year = $year >= 2000 && $year <= 2100 ? $year : null;
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+
         $periods = PayrollPeriod::query()
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                $query
+                    ->where('payroll_code', 'like', '%'.$search.'%')
+                    ->orWhere('year', 'like', '%'.$search.'%');
+            }))
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($month, fn ($query, int $month) => $query->where('month', $month))
+            ->when($year, fn ($query, int $year) => $query->where('year', $year))
             ->when(
                 $request->integer('employee_id'),
                 fn ($query, int $employeeId) => $query->whereHas(
@@ -64,7 +88,7 @@ class PayrollPeriodController extends Controller implements HasMiddleware
             ->withCount(['snapshots', 'items'])
             ->orderByDesc('year')
             ->orderByDesc('month')
-            ->paginate(12)
+            ->paginate($perPage)
             ->withQueryString();
         $periods->through(
             fn (PayrollPeriod $period) => (new PayrollPeriodResource($period))
@@ -73,7 +97,14 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
         return Inertia::render('Payroll/Periods', [
             'periods' => $periods,
-            'filters' => $request->only(['page', 'employee_id']),
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'month' => $month,
+                'year' => $year,
+                'per_page' => $perPage,
+                'employee_id' => $request->integer('employee_id') ?: null,
+            ],
         ]);
     }
 
@@ -267,15 +298,36 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
     public function history(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+        $status = in_array($request->input('status'), [
+            PayrollPeriod::STATUS_PAID,
+            PayrollPeriod::STATUS_CANCELLED,
+        ], true)
+            ? (string) $request->input('status')
+            : 'all';
+        $month = $request->integer('month');
+        $month = $month >= 1 && $month <= 12 ? $month : null;
+        $year = $request->integer('year');
+        $year = $year >= 2000 && $year <= 2100 ? $year : null;
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+
         $periods = PayrollPeriod::query()
             ->whereIn('status', [
                 PayrollPeriod::STATUS_PAID,
                 PayrollPeriod::STATUS_CANCELLED,
             ])
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                $query
+                    ->where('payroll_code', 'like', '%'.$search.'%')
+                    ->orWhere('year', 'like', '%'.$search.'%');
+            }))
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($month, fn ($query, int $month) => $query->where('month', $month))
+            ->when($year, fn ($query, int $year) => $query->where('year', $year))
             ->withCount(['snapshots', 'items'])
             ->orderByDesc('year')
             ->orderByDesc('month')
-            ->paginate(12)
+            ->paginate($perPage)
             ->withQueryString();
         $periods->through(
             fn (PayrollPeriod $period) => (new PayrollPeriodResource($period))
@@ -284,6 +336,13 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
         return Inertia::render('Payroll/History', [
             'periods' => $periods,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'month' => $month,
+                'year' => $year,
+                'per_page' => $perPage,
+            ],
         ]);
     }
 

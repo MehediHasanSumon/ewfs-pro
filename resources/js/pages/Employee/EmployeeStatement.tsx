@@ -3,6 +3,11 @@ import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
+import { dashboard } from '@/routes';
+import { type BreadcrumbItem } from '@/types';
 import { ArrowLeft, FileText, Filter, X, Download } from 'lucide-react';
 import { useState } from 'react';
 
@@ -38,8 +43,8 @@ interface Receipt {
     description?: string;
 }
 
-interface PaginatedPayments {
-    data: Payment[];
+interface PaginatedRows<T> {
+    data: T[];
     current_page: number;
     last_page: number;
     per_page: number;
@@ -50,24 +55,56 @@ interface PaginatedPayments {
 
 interface EmployeeStatementProps {
     employee: Employee;
-    payments: PaginatedPayments;
-    receipts: Receipt[];
+    payments: PaginatedRows<Payment>;
+    receipts: PaginatedRows<Receipt>;
     currentBalance: number;
+    view: string;
+    filters: {
+        start_date?: string;
+        end_date?: string;
+        per_page?: number;
+    };
 }
 
-export default function EmployeeStatement({ employee, payments, receipts, currentBalance }: EmployeeStatementProps) {
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+export default function EmployeeStatement({
+    employee,
+    payments,
+    receipts,
+    currentBalance,
+    view,
+    filters,
+}: EmployeeStatementProps) {
+    const [startDate, setStartDate] = useState(filters.start_date ?? '');
+    const [endDate, setEndDate] = useState(filters.end_date ?? '');
+    const [perPage, setPerPage] = useState(filters.per_page ?? payments.per_page ?? 10);
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Dashboard', href: dashboard().url },
+        { title: 'Employees', href: '/employees' },
+        { title: employee.employee_name, href: `/employees/${employee.id}` },
+        { title: 'Statement', href: `/employees/${employee.id}/statement` },
+    ];
+
+    const query = (overrides: Record<string, string | number | undefined> = {}) => ({
+        view: view === 'all' ? undefined : view,
+        start_date: overrides.start_date ?? (startDate || undefined),
+        end_date: overrides.end_date ?? (endDate || undefined),
+        per_page: overrides.per_page ?? perPage,
+        payment_page: overrides.payment_page ?? payments.current_page,
+        receipt_page: overrides.receipt_page ?? receipts.current_page,
+    });
 
     const handleFilter = () => {
-        router.get(`/employees/${employee.id}/statement`, {
-            start_date: startDate,
-            end_date: endDate
+        router.get(`/employees/${employee.id}/statement`, query({
+            payment_page: 1,
+            receipt_page: 1,
+        }), {
+            preserveState: true,
+            preserveScroll: true,
         });
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Statement - ${employee.employee_name}`} />
             
             <div className="p-6 space-y-6">
@@ -143,21 +180,21 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                     <CardContent>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                             <div>
-                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Start Date</label>
-                                <input 
+                                <Label className="dark:text-gray-200">Start Date</Label>
+                                <Input
                                     type="date"
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">End Date</label>
-                                <input 
+                                <Label className="dark:text-gray-200">End Date</Label>
+                                <Input
                                     type="date"
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
                             <div className="flex items-end gap-2">
@@ -168,7 +205,15 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                                     onClick={() => {
                                         setStartDate('');
                                         setEndDate('');
-                                        router.get(`/employees/${employee.id}/statement`);
+                                        router.get(`/employees/${employee.id}/statement`, query({
+                                            start_date: '',
+                                            end_date: '',
+                                            payment_page: 1,
+                                            receipt_page: 1,
+                                        }), {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                        });
                                     }}
                                     variant="secondary"
                                     className="px-4"
@@ -219,7 +264,9 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                                         {payments && payments.data && payments.data.length > 0 ? (
                                             payments.data.map((payment, index) => (
                                                 <tr key={payment.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                    <td className="p-4 text-[13px] dark:text-white">{index + 1}</td>
+                                                    <td className="p-4 text-[13px] dark:text-white">
+                                                        {(payments.current_page - 1) * payments.per_page + index + 1}
+                                                    </td>
                                                     <td className="p-4 text-[13px] dark:text-white">{payment.voucher_no}</td>
                                                     <td className="p-4 text-[13px] dark:text-white">
                                                         {new Date(payment.date).toLocaleDateString('en-GB')}
@@ -246,45 +293,31 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                                 </table>
                             </div>
                             
-                            {/* Pagination */}
-                            {payments && payments.last_page > 1 && (
-                                <div className="flex justify-between items-center mt-4 px-4 pb-4">
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                        Showing {payments.from || 0} to {payments.to || 0} of {payments.total} results
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            className="h-8 px-2"
-                                            disabled={payments.current_page === 1}
-                                            onClick={() => router.get(`/employees/${employee.id}/statement`, { page: payments.current_page - 1 })}
-                                        >
-                                            Previous
-                                        </Button>
-                                        {Array.from({ length: payments.last_page }, (_, i) => i + 1).map((page) => (
-                                            <Button 
-                                                key={page}
-                                                variant={page === payments.current_page ? "default" : "outline"} 
-                                                size="sm" 
-                                                className="h-8 px-3"
-                                                onClick={() => router.get(`/employees/${employee.id}/statement`, { page })}
-                                            >
-                                                {page}
-                                            </Button>
-                                        ))}
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            className="h-8 px-2"
-                                            disabled={payments.current_page === payments.last_page}
-                                            onClick={() => router.get(`/employees/${employee.id}/statement`, { page: payments.current_page + 1 })}
-                                        >
-                                            Next
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                            <Pagination
+                                currentPage={payments.current_page}
+                                lastPage={payments.last_page}
+                                from={payments.from}
+                                to={payments.to}
+                                total={payments.total}
+                                perPage={perPage}
+                                onPageChange={(page) => router.get(
+                                    `/employees/${employee.id}/statement`,
+                                    query({ payment_page: page }),
+                                    { preserveState: true, preserveScroll: true },
+                                )}
+                                onPerPageChange={(value) => {
+                                    setPerPage(value);
+                                    router.get(
+                                        `/employees/${employee.id}/statement`,
+                                        query({
+                                            per_page: value,
+                                            payment_page: 1,
+                                            receipt_page: 1,
+                                        }),
+                                        { preserveState: true, preserveScroll: true },
+                                    );
+                                }}
+                            />
                         </CardContent>
                     </Card>
 
@@ -321,10 +354,12 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {receipts && receipts.length > 0 ? (
-                                            receipts.map((receipt, index) => (
+                                        {receipts.data.length > 0 ? (
+                                            receipts.data.map((receipt, index) => (
                                                 <tr key={receipt.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                    <td className="p-4 text-[13px] dark:text-white">{index + 1}</td>
+                                                    <td className="p-4 text-[13px] dark:text-white">
+                                                        {(receipts.current_page - 1) * receipts.per_page + index + 1}
+                                                    </td>
                                                     <td className="p-4 text-[13px] dark:text-white">{receipt.voucher_no}</td>
                                                     <td className="p-4 text-[13px] dark:text-white">
                                                         {new Date(receipt.date).toLocaleDateString('en-GB')}
@@ -350,6 +385,31 @@ export default function EmployeeStatement({ employee, payments, receipts, curren
                                     </tbody>
                                 </table>
                             </div>
+                            <Pagination
+                                currentPage={receipts.current_page}
+                                lastPage={receipts.last_page}
+                                from={receipts.from}
+                                to={receipts.to}
+                                total={receipts.total}
+                                perPage={perPage}
+                                onPageChange={(page) => router.get(
+                                    `/employees/${employee.id}/statement`,
+                                    query({ receipt_page: page }),
+                                    { preserveState: true, preserveScroll: true },
+                                )}
+                                onPerPageChange={(value) => {
+                                    setPerPage(value);
+                                    router.get(
+                                        `/employees/${employee.id}/statement`,
+                                        query({
+                                            per_page: value,
+                                            payment_page: 1,
+                                            receipt_page: 1,
+                                        }),
+                                        { preserveState: true, preserveScroll: true },
+                                    );
+                                }}
+                            />
                         </CardContent>
                     </Card>
                 </div>
