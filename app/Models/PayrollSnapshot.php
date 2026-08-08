@@ -19,6 +19,7 @@ class PayrollSnapshot extends Model
         'department_name',
         'designation_name',
         'basic_salary',
+        'monthly_salary',
         'home_rent_percent',
         'home_rent_amount',
         'medical_percent',
@@ -38,6 +39,7 @@ class PayrollSnapshot extends Model
     {
         return [
             'basic_salary' => 'decimal:4',
+            'monthly_salary' => 'decimal:4',
             'home_rent_percent' => 'decimal:4',
             'home_rent_amount' => 'decimal:4',
             'medical_percent' => 'decimal:4',

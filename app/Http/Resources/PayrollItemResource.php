@@ -25,13 +25,47 @@ class PayrollItemResource extends JsonResource
                 'name' => $snapshot->paymentAccount->name,
                 'ac_number' => $snapshot->paymentAccount->ac_number,
             ] : null,
+            'monthly_salary' => (float) (
+                $this->monthly_salary
+                ?? $snapshot?->monthly_salary
+                ?? $this->net_salary
+            ),
             'gross_salary' => (float) $this->gross_salary,
             'net_salary' => (float) $this->net_salary,
+            'total_deduction' => (float) $this->total_deduction,
+            'total_bonus' => (float) $this->total_bonus,
             'advance_balance' => (float) $this->advance_balance,
             'advance_applied' => (float) $this->advance_applied,
+            'salary_payable' => (float) $this->salary_payable,
             'loan_balance' => (float) $this->loan_balance,
             'net_payable' => (float) $this->net_payable,
             'status' => $this->status,
+            'deductions' => $this->whenLoaded(
+                'deductions',
+                fn () => $this->deductions->map(fn ($deduction) => [
+                    'id' => $deduction->id,
+                    'amount' => (float) $deduction->amount,
+                    'reason' => $deduction->reason,
+                ])->values()
+            ),
+            'extras' => $this->whenLoaded(
+                'extras',
+                fn () => $this->extras->map(fn ($extra) => [
+                    'id' => $extra->id,
+                    'amount' => (float) $extra->amount,
+                    'remarks' => $extra->remarks,
+                    'status' => $extra->status,
+                    'voucher_transaction_type' => $extra->voucherTransactionType ? [
+                        'id' => $extra->voucherTransactionType->id,
+                        'code' => $extra->voucherTransactionType->code,
+                        'name' => $extra->voucherTransactionType->name,
+                    ] : null,
+                    'payment_voucher' => $extra->paymentVoucher ? [
+                        'id' => $extra->paymentVoucher->id,
+                        'voucher_no' => $extra->paymentVoucher->voucher_no,
+                    ] : null,
+                ])->values()
+            ),
             'payment_voucher' => $this->paymentVoucher ? [
                 'id' => $this->paymentVoucher->id,
                 'voucher_no' => $this->paymentVoucher->voucher_no,

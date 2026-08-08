@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, router } from '@inertiajs/react';
-import { ArrowLeft, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
 
 interface Period {
     id: number;
@@ -25,7 +25,7 @@ export default function History({ periods }: { periods: Paginator }) {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-semibold dark:text-white">Payroll History</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Immutable completed and locked payroll periods.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Completed and cancelled payroll records.</p>
                     </div>
                     <Button type="button" variant="outline" onClick={() => router.get('/payroll')}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -49,7 +49,8 @@ export default function History({ periods }: { periods: Paginator }) {
                                         <td className="p-4 font-medium dark:text-white">{period.label}</td>
                                         <td className="p-4 text-sm dark:text-gray-300">{period.item_count ?? 0}</td>
                                         <td className="p-4 flex items-center gap-2 text-sm capitalize dark:text-gray-300">
-                                            {period.status === 'locked' && <LockKeyhole className="h-4 w-4" />}
+                                            {period.status === 'paid' && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                                            {period.status === 'cancelled' && <XCircle className="h-4 w-4 text-gray-500" />}
                                             {period.status}
                                         </td>
                                         <td className="p-4 text-right">

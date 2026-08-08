@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayrollItem extends Model
 {
@@ -18,10 +19,14 @@ class PayrollItem extends Model
         'payroll_period_id',
         'payroll_snapshot_id',
         'employee_id',
+        'monthly_salary',
         'gross_salary',
         'net_salary',
+        'total_deduction',
+        'total_bonus',
         'advance_balance',
         'advance_applied',
+        'salary_payable',
         'loan_balance',
         'net_payable',
         'advance_adjustment_voucher_id',
@@ -36,10 +41,14 @@ class PayrollItem extends Model
     protected function casts(): array
     {
         return [
+            'monthly_salary' => 'decimal:4',
             'gross_salary' => 'decimal:4',
             'net_salary' => 'decimal:4',
+            'total_deduction' => 'decimal:4',
+            'total_bonus' => 'decimal:4',
             'advance_balance' => 'decimal:4',
             'advance_applied' => 'decimal:4',
+            'salary_payable' => 'decimal:4',
             'loan_balance' => 'decimal:4',
             'net_payable' => 'decimal:4',
             'processed_at' => 'datetime',
@@ -74,6 +83,21 @@ class PayrollItem extends Model
     public function salaryPayment(): BelongsTo
     {
         return $this->belongsTo(EmployeeSalaryPayment::class, 'employee_salary_payment_id');
+    }
+
+    public function deductions(): HasMany
+    {
+        return $this->hasMany(PayrollDeduction::class);
+    }
+
+    public function extras(): HasMany
+    {
+        return $this->hasMany(PayrollExtra::class);
+    }
+
+    public function voucherLinks(): HasMany
+    {
+        return $this->hasMany(PayrollVoucherLink::class);
     }
 
     public function scopePending(Builder $query): Builder

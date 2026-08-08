@@ -6,12 +6,17 @@ use App\Jobs\ProcessPayrollBatch;
 use App\Models\Account;
 use App\Models\Employee;
 use App\Models\EmployeeSalaryPayment;
+use App\Models\PayrollExtra;
 use App\Models\PayrollItem;
+use App\Models\PayrollPeriod;
+use App\Models\PayrollVoucherLink;
+use App\Models\Voucher;
 use App\Services\AccountingService;
 use App\Services\CustomerSecurityDepositService;
 use App\Services\DocumentNumberService;
 use App\Services\PartyLedgerService;
 use App\Services\PayrollService;
+use App\Services\PayrollVoucherSynchronizationService;
 use App\Services\SystemAccountService;
 use App\Services\VoucherPostingService;
 use Illuminate\Database\Schema\Blueprint;
@@ -219,13 +224,17 @@ beforeEach(function (): void {
     });
     Schema::create('payroll_periods', function (Blueprint $table): void {
         $table->id();
+        $table->string('payroll_code')->nullable()->unique();
         $table->unsignedTinyInteger('month');
         $table->unsignedSmallInteger('year');
+        $table->text('remarks')->nullable();
         $table->string('status');
         $table->date('payable_date')->nullable();
         $table->timestamp('started_at')->nullable();
+        $table->timestamp('generated_at')->nullable();
         $table->timestamp('completed_at')->nullable();
         $table->timestamp('locked_at')->nullable();
+        $table->timestamp('cancelled_at')->nullable();
         $table->unsignedBigInteger('created_by')->nullable();
         $table->unsignedBigInteger('updated_by')->nullable();
         $table->timestamps();
@@ -242,6 +251,7 @@ beforeEach(function (): void {
         $table->string('department_name')->nullable();
         $table->string('designation_name')->nullable();
         $table->decimal('basic_salary', 24, 4);
+        $table->decimal('monthly_salary', 24, 4)->nullable();
         $table->decimal('home_rent_percent', 8, 4)->default(0);
         $table->decimal('home_rent_amount', 24, 4)->default(0);
         $table->decimal('medical_percent', 8, 4)->default(0);
@@ -263,10 +273,14 @@ beforeEach(function (): void {
         $table->foreignId('payroll_period_id');
         $table->foreignId('payroll_snapshot_id')->unique();
         $table->foreignId('employee_id');
+        $table->decimal('monthly_salary', 24, 4)->nullable();
         $table->decimal('gross_salary', 24, 4);
         $table->decimal('net_salary', 24, 4);
+        $table->decimal('total_deduction', 24, 4)->default(0);
+        $table->decimal('total_bonus', 24, 4)->default(0);
         $table->decimal('advance_balance', 24, 4)->default(0);
         $table->decimal('advance_applied', 24, 4)->default(0);
+        $table->decimal('salary_payable', 24, 4)->default(0);
         $table->decimal('loan_balance', 24, 4)->default(0);
         $table->decimal('net_payable', 24, 4)->default(0);
         $table->foreignId('advance_adjustment_voucher_id')->nullable()->unique();
@@ -278,6 +292,34 @@ beforeEach(function (): void {
         $table->unsignedBigInteger('updated_by')->nullable();
         $table->timestamps();
         $table->unique(['payroll_period_id', 'employee_id']);
+    });
+    Schema::create('payroll_deductions', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('payroll_item_id');
+        $table->decimal('amount', 24, 4);
+        $table->string('reason');
+        $table->unsignedBigInteger('created_by')->nullable();
+        $table->timestamps();
+    });
+    Schema::create('payroll_extras', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('payroll_item_id');
+        $table->foreignId('voucher_transaction_type_id');
+        $table->decimal('amount', 24, 4);
+        $table->text('remarks')->nullable();
+        $table->foreignId('payment_voucher_id')->nullable()->unique();
+        $table->string('status')->default('pending');
+        $table->unsignedBigInteger('created_by')->nullable();
+        $table->timestamps();
+    });
+    Schema::create('payroll_voucher_links', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('payroll_item_id')->nullable();
+        $table->foreignId('payroll_extra_id')->nullable();
+        $table->foreignId('voucher_id')->unique();
+        $table->string('role');
+        $table->string('status')->default('posted');
+        $table->timestamps();
     });
 });
 
@@ -319,6 +361,15 @@ function payrollFixture(): array
             'updated_at' => now(),
         ]);
     }
+    $types['festival_bonus'] = DB::table('voucher_transaction_types')->insertGetId([
+        'voucher_category_id' => $employeeCategory,
+        'code' => '2001',
+        'name' => 'Festival Bonus',
+        'voucher_type' => VoucherTransactionTypeHelper::paymentVoucherType(),
+        'status' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
     DB::table('accounting_periods')->insert([
         'code' => '2026',
         'starts_on' => '2026-01-01',
@@ -478,6 +529,147 @@ it('keeps payroll salary snapshots immutable', function (): void {
 
     expect(fn () => $snapshot->update(['net_salary' => 1]))
         ->toThrow(ValidationException::class);
+});
+
+it('generates normalized deductions and separate extra payment vouchers', function (): void {
+    $fixture = payrollFixture();
+    $period = app(PayrollService::class)->createPeriod([
+        'month' => 8,
+        'year' => 2026,
+    ]);
+
+    $period = app(PayrollService::class)->generate($period, [
+        'employees' => [[
+            'employee_id' => $fixture['employee']->id,
+            'deductions' => [[
+                'amount' => 2000,
+                'reason' => 'Late attendance',
+            ]],
+            'extras' => [
+                [
+                    'voucher_transaction_type_id' => $fixture['types']['festival_bonus'],
+                    'amount' => 5000,
+                    'remarks' => 'Festival bonus',
+                ],
+                [
+                    'voucher_transaction_type_id' => $fixture['types']['festival_bonus'],
+                    'amount' => 2000,
+                    'remarks' => 'Overtime',
+                ],
+            ],
+        ]],
+    ]);
+
+    $item = $period->items()->with('deductions', 'extras')->firstOrFail();
+
+    expect($period->status)->toBe(PayrollPeriod::STATUS_GENERATED)
+        ->and($item->deductions)->toHaveCount(1)
+        ->and($item->extras)->toHaveCount(2)
+        ->and((float) $item->monthly_salary)->toBe(30000.0)
+        ->and((float) $item->total_deduction)->toBe(2000.0)
+        ->and((float) $item->total_bonus)->toBe(7000.0)
+        ->and((float) $item->salary_payable)->toBe(28000.0)
+        ->and((float) $item->net_payable)->toBe(35000.0);
+
+    app(PayrollService::class)->pay($period, [
+        'date' => '2026-08-08',
+        'employee_ids' => [$fixture['employee']->id],
+    ]);
+
+    expect($period->fresh()->status)->toBe(PayrollPeriod::STATUS_PAID)
+        ->and(PayrollVoucherLink::query()->where('payroll_item_id', $item->id)->count())->toBe(3)
+        ->and(Voucher::query()->where('voucher_transaction_type_id', $fixture['types']['festival_bonus'])->count())->toBe(2)
+        ->and(EmployeeSalaryPayment::query()->where('employee_id', $fixture['employee']->id)->count())->toBe(1);
+});
+
+it('revises an unpaid generated payroll without changing its salary snapshot', function (): void {
+    $fixture = payrollFixture();
+    $service = app(PayrollService::class);
+    $period = $service->createPeriod([
+        'month' => 9,
+        'year' => 2026,
+    ]);
+    $period = $service->generate($period, [
+        'employees' => [[
+            'employee_id' => $fixture['employee']->id,
+            'deductions' => [],
+            'extras' => [],
+        ]],
+    ]);
+    $snapshotId = $period->snapshots->firstOrFail()->id;
+    $fixture['employee']->salaryStructure()->update([
+        'gross_salary' => 40000,
+        'basic_salary' => 40000,
+    ]);
+
+    $revised = $service->generate($period->fresh(), [
+        'employees' => [[
+            'employee_id' => $fixture['employee']->id,
+            'deductions' => [[
+                'amount' => 1000,
+                'reason' => 'Absence',
+            ]],
+            'extras' => [[
+                'voucher_transaction_type_id' => $fixture['types']['festival_bonus'],
+                'amount' => 3000,
+                'remarks' => 'Performance bonus',
+            ]],
+        ]],
+    ]);
+    $item = $revised->items()->with('snapshot')->firstOrFail();
+
+    expect($item->payroll_snapshot_id)->toBe($snapshotId)
+        ->and((float) $item->snapshot->monthly_salary)->toBe(30000.0)
+        ->and((float) $item->monthly_salary)->toBe(30000.0)
+        ->and((float) $item->total_deduction)->toBe(1000.0)
+        ->and((float) $item->total_bonus)->toBe(3000.0)
+        ->and((float) $item->net_payable)->toBe(32000.0);
+});
+
+it('synchronizes payroll status when an extra voucher is reversed and repaid', function (): void {
+    $fixture = payrollFixture();
+    $service = app(PayrollService::class);
+    $period = $service->createPeriod([
+        'month' => 10,
+        'year' => 2026,
+    ]);
+    $period = $service->generate($period, [
+        'employees' => [[
+            'employee_id' => $fixture['employee']->id,
+            'deductions' => [],
+            'extras' => [[
+                'voucher_transaction_type_id' => $fixture['types']['festival_bonus'],
+                'amount' => 5000,
+                'remarks' => 'Festival bonus',
+            ]],
+        ]],
+    ]);
+    $service->pay($period, [
+        'date' => '2026-08-08',
+        'employee_ids' => [$fixture['employee']->id],
+    ]);
+    $extra = PayrollExtra::query()
+        ->with('paymentVoucher')
+        ->firstOrFail();
+
+    app(PayrollVoucherSynchronizationService::class)
+        ->reverse($extra->paymentVoucher);
+
+    expect($period->fresh()->status)->toBe(PayrollPeriod::STATUS_GENERATED)
+        ->and($extra->fresh()->status)->toBe(PayrollExtra::STATUS_REVERSED)
+        ->and($extra->fresh()->payment_voucher_id)->toBeNull()
+        ->and($period->items()->firstOrFail()->status)->toBe(PayrollItem::STATUS_PENDING);
+
+    $service->pay($period->fresh(), [
+        'date' => '2026-08-08',
+        'employee_ids' => [$fixture['employee']->id],
+    ]);
+
+    expect($period->fresh()->status)->toBe(PayrollPeriod::STATUS_PAID)
+        ->and(PayrollExtra::query()->firstOrFail()->status)->toBe(PayrollExtra::STATUS_PAID)
+        ->and(PayrollVoucherLink::query()
+            ->where('role', PayrollVoucherLink::ROLE_EXTRA)
+            ->count())->toBe(2);
 });
 
 it('rejects duplicate payroll periods', function (): void {

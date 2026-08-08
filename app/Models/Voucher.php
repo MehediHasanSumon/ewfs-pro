@@ -146,6 +146,11 @@ class Voucher extends Model
         );
     }
 
+    public function payrollLink(): HasOne
+    {
+        return $this->hasOne(PayrollVoucherLink::class);
+    }
+
     public function getDateAttribute(): ?string
     {
         return $this->voucher_date?->format('Y-m-d');

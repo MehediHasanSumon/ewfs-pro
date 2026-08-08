@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\Employee;
 use App\Models\EmployeeSalaryPayment;
 use App\Models\PayrollItem;
+use App\Models\PayrollVoucherLink;
 use App\Models\Voucher;
 use App\Models\VoucherTransactionType;
 use Illuminate\Support\Facades\DB;
@@ -83,19 +84,40 @@ class VoucherPostingService
         });
     }
 
-    public function reverse(Voucher $voucher, string $reason = 'Voucher deleted from the workflow.'): void
-    {
-        DB::transaction(function () use ($voucher, $reason): void {
+    public function reverse(
+        Voucher $voucher,
+        string $reason = 'Voucher deleted from the workflow.',
+        bool $allowPayrollVoucher = false
+    ): void {
+        DB::transaction(function () use (
+            $voucher,
+            $reason,
+            $allowPayrollVoucher
+        ): void {
             if (
-                Schema::hasTable('payroll_items')
-                && PayrollItem::query()
-                    ->where(fn ($query) => $query
-                        ->where('payment_voucher_id', $voucher->id)
-                        ->orWhere('advance_adjustment_voucher_id', $voucher->id))
-                    ->exists()
+                ! $allowPayrollVoucher
+                && (
+                    (
+                        Schema::hasTable('payroll_voucher_links')
+                        && PayrollVoucherLink::query()
+                            ->where('voucher_id', $voucher->id)
+                            ->exists()
+                    )
+                    || (
+                        Schema::hasTable('payroll_items')
+                        && PayrollItem::query()
+                            ->where(fn ($query) => $query
+                                ->where('payment_voucher_id', $voucher->id)
+                                ->orWhere(
+                                    'advance_adjustment_voucher_id',
+                                    $voucher->id
+                                ))
+                            ->exists()
+                    )
+                )
             ) {
                 throw ValidationException::withMessages([
-                    'voucher' => 'Payroll vouchers are immutable and cannot be reversed independently.',
+                    'voucher' => 'Payroll vouchers must be reversed through the synchronized payroll workflow.',
                 ]);
             }
 

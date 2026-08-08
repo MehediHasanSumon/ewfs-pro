@@ -112,6 +112,14 @@ class Employee extends Model
         return $this->hasMany(PayrollItem::class);
     }
 
+    public function payrollDeductions(): HasMany
+    {
+        return $this->hasManyThrough(
+            PayrollDeduction::class,
+            PayrollItem::class
+        );
+    }
+
     public function shiftClosingProductItems(): HasMany
     {
         return $this->hasMany(ShiftClosingProductItem::class);

@@ -274,11 +274,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Payroll routes
     Route::get('payroll', [PayrollPeriodController::class, 'index'])->name('payroll.periods.index');
     Route::post('payroll', [PayrollPeriodController::class, 'store'])->name('payroll.periods.store');
+    Route::put('payroll/{period}', [PayrollPeriodController::class, 'update'])->name('payroll.periods.update');
     Route::get('payroll/history', [PayrollPeriodController::class, 'history'])->name('payroll.history');
     Route::get('payroll/{period}/processing', [PayrollPeriodController::class, 'processing'])->name('payroll.processing');
     Route::post('payroll/{period}/start', [PayrollPeriodController::class, 'start'])->name('payroll.periods.start');
+    Route::post('payroll/{period}/generate', [PayrollPeriodController::class, 'generate'])->name('payroll.periods.generate');
     Route::post('payroll/{period}/process', [PayrollPeriodController::class, 'process'])->name('payroll.periods.process');
-    Route::post('payroll/{period}/lock', [PayrollPeriodController::class, 'lock'])->name('payroll.periods.lock');
+    Route::post('payroll/{period}/cancel', [PayrollPeriodController::class, 'cancel'])->name('payroll.periods.cancel');
+    Route::delete('payroll/{period}', [PayrollPeriodController::class, 'destroy'])->name('payroll.periods.destroy');
 
     // Supplier routes
     Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');

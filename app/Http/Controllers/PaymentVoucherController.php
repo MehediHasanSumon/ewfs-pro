@@ -6,11 +6,11 @@ use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\PaymentVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\PayrollItem;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
+use App\Services\PayrollVoucherSynchronizationService;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -22,7 +22,8 @@ use Inertia\Inertia;
 class PaymentVoucherController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly VoucherPostingService $vouchers
+        private readonly VoucherPostingService $vouchers,
+        private readonly PayrollVoucherSynchronizationService $payrollVouchers
     ) {}
 
     public static function middleware(): array
@@ -85,16 +86,14 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::paymentVoucherType(),
             404
         );
+        if ($this->payrollVouchers->isPayrollVoucher($voucher)) {
+            throw ValidationException::withMessages([
+                'voucher' => 'Payroll-generated vouchers cannot be edited. Reverse the voucher and repay the affected payroll component.',
+            ]);
+        }
         if ($voucher->salaryPayment()->exists()) {
             throw ValidationException::withMessages([
                 'voucher' => 'Salary payment vouchers cannot be edited from Payment Voucher. Reverse the voucher and process the salary again.',
-            ]);
-        }
-        if (PayrollItem::query()
-            ->where('advance_adjustment_voucher_id', $voucher->id)
-            ->exists()) {
-            throw ValidationException::withMessages([
-                'voucher' => 'Payroll adjustment vouchers cannot be edited. Reverse the payroll period if a correction is required.',
             ]);
         }
         $this->vouchers->replace($voucher, $request->validated());
@@ -109,16 +108,11 @@ class PaymentVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::paymentVoucherType(),
             404
         );
-        abort_unless(
-            ! PayrollItem::query()
-                ->where(fn ($query) => $query
-                    ->where('payment_voucher_id', $voucher->id)
-                    ->orWhere('advance_adjustment_voucher_id', $voucher->id))
-                ->exists(),
-            422,
-            'Payroll adjustment vouchers cannot be deleted independently.'
-        );
-        $this->vouchers->reverse($voucher);
+        if ($this->payrollVouchers->isPayrollVoucher($voucher)) {
+            $this->payrollVouchers->reverse($voucher);
+        } else {
+            $this->vouchers->reverse($voucher);
+        }
 
         return back()->with('success', 'Payment voucher deleted successfully.');
     }
@@ -139,16 +133,11 @@ class PaymentVoucherController extends Controller implements HasMiddleware
             ->with('journalEntry')
             ->get()
             ->each(function (Voucher $voucher): void {
-                abort_unless(
-                    ! PayrollItem::query()
-                        ->where(fn ($query) => $query
-                            ->where('payment_voucher_id', $voucher->id)
-                            ->orWhere('advance_adjustment_voucher_id', $voucher->id))
-                        ->exists(),
-                    422,
-                    'Payroll adjustment vouchers cannot be deleted independently.'
-                );
-                $this->vouchers->reverse($voucher);
+                if ($this->payrollVouchers->isPayrollVoucher($voucher)) {
+                    $this->payrollVouchers->reverse($voucher);
+                } else {
+                    $this->vouchers->reverse($voucher);
+                }
             });
 
         return back()->with('success', 'Payment vouchers deleted successfully.');

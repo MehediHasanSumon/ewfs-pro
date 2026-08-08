@@ -11,14 +11,18 @@ class PayrollPeriodResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'payroll_code' => $this->payroll_code,
             'month' => $this->month,
             'year' => $this->year,
             'label' => $this->label(),
+            'remarks' => $this->remarks,
             'status' => $this->status,
             'payable_date' => $this->payable_date?->format('Y-m-d'),
             'started_at' => $this->started_at?->toISOString(),
+            'generated_at' => $this->generated_at?->toISOString(),
             'completed_at' => $this->completed_at?->toISOString(),
             'locked_at' => $this->locked_at?->toISOString(),
+            'cancelled_at' => $this->cancelled_at?->toISOString(),
             'snapshot_count' => $this->whenCounted('snapshots'),
             'item_count' => $this->whenCounted('items'),
             'pending_count' => $this->when(

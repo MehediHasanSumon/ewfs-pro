@@ -6,11 +6,11 @@ use App\Helpers\VoucherTransactionTypeHelper;
 use App\Http\Requests\ReceivedVoucherRequest;
 use App\Models\Account;
 use App\Models\CompanySetting;
-use App\Models\PayrollItem;
 use App\Models\Shift;
 use App\Models\ShiftClosing;
 use App\Models\Voucher;
 use App\Models\VoucherCategory;
+use App\Services\PayrollVoucherSynchronizationService;
 use App\Services\VoucherPostingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -21,7 +21,8 @@ use Inertia\Inertia;
 class ReceivedVoucherController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly VoucherPostingService $vouchers
+        private readonly VoucherPostingService $vouchers,
+        private readonly PayrollVoucherSynchronizationService $payrollVouchers
     ) {}
 
     public static function middleware(): array
@@ -91,11 +92,9 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
             404
         );
         abort_unless(
-            ! PayrollItem::query()
-                ->where('advance_adjustment_voucher_id', $voucher->id)
-                ->exists(),
+            ! $this->payrollVouchers->isPayrollVoucher($voucher),
             422,
-            'Payroll adjustment vouchers cannot be edited independently.'
+            'Payroll-generated vouchers cannot be edited. Reverse the voucher and repay the affected payroll component.'
         );
         $this->vouchers->replace($voucher, $request->validated());
 
@@ -109,14 +108,11 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
                 === VoucherTransactionTypeHelper::receiptVoucherType(),
             404
         );
-        abort_unless(
-            ! PayrollItem::query()
-                ->where('advance_adjustment_voucher_id', $voucher->id)
-                ->exists(),
-            422,
-            'Payroll adjustment vouchers cannot be deleted independently.'
-        );
-        $this->vouchers->reverse($voucher);
+        if ($this->payrollVouchers->isPayrollVoucher($voucher)) {
+            $this->payrollVouchers->reverse($voucher);
+        } else {
+            $this->vouchers->reverse($voucher);
+        }
 
         return back()->with('success', 'Received voucher deleted successfully.');
     }
@@ -137,14 +133,11 @@ class ReceivedVoucherController extends Controller implements HasMiddleware
             ->with('journalEntry')
             ->get()
             ->each(function (Voucher $voucher): void {
-                abort_unless(
-                    ! PayrollItem::query()
-                        ->where('advance_adjustment_voucher_id', $voucher->id)
-                        ->exists(),
-                    422,
-                    'Payroll adjustment vouchers cannot be deleted independently.'
-                );
-                $this->vouchers->reverse($voucher);
+                if ($this->payrollVouchers->isPayrollVoucher($voucher)) {
+                    $this->payrollVouchers->reverse($voucher);
+                } else {
+                    $this->vouchers->reverse($voucher);
+                }
             });
 
         return back()->with('success', 'Received vouchers deleted successfully.');

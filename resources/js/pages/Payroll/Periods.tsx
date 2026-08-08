@@ -1,16 +1,19 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { CalendarPlus, LockKeyhole, Play, WalletCards } from 'lucide-react';
+import { CalendarPlus, FileText, FolderOpen, Trash2, XCircle } from 'lucide-react';
 import { FormEvent } from 'react';
 
 interface Period {
     id: number;
+    payroll_code: string | null;
     label: string;
     month: number;
     year: number;
+    remarks: string | null;
     status: string;
     payable_date: string | null;
     snapshot_count?: number;
@@ -27,6 +30,7 @@ export default function Periods({ periods }: { periods: Paginator }) {
     const form = useForm({
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
+        remarks: '',
         payable_date: '',
     });
 
@@ -37,29 +41,30 @@ export default function Periods({ periods }: { periods: Paginator }) {
 
     return (
         <AppLayout>
-            <Head title="Payroll Periods" />
+            <Head title="Payroll" />
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-semibold dark:text-white">
-                            Payroll Periods
-                        </h1>
+                        <h1 className="text-2xl font-semibold dark:text-white">Payroll</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Create, process, complete, and lock payroll periods.
+                            Create, generate, review, and pay monthly payroll.
                         </p>
                     </div>
-                    <Button type="button" onClick={() => document.getElementById('payroll-period-form')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Button
+                        type="button"
+                        onClick={() => document.getElementById('payroll-form')?.scrollIntoView({ behavior: 'smooth' })}
+                    >
                         <CalendarPlus className="mr-2 h-4 w-4" />
-                        New Period
+                        New Payroll
                     </Button>
                 </div>
 
-                <Card id="payroll-period-form">
+                <Card id="payroll-form">
                     <CardHeader>
-                        <CardTitle>Create Payroll Period</CardTitle>
+                        <CardTitle>Create Payroll</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <form className="grid gap-4 md:grid-cols-4" onSubmit={submit}>
+                        <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={submit}>
                             <Input
                                 type="number"
                                 min={1}
@@ -84,8 +89,15 @@ export default function Periods({ periods }: { periods: Paginator }) {
                                 onChange={(event) => form.setData('payable_date', event.target.value)}
                                 aria-label="Salary payable date"
                             />
+                            <Textarea
+                                value={form.data.remarks}
+                                onChange={(event) => form.setData('remarks', event.target.value)}
+                                placeholder="Remarks"
+                                aria-label="Payroll remarks"
+                                className="min-h-10"
+                            />
                             <Button type="submit" disabled={form.processing}>
-                                Create Period
+                                Create Payroll
                             </Button>
                         </form>
                     </CardContent>
@@ -94,10 +106,10 @@ export default function Periods({ periods }: { periods: Paginator }) {
                 <Card>
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[820px]">
+                            <table className="w-full min-w-[900px]">
                                 <thead>
                                     <tr className="border-b text-left text-sm text-gray-500 dark:border-gray-700">
-                                        <th className="p-4">Period</th>
+                                        <th className="p-4">Payroll</th>
                                         <th className="p-4">Payable Date</th>
                                         <th className="p-4">Status</th>
                                         <th className="p-4">Employees</th>
@@ -107,46 +119,67 @@ export default function Periods({ periods }: { periods: Paginator }) {
                                 <tbody>
                                     {periods.data.map((period) => (
                                         <tr key={period.id} className="border-b dark:border-gray-700">
-                                            <td className="p-4 font-medium dark:text-white">{period.label}</td>
+                                            <td className="p-4 dark:text-white">
+                                                <div className="font-medium">{period.label}</div>
+                                                <div className="text-xs text-gray-500">{period.payroll_code}</div>
+                                            </td>
                                             <td className="p-4 text-sm text-gray-600 dark:text-gray-300">
                                                 {period.payable_date ?? 'Not set'}
                                             </td>
-                                            <td className="p-4 capitalize text-sm dark:text-gray-300">{period.status}</td>
-                                            <td className="p-4 text-sm dark:text-gray-300">
-                                                {period.item_count ?? 0}
-                                            </td>
+                                            <td className="p-4 text-sm capitalize dark:text-gray-300">{period.status}</td>
+                                            <td className="p-4 text-sm dark:text-gray-300">{period.item_count ?? 0}</td>
                                             <td className="p-4">
                                                 <div className="flex justify-end gap-2">
-                                                    {period.status === 'draft' && (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            onClick={() => router.post(`/payroll/${period.id}/start`)}
-                                                        >
-                                                            <Play className="mr-2 h-4 w-4" />
-                                                            Start
-                                                        </Button>
-                                                    )}
-                                                    {period.status !== 'draft' && (
+                                                    {period.status !== 'paid' && period.status !== 'cancelled' && (
                                                         <Button
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => router.get(`/payroll/${period.id}/processing`)}
                                                         >
-                                                            <WalletCards className="mr-2 h-4 w-4" />
+                                                            <FolderOpen className="mr-2 h-4 w-4" />
                                                             Open
                                                         </Button>
                                                     )}
-                                                    {period.status === 'completed' && (
+                                                    {period.status === 'paid' && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => router.get(`/payroll/${period.id}/processing`)}
+                                                        >
+                                                            <FileText className="mr-2 h-4 w-4" />
+                                                            View
+                                                        </Button>
+                                                    )}
+                                                    {period.status === 'draft' && (
                                                         <Button
                                                             type="button"
                                                             size="sm"
                                                             variant="secondary"
-                                                            onClick={() => router.post(`/payroll/${period.id}/lock`)}
+                                                            onClick={() => {
+                                                                if (window.confirm('Delete this unpaid payroll?')) {
+                                                                    router.delete(`/payroll/${period.id}`);
+                                                                }
+                                                            }}
                                                         >
-                                                            <LockKeyhole className="mr-2 h-4 w-4" />
-                                                            Lock
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </Button>
+                                                    )}
+                                                    {period.status === 'generated' && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            onClick={() => {
+                                                                if (window.confirm('Cancel this unpaid payroll?')) {
+                                                                    router.post(`/payroll/${period.id}/cancel`);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                            Cancel
                                                         </Button>
                                                     )}
                                                 </div>
@@ -156,7 +189,7 @@ export default function Periods({ periods }: { periods: Paginator }) {
                                     {periods.data.length === 0 && (
                                         <tr>
                                             <td colSpan={5} className="p-10 text-center text-gray-500">
-                                                No payroll periods found.
+                                                No payrolls found.
                                             </td>
                                         </tr>
                                     )}

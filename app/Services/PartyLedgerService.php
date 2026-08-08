@@ -291,9 +291,8 @@ class PartyLedgerService
             ->join('payroll_periods as pp', 'pp.id', '=', 'payroll_items.payroll_period_id')
             ->whereIn('payroll_items.employee_id', $employeeIds)
             ->whereIn('pp.status', [
-                PayrollPeriod::STATUS_PROCESSING,
-                PayrollPeriod::STATUS_COMPLETED,
-                PayrollPeriod::STATUS_LOCKED,
+                PayrollPeriod::STATUS_GENERATED,
+                PayrollPeriod::STATUS_PAID,
             ])
             ->where('payroll_items.status', PayrollItem::STATUS_PENDING)
             ->when($asOfDate, fn ($query) => $query

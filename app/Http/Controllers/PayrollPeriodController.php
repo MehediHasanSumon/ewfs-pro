@@ -3,13 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\SalaryPaymentHelper;
+use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
+use App\Http\Requests\PayrollGenerateRequest;
 use App\Http\Requests\PayrollPeriodRequest;
 use App\Http\Requests\PayrollProcessRequest;
 use App\Http\Resources\PayrollItemResource;
 use App\Http\Resources\PayrollPeriodResource;
 use App\Jobs\ProcessPayrollBatch;
+use App\Models\Employee;
 use App\Models\PayrollPeriod;
+use App\Models\VoucherTransactionType;
+use App\Services\PaymentAccountService;
 use App\Services\PayrollService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -18,7 +25,8 @@ use Inertia\Inertia;
 class PayrollPeriodController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly PayrollService $payroll
+        private readonly PayrollService $payroll,
+        private readonly PaymentAccountService $paymentAccounts
     ) {}
 
     public static function middleware(): array
@@ -34,11 +42,11 @@ class PayrollPeriodController extends Controller implements HasMiddleware
             ),
             new Middleware(
                 'permission:'.SalaryPaymentHelper::payrollCreatePermission(),
-                only: ['store', 'start']
+                only: ['store', 'update', 'generate', 'start', 'cancel', 'destroy']
             ),
             new Middleware(
                 'permission:'.SalaryPaymentHelper::payrollProcessPermission(),
-                only: ['process', 'lock']
+                only: ['process']
             ),
         ];
     }
@@ -73,7 +81,16 @@ class PayrollPeriodController extends Controller implements HasMiddleware
     {
         $this->payroll->createPeriod($request->validated());
 
-        return back()->with('success', 'Payroll period created successfully.');
+        return back()->with('success', 'Payroll created successfully.');
+    }
+
+    public function update(
+        PayrollPeriodRequest $request,
+        PayrollPeriod $period
+    ) {
+        $this->payroll->updatePeriod($period, $request->validated());
+
+        return back()->with('success', 'Payroll updated successfully.');
     }
 
     public function start(PayrollPeriod $period)
@@ -82,12 +99,57 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
         return redirect()
             ->route('payroll.processing', $period)
-            ->with('success', 'Payroll snapshots created successfully.');
+            ->with('success', 'Payroll generated successfully.');
+    }
+
+    public function generate(
+        PayrollGenerateRequest $request,
+        PayrollPeriod $period
+    ) {
+        $this->payroll->generate($period, $request->validated());
+
+        return redirect()
+            ->route('payroll.processing', $period)
+            ->with('success', 'Payroll generated successfully.');
     }
 
     public function processing(PayrollPeriod $period)
     {
-        abort_if($period->status === PayrollPeriod::STATUS_DRAFT, 404);
+        $period->loadCount(['snapshots', 'items']);
+
+        $employees = collect();
+        if ($period->status === PayrollPeriod::STATUS_DRAFT) {
+            $employees = Employee::query()
+                ->where('status', true)
+                ->whereHas('salaryStructure')
+                ->with([
+                    'department:id,name',
+                    'designation:id,name',
+                    'paymentAccount:id,name,ac_number',
+                ])
+                ->orderBy('employee_name')
+                ->get()
+                ->map(fn (Employee $employee): array => [
+                    'id' => $employee->id,
+                    'employee_code' => $employee->employee_code,
+                    'employee_name' => $employee->employee_name,
+                    'department' => $employee->department?->name,
+                    'designation' => $employee->designation?->name,
+                    'monthly_salary' => (float) (
+                        $employee->salaryStructure?->gross_salary ?? 0
+                    ),
+                    'payment_method' => $employee->paymentAccount
+                        ? $this->paymentAccounts->methodFor(
+                            $employee->paymentAccount
+                        )
+                        : null,
+                    'payment_account' => $employee->paymentAccount ? [
+                        'id' => $employee->paymentAccount->id,
+                        'name' => $employee->paymentAccount->name,
+                        'ac_number' => $employee->paymentAccount->ac_number,
+                    ] : null,
+                ]);
+        }
 
         $period->load([
             'items' => fn ($query) => $query
@@ -95,21 +157,74 @@ class PayrollPeriodController extends Controller implements HasMiddleware
                     'snapshot.paymentAccount:id,name,ac_number',
                     'employee.department:id,name',
                     'employee.designation:id,name',
-                    'paymentVoucher:id,voucher_no',
-                    'advanceAdjustmentVoucher:id,voucher_no',
+                    'deductions',
+                    'extras.voucherTransactionType:id,name,code',
+                    'paymentVoucher:id,voucher_no,voucher_date',
+                    'advanceAdjustmentVoucher:id,voucher_no,voucher_date',
                 ])
                 ->orderBy('employee_id'),
         ]);
+        $canGenerate = in_array($period->status, [
+            PayrollPeriod::STATUS_DRAFT,
+            PayrollPeriod::STATUS_GENERATED,
+        ], true) && ! $period->hasVoucherHistory();
+
+        if (
+            $period->status === PayrollPeriod::STATUS_GENERATED
+            && $canGenerate
+        ) {
+            $employees = $period->items
+                ->map(function ($item): array {
+                    $snapshot = $item->snapshot;
+
+                    return [
+                        'id' => $item->employee_id,
+                        'employee_code' => $snapshot?->employee_code,
+                        'employee_name' => $snapshot?->employee_name,
+                        'department' => $snapshot?->department_name,
+                        'designation' => $snapshot?->designation_name,
+                        'monthly_salary' => (float) (
+                            $snapshot?->monthly_salary
+                            ?? $item->monthly_salary
+                        ),
+                        'payment_method' => $snapshot?->payment_method,
+                        'payment_account' => $snapshot?->paymentAccount ? [
+                            'id' => $snapshot->paymentAccount->id,
+                            'name' => $snapshot->paymentAccount->name,
+                            'ac_number' => $snapshot->paymentAccount->ac_number,
+                        ] : null,
+                        'deductions' => $item->deductions
+                            ->map(fn ($deduction): array => [
+                                'amount' => (string) $deduction->amount,
+                                'reason' => $deduction->reason,
+                            ])
+                            ->values(),
+                        'extras' => $item->extras
+                            ->map(fn ($extra): array => [
+                                'voucher_transaction_type_id' => (string) $extra->voucher_transaction_type_id,
+                                'amount' => (string) $extra->amount,
+                                'remarks' => (string) ($extra->remarks ?? ''),
+                            ])
+                            ->values(),
+                    ];
+                })
+                ->values();
+        }
 
         return Inertia::render('Payroll/Processing', [
             'period' => PayrollPeriodResource::make($period)->resolve(),
+            'employees' => $employees,
             'items' => PayrollItemResource::collection($period->items)->resolve(),
-            'canProcess' => $period->status === PayrollPeriod::STATUS_PROCESSING,
+            'extraTypes' => $this->extraTypes(),
+            'canGenerate' => $canGenerate,
+            'canProcess' => false,
         ]);
     }
 
-    public function process(PayrollProcessRequest $request, PayrollPeriod $period)
-    {
+    public function process(
+        PayrollProcessRequest $request,
+        PayrollPeriod $period
+    ) {
         $data = $request->validated();
         $queueThreshold = max(
             1,
@@ -125,28 +240,37 @@ class PayrollPeriodController extends Controller implements HasMiddleware
 
             return back()->with(
                 'success',
-                'Payroll batch queued for processing successfully.'
+                'Salary payment batch queued successfully.'
             );
         }
 
-        $this->payroll->process($period, $data);
+        $this->payroll->pay($period, $data);
 
-        return back()->with('success', 'Selected payroll items processed successfully.');
+        return back()->with('success', 'Salary payment vouchers created successfully.');
     }
 
-    public function lock(PayrollPeriod $period)
+    public function cancel(PayrollPeriod $period)
     {
-        $this->payroll->lock($period);
+        $this->payroll->cancel($period);
 
-        return back()->with('success', 'Payroll period locked successfully.');
+        return back()->with('success', 'Payroll cancelled successfully.');
+    }
+
+    public function destroy(PayrollPeriod $period)
+    {
+        $this->payroll->delete($period);
+
+        return redirect()
+            ->route('payroll.periods.index')
+            ->with('success', 'Payroll deleted successfully.');
     }
 
     public function history(Request $request)
     {
         $periods = PayrollPeriod::query()
             ->whereIn('status', [
-                PayrollPeriod::STATUS_COMPLETED,
-                PayrollPeriod::STATUS_LOCKED,
+                PayrollPeriod::STATUS_PAID,
+                PayrollPeriod::STATUS_CANCELLED,
             ])
             ->withCount(['snapshots', 'items'])
             ->orderByDesc('year')
@@ -161,5 +285,28 @@ class PayrollPeriodController extends Controller implements HasMiddleware
         return Inertia::render('Payroll/History', [
             'periods' => $periods,
         ]);
+    }
+
+    private function extraTypes()
+    {
+        return VoucherTransactionType::query()
+            ->whereHas(
+                'voucherCategory',
+                fn (Builder $query) => $query
+                    ->where('code', VoucherCategoryHelper::employeeCode())
+                    ->where('status', true)
+            )
+            ->active()
+            ->forVoucherType(
+                VoucherTransactionTypeHelper::paymentVoucherType()
+            )
+            ->where(
+                'code',
+                '!=',
+                VoucherTransactionTypeHelper::monthlySalaryCode()
+            )
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'sort_order']);
     }
 }

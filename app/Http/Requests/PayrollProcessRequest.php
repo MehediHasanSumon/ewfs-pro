@@ -14,17 +14,38 @@ class PayrollProcessRequest extends FormRequest
 
     public function rules(): array
     {
+        $routePeriod = $this->route('period');
+        $periodId = $routePeriod?->id ?? $this->integer('payroll_id');
+        $payrollIdRules = [
+            'integer',
+            Rule::exists('payroll_periods', 'id')
+                ->where('status', 'generated'),
+        ];
+
+        array_unshift(
+            $payrollIdRules,
+            $routePeriod ? 'nullable' : 'required'
+        );
+
         return [
+            'payroll_id' => $payrollIdRules,
             'date' => ['required', 'date'],
             'employee_ids' => ['required', 'array', 'min:1', 'max:500'],
             'employee_ids.*' => [
                 'required',
                 'integer',
                 'distinct',
-                Rule::exists('employees', 'id')->where('status', true),
+                Rule::exists('payroll_items', 'employee_id')
+                    ->where('payroll_period_id', $periodId)
+                    ->where('status', 'pending'),
             ],
-            'remarks' => ['nullable', 'array'],
-            'remarks.*' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'employee_ids.*.exists' => 'One or more selected payroll employees are unavailable or already paid.',
         ];
     }
 }

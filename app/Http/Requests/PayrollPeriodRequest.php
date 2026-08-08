@@ -14,15 +14,19 @@ class PayrollPeriodRequest extends FormRequest
 
     public function rules(): array
     {
+        $periodId = $this->route('period')?->id;
+
         return [
             'month' => [
                 'required',
                 'integer',
                 'between:1,12',
                 Rule::unique('payroll_periods', 'month')
-                    ->where(fn ($query) => $query->where('year', $this->integer('year'))),
+                    ->where(fn ($query) => $query->where('year', $this->integer('year')))
+                    ->ignore($periodId),
             ],
             'year' => ['required', 'integer', 'between:2000,2100'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
             'payable_date' => ['nullable', 'date'],
         ];
     }
