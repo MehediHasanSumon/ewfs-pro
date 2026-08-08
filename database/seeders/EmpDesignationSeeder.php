@@ -2,28 +2,37 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\EmpDesignation;
+use Illuminate\Database\Seeder;
 
 class EmpDesignationSeeder extends Seeder
 {
     public function run(): void
     {
-        $designations = [
-            ['name' => 'Software Engineer', 'status' => true],
-            ['name' => 'Senior Software Engineer', 'status' => true],
-            ['name' => 'Team Lead', 'status' => true],
-            ['name' => 'Project Manager', 'status' => true],
-            ['name' => 'HR Manager', 'status' => true],
-            ['name' => 'Accountant', 'status' => true],
-            ['name' => 'Marketing Executive', 'status' => true],
-            ['name' => 'Sales Representative', 'status' => false],
-            ['name' => 'System Administrator', 'status' => true],
-            ['name' => 'Quality Assurance', 'status' => true]
-        ];
-
-        foreach ($designations as $designation) {
-            EmpDesignation::create($designation);
+        foreach ($this->designations() as $definition) {
+            EmpDesignation::query()->updateOrCreate(
+                ['name' => $definition['name']],
+                [
+                    'code' => $definition['code'],
+                    'status' => true,
+                ]
+            );
         }
+    }
+
+    private function designations(): array
+    {
+        return [
+            ['code' => 'SOFTWARE-ENGINEER', 'name' => 'Software Engineer'],
+            ['code' => 'SENIOR-SOFTWARE-ENGINEER', 'name' => 'Senior Software Engineer'],
+            ['code' => 'TEAM-LEAD', 'name' => 'Team Lead'],
+            ['code' => 'PROJECT-MANAGER', 'name' => 'Project Manager'],
+            ['code' => 'HR-MANAGER', 'name' => 'HR Manager'],
+            ['code' => 'ACCOUNTANT', 'name' => 'Accountant'],
+            ['code' => 'MARKETING-EXECUTIVE', 'name' => 'Marketing Executive'],
+            ['code' => 'SALES-REPRESENTATIVE', 'name' => 'Sales Representative'],
+            ['code' => 'SYSTEM-ADMINISTRATOR', 'name' => 'System Administrator'],
+            ['code' => 'QUALITY-ASSURANCE', 'name' => 'Quality Assurance'],
+        ];
     }
 }

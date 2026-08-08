@@ -2,26 +2,53 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\EmpDepartment;
+use App\Models\EmpType;
+use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class EmpDepartmentSeeder extends Seeder
 {
     public function run(): void
     {
-        $departments = [
-            ['emp_type_id' => 1, 'name' => 'IT Department', 'status' => true],
-            ['emp_type_id' => 2, 'name' => 'HR Department', 'status' => true],
-            ['emp_type_id' => 3, 'name' => 'Finance Department', 'status' => true],
-            ['emp_type_id' => 4, 'name' => 'Marketing Department', 'status' => true],
-            ['emp_type_id' => 5, 'name' => 'Sales Department', 'status' => true],
-            ['emp_type_id' => 1, 'name' => 'Operations Department', 'status' => true],
-            ['emp_type_id' => 2, 'name' => 'Admin Department', 'status' => true],
-            ['emp_type_id' => 3, 'name' => 'Customer Service', 'status' => true]
-        ];
+        $types = EmpType::query()
+            ->where('status', true)
+            ->pluck('id', 'name');
 
-        foreach ($departments as $department) {
-            EmpDepartment::create($department);
+        foreach ($this->departments() as $definition) {
+            $typeId = $types->get($definition['employee_type']);
+
+            if (! $typeId) {
+                throw new RuntimeException(
+                    "Employee type [{$definition['employee_type']}] is missing. Run EmpTypeSeeder first."
+                );
+            }
+
+            $department = EmpDepartment::query()
+                ->where('code', $definition['code'])
+                ->orWhere('name', $definition['name'])
+                ->first() ?? new EmpDepartment;
+
+            $department->fill([
+                'emp_type_id' => $typeId,
+                'code' => $definition['code'],
+                'name' => $definition['name'],
+                'status' => true,
+            ])->save();
         }
+    }
+
+    private function departments(): array
+    {
+        return [
+            ['code' => 'IT', 'name' => 'IT Department', 'employee_type' => 'Manager'],
+            ['code' => 'HR', 'name' => 'HR Department', 'employee_type' => 'HR Admin'],
+            ['code' => 'FINANCE', 'name' => 'Finance Department', 'employee_type' => 'Cashier'],
+            ['code' => 'MARKETING', 'name' => 'Marketing Department', 'employee_type' => 'Manager'],
+            ['code' => 'SALES', 'name' => 'Sales Department', 'employee_type' => 'Sales Executive'],
+            ['code' => 'OPERATIONS', 'name' => 'Operations Department', 'employee_type' => 'Manager'],
+            ['code' => 'ADMIN', 'name' => 'Admin Department', 'employee_type' => 'HR Admin'],
+            ['code' => 'CUSTOMER-SERVICE', 'name' => 'Customer Service', 'employee_type' => 'Support Staff'],
+        ];
     }
 }
