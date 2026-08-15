@@ -59,6 +59,7 @@ class OfficePaymentController extends Controller implements HasMiddleware
             'types' => [
                 ['value' => 'cash', 'label' => 'Cash'],
                 ['value' => 'bank', 'label' => 'Bank'],
+                ['value' => 'mobile_bank', 'label' => 'Mobile Bank'],
             ],
             'filters' => $request->only([
                 'search', 'start_date', 'end_date', 'type', 'shift_id',
@@ -145,8 +146,13 @@ class OfficePaymentController extends Controller implements HasMiddleware
             ->when($request->shift_id, fn ($q, $shiftId) => $q->where('shift_id', $shiftId));
 
         if ($request->filled('type')) {
+            $method = match (strtolower((string) $request->type)) {
+                'bank' => 'bank',
+                'mobile_bank', 'mobile bank' => 'mobile_bank',
+                default => 'cash',
+            };
             $query->whereHas('lines.paymentDetail', fn ($detail) => $detail
-                ->where('payment_method', $request->type === 'bank' ? 'bank' : 'cash'));
+                ->where('payment_method', $method));
         }
 
         $sort = in_array($request->sort_by, ['id', 'voucher_date', 'voucher_no', 'created_at'], true)

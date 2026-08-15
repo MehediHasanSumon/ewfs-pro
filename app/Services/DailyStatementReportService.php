@@ -177,15 +177,19 @@ class DailyStatementReportService
                     ->where('vl.entry_side', $accountSide);
             })
             ->join('accounts as a', 'a.id', '=', 'vl.account_id')
-            ->leftJoin('voucher_lines as payment_line', function ($join) {
-                $join->on('payment_line.voucher_id', '=', 'v.id')
-                    ->where('payment_line.entry_side', 'debit');
-            })
+            ->leftJoinSub(
+                DB::table('voucher_lines')
+                    ->select('voucher_id', DB::raw('MIN(id) AS id'))
+                    ->where('entry_side', 'debit')
+                    ->groupBy('voucher_id'),
+                'first_debit',
+                fn ($join) => $join->on('first_debit.voucher_id', '=', 'v.id')
+            )
             ->leftJoin(
                 'voucher_payment_details as payment',
                 'payment.voucher_line_id',
                 '=',
-                'payment_line.id'
+                'first_debit.id'
             )
             ->where('v.status', 'posted')
             ->where('v.voucher_type', $voucherType)

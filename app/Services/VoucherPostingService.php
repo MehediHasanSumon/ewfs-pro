@@ -7,6 +7,7 @@ use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Employee;
 use App\Models\EmployeeSalaryPayment;
+use App\Models\VoucherCategory;
 use App\Models\PayrollItem;
 use App\Models\PayrollVoucherLink;
 use App\Models\Voucher;
@@ -49,9 +50,33 @@ class VoucherPostingService
             $fundingAccount = Account::query()->findOrFail($data['to_account_id']);
             $expenseAccount = $this->systemAccounts->officeExpense();
 
+            $operatingCode = VoucherCategoryHelper::operatingCode();
+            $category = VoucherCategory::query()
+                ->where('code', $operatingCode)
+                ->where('status', true)
+                ->first();
+
+            if (! $category) {
+                throw ValidationException::withMessages([
+                    'voucher_category' => 'The Operating voucher category is not configured.',
+                ]);
+            }
+
+            $transactionType = VoucherTransactionType::query()
+                ->where('voucher_category_id', $category->id)
+                ->where('voucher_type', 'office_payment')
+                ->where('status', true)
+                ->first();
+
+            if (! $transactionType) {
+                throw ValidationException::withMessages([
+                    'voucher_transaction_type' => 'No active Office Payment transaction type is configured. Run the database migration.',
+                ]);
+            }
+
             return $this->createDocument('office_payment', $data, [
-                'voucher_category_id' => $data['voucher_category_id'] ?? null,
-                'voucher_transaction_type_id' => $this->transactionTypeId($data),
+                'voucher_category_id' => $category->id,
+                'voucher_transaction_type_id' => $transactionType->id,
                 'from_account_id' => $fundingAccount->id,
                 'to_account_id' => $expenseAccount->id,
                 'amount' => $data['amount'],

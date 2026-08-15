@@ -484,21 +484,40 @@ class ShiftClosingService
 
     private function bankSales(string $date, int $shiftId, bool $fuel): float
     {
-        return (float) SaleItem::query()
-            ->whereHas('sale', fn ($sale) => $sale
-                ->whereDate('sale_date', $date)
-                ->where('shift_id', $shiftId)
-                ->where('sale_type', 'regular')
-                ->whereHas('journalEntry', fn ($entry) => $entry->posted())
-                ->whereHas('transaction', fn ($line) => $line
-                    ->whereIn('payment_method', ['bank', 'mobile_bank', 'cheque', 'online'])))
-            ->whereHas(
-                'category',
-                fn ($category) => $fuel
-                    ? $category->allowedForDispenser()
-                    : $category->otherForDispenser()
+        $categoryCodes = ErpHelper::dispenserProductCategoryCodes();
+        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online'];
+
+        $legacyPaymentMethods = DB::table('journal_lines')
+            ->select('journal_entry_id')
+            ->selectRaw('MAX(payment_method) AS payment_method')
+            ->where('debit_amount', '>', 0)
+            ->whereNotNull('payment_method')
+            ->groupBy('journal_entry_id');
+
+        return (float) DB::table('sale_items AS si')
+            ->join('sales AS s', 's.id', '=', 'si.sale_id')
+            ->join('categories AS c', 'c.id', '=', 'si.category_id')
+            ->join('journal_entries AS je', function ($join) {
+                $join->on('je.id', '=', 's.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->leftJoin('sale_payment_details AS spd', 'spd.sale_id', '=', 's.id')
+            ->leftJoinSub($legacyPaymentMethods, 'jl_pay', fn ($join) => $join
+                ->on('jl_pay.journal_entry_id', '=', 's.journal_entry_id'))
+            ->whereDate('s.sale_date', $date)
+            ->where('s.shift_id', $shiftId)
+            ->where('s.sale_type', 'regular')
+            ->when(
+                $fuel,
+                fn ($q) => $q->whereIn('c.code', $categoryCodes),
+                fn ($q) => $q->whereNotIn('c.code', $categoryCodes)
             )
-            ->sum('line_total');
+            ->whereRaw(
+                "COALESCE(spd.payment_method, jl_pay.payment_method, 'cash') IN ("
+                . implode(', ', array_map(fn ($m) => DB::getPdo()->quote($m), $bankMethods))
+                . ')'
+            )
+            ->sum('si.line_total');
     }
 
     private function voucherTotal(string $date, int $shiftId, string $type): float
@@ -525,11 +544,6 @@ class ShiftClosingService
                 $join->on('je.id', '=', 's.journal_entry_id')
                     ->where('je.status', 'posted');
             })
-            ->leftJoin('inventory_movements as im', function ($join) {
-                $join->on('im.source_line_id', '=', 'si.id')
-                    ->where('im.source_type', Sale::class)
-                    ->whereNull('im.reversal_of_id');
-            })
             ->whereDate('s.sale_date', $date)
             ->where('s.shift_id', $shiftId)
             ->whereIn('category.code', $categoryCodes)
@@ -537,8 +551,14 @@ class ShiftClosingService
             ->selectRaw(
                 'si.product_id,
                  SUM(si.quantity) AS quantity,
-                 SUM(CASE WHEN im.id IS NOT NULL THEN si.quantity ELSE 0 END) AS inventory_quantity,
-                 SUM(si.line_total) AS amount'
+                 SUM(CASE WHEN EXISTS (
+                     SELECT 1 FROM inventory_movements im
+                     WHERE im.source_line_id = si.id
+                       AND im.source_type = ?
+                       AND im.reversal_of_id IS NULL
+                 ) THEN si.quantity ELSE 0 END) AS inventory_quantity,
+                 SUM(si.line_total) AS amount',
+                [Sale::class]
             )
             ->get();
         $creditRows = DB::table('credit_sale_items as csi')
@@ -549,11 +569,6 @@ class ShiftClosingService
                 $join->on('je.id', '=', 'csc.journal_entry_id')
                     ->where('je.status', 'posted');
             })
-            ->leftJoin('inventory_movements as im', function ($join) {
-                $join->on('im.source_line_id', '=', 'csi.id')
-                    ->where('im.source_type', CreditSale::class)
-                    ->whereNull('im.reversal_of_id');
-            })
             ->whereDate('cs.sale_date', $date)
             ->where('cs.shift_id', $shiftId)
             ->whereIn('category.code', $categoryCodes)
@@ -561,8 +576,14 @@ class ShiftClosingService
             ->selectRaw(
                 'csi.product_id,
                  SUM(csi.quantity) AS quantity,
-                 SUM(CASE WHEN im.id IS NOT NULL THEN csi.quantity ELSE 0 END) AS inventory_quantity,
-                 SUM(csi.line_total) AS amount'
+                 SUM(CASE WHEN EXISTS (
+                     SELECT 1 FROM inventory_movements im
+                     WHERE im.source_line_id = csi.id
+                       AND im.source_type = ?
+                       AND im.reversal_of_id IS NULL
+                 ) THEN csi.quantity ELSE 0 END) AS inventory_quantity,
+                 SUM(csi.line_total) AS amount',
+                [CreditSale::class]
             )
             ->get();
 
