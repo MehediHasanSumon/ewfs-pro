@@ -192,8 +192,15 @@ class DailyStatementReportService
                 'first_debit.id'
             )
             ->where('v.status', 'posted')
-            ->where('v.voucher_type', $voucherType)
-            ->whereBetween('v.voucher_date', [$startDate, $endDate])
+            ->where(function (Builder $query) use ($voucherType) {
+                if (in_array($voucherType, ['receipt', 'received'])) {
+                    $query->whereIn('v.voucher_type', ['receipt', 'received']);
+                } else {
+                    $query->whereIn('v.voucher_type', ['payment', 'office_payment']);
+                }
+            })
+            ->whereDate('v.voucher_date', '>=', $startDate)
+            ->whereDate('v.voucher_date', '<=', $endDate)
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('v.shift_id', $shiftId))
             ->orderBy('v.voucher_date')

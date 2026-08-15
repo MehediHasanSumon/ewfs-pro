@@ -71,18 +71,43 @@ class LedgerQueryService
             ->pluck('id');
     }
 
+    public function cashAccounts(): Collection
+    {
+        return Account::query()
+            ->active()
+            ->with('group:id,code,name,account_class,normal_balance')
+            ->where(function (EloquentBuilder $query) {
+                $query->where('semantic_code', 'cash_on_hand')
+                    ->orWhere('name', 'like', '%cash%')
+                    ->orWhereHas('group', fn (EloquentBuilder $group) => $group
+                        ->where('account_class', 'asset')
+                        ->where(function (EloquentBuilder $cashGroup) {
+                            $cashGroup->where(
+                                'code',
+                                AccountGroupHelper::code('cash_in_hand')
+                            )
+                                ->orWhere('name', 'like', '%cash%');
+                        }));
+            })
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function accountLedger(Account $account, string $startDate, string $endDate): array
     {
-        $openingBalance = $this->legacySignedBalanceBefore($account->id, $startDate);
+        $account->loadMissing('group');
+        $isCreditNormal = $account->group?->normal_balance === 'credit';
+        $openingBalance = $this->signedBalanceBefore($account->id, $startDate, $isCreditNormal);
+
+        $runningBalanceSql = $isCreditNormal
+            ? '? + SUM(jl.credit_amount - jl.debit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance'
+            : '? + SUM(jl.debit_amount - jl.credit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance';
+
         $transactions = $this->accountLinesQuery($account->id, $startDate, $endDate)
             ->select($this->legacySelectColumns())
             ->selectRaw($this->legacySelectExpressions())
-            ->selectRaw(
-                '? + SUM(jl.credit_amount - jl.debit_amount) OVER (
-                    ORDER BY je.business_date, je.occurred_at, jl.id
-                ) AS balance',
-                [$openingBalance]
-            )
+            ->selectRaw($runningBalanceSql, [$openingBalance])
             ->orderBy('je.business_date')
             ->orderBy('je.occurred_at')
             ->orderBy('jl.id')
@@ -91,14 +116,16 @@ class LedgerQueryService
 
         $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate);
 
+        $closingBalance = $isCreditNormal
+            ? $openingBalance + (float) $totals->total_credit - (float) $totals->total_debit
+            : $openingBalance + (float) $totals->total_debit - (float) $totals->total_credit;
+
         return [
             'transactions' => $transactions,
             'opening_balance' => $openingBalance,
             'total_debit' => (float) $totals->total_debit,
             'total_credit' => (float) $totals->total_credit,
-            'closing_balance' => $openingBalance
-                + (float) $totals->total_credit
-                - (float) $totals->total_debit,
+            'closing_balance' => $closingBalance,
         ];
     }
 
@@ -108,16 +135,18 @@ class LedgerQueryService
         string $endDate,
         int $perPage
     ): array {
-        $openingBalance = $this->legacySignedBalanceBefore($account->id, $startDate);
+        $account->loadMissing('group');
+        $isCreditNormal = $account->group?->normal_balance === 'credit';
+        $openingBalance = $this->signedBalanceBefore($account->id, $startDate, $isCreditNormal);
+
+        $runningBalanceSql = $isCreditNormal
+            ? '? + SUM(jl.credit_amount - jl.debit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance'
+            : '? + SUM(jl.debit_amount - jl.credit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance';
+
         $query = $this->accountLinesQuery($account->id, $startDate, $endDate)
             ->select($this->legacySelectColumns())
             ->selectRaw($this->legacySelectExpressions())
-            ->selectRaw(
-                '? + SUM(jl.credit_amount - jl.debit_amount) OVER (
-                    ORDER BY je.business_date, je.occurred_at, jl.id
-                ) AS balance',
-                [$openingBalance]
-            )
+            ->selectRaw($runningBalanceSql, [$openingBalance])
             ->orderBy('je.business_date')
             ->orderBy('je.occurred_at')
             ->orderBy('jl.id');
@@ -129,14 +158,16 @@ class LedgerQueryService
         );
         $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate);
 
+        $closingBalance = $isCreditNormal
+            ? $openingBalance + (float) $totals->total_credit - (float) $totals->total_debit
+            : $openingBalance + (float) $totals->total_debit - (float) $totals->total_credit;
+
         return [
             'transactions' => $transactions,
             'opening_balance' => $openingBalance,
             'total_debit' => (float) $totals->total_debit,
             'total_credit' => (float) $totals->total_credit,
-            'closing_balance' => $openingBalance
-                + (float) $totals->total_credit
-                - (float) $totals->total_debit,
+            'closing_balance' => $closingBalance,
         ];
     }
 
@@ -282,14 +313,18 @@ class LedgerQueryService
             ->first();
     }
 
-    private function legacySignedBalanceBefore(int $accountId, string $startDate): float
+    private function signedBalanceBefore(int $accountId, string $startDate, bool $isCreditNormal = false): float
     {
+        $selectExpr = $isCreditNormal
+            ? 'COALESCE(SUM(jl.credit_amount - jl.debit_amount), 0) AS balance'
+            : 'COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) AS balance';
+
         return (float) DB::table('journal_lines as jl')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
             ->where('jl.account_id', $accountId)
             ->whereIn('je.status', ['posted', 'reversed'])
             ->whereDate('je.business_date', '<', $startDate)
-            ->selectRaw('COALESCE(SUM(jl.credit_amount - jl.debit_amount), 0) AS balance')
+            ->selectRaw($selectExpr)
             ->value('balance');
     }
 
@@ -301,9 +336,9 @@ class LedgerQueryService
             'je.business_date as transaction_date',
             'jl.debit_amount',
             'jl.credit_amount',
-            'v.voucher_no',
-            'v.voucher_type',
             's.name as shift_name',
+            'je.source_type',
+            'je.source_id',
         ];
     }
 
@@ -315,7 +350,9 @@ class LedgerQueryService
             CASE WHEN jl.debit_amount >= jl.credit_amount THEN jl.debit_amount ELSE jl.credit_amount END AS amount,
             COALESCE(jl.description, je.description) AS description,
             jl.payment_method AS payment_type,
-            COALESCE(v.voucher_date, je.business_date) AS voucher_date
+            COALESCE(v.voucher_date, je.business_date) AS voucher_date,
+            COALESCE(v.voucher_no, je.reference_no, je.entry_no) AS voucher_no,
+            COALESCE(v.voucher_type, je.event_type) AS voucher_type
         ";
     }
 

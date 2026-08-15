@@ -33,13 +33,13 @@ class AccountingService
                 'business_date' => $businessDate,
                 'occurred_at' => $entryData['occurred_at'] ?? now(),
                 'event_type' => $entryData['event_type'],
-                'source_type' => $entryData['source_type'],
+                'source_type' => $entryData['source_type'] ?? 'manual_journal',
                 'source_id' => $entryData['source_id'] ?? null,
                 'reference_no' => $entryData['reference_no'] ?? null,
                 'description' => $entryData['description'] ?? null,
                 'status' => 'draft',
                 'reversal_of_id' => $entryData['reversal_of_id'] ?? null,
-                'idempotency_key' => $entryData['idempotency_key'],
+                'idempotency_key' => $entryData['idempotency_key'] ?? (string) \Illuminate\Support\Str::uuid(),
                 'posted_by' => $entryData['posted_by'] ?? auth()->id(),
             ]);
 
