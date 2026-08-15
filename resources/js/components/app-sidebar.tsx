@@ -9,6 +9,7 @@ import {
 import { dashboard } from '@/routes';
 import { Link, usePage } from '@inertiajs/react';
 import {
+    ArrowLeftRight,
     BarChart3,
     Building,
     Car,
@@ -196,6 +197,18 @@ const mainNavItems = [
                 permission: 'view-voucher',
             },
             {
+                title: 'Fund Transfer',
+                href: '/fund-transfers',
+                icon: ArrowLeftRight,
+                permission: 'view-account',
+            },
+            {
+                title: 'Office Payment',
+                href: '/office-payments',
+                icon: CreditCard,
+                permission: 'view-office-payment',
+            },
+            {
                 title: 'Voucher Category Management',
                 href: '/voucher-categories',
                 icon: FileText,
@@ -206,12 +219,6 @@ const mainNavItems = [
                 href: '/voucher-transaction-types',
                 icon: FileText,
                 permission: 'voucher-transaction-type-view',
-            },
-            {
-                title: 'Office Payment',
-                href: '/office-payments',
-                icon: CreditCard,
-                permission: 'view-office-payment',
             },
         ],
     },
@@ -346,7 +353,7 @@ export function AppSidebar() {
                                     </button>
                                     <div
                                         className={`mt-1 ml-8 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${openDropdowns.includes(item.title)
-                                            ? 'max-h-[500px] opacity-100'
+                                            ? 'max-h-[800px] opacity-100'
                                             : 'max-h-0 opacity-0'
                                             }`}
                                     >

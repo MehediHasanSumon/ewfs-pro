@@ -22,6 +22,7 @@ use App\Http\Controllers\EmpDepartmentController;
 use App\Http\Controllers\EmpDesignationController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmpTypeController;
+use App\Http\Controllers\FundTransferController;
 use App\Http\Controllers\GeneralLedgerController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\LiabilityAssetsController;
@@ -348,6 +349,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('office-payments/{officePayment}', [OfficePaymentController::class, 'update'])->name('office-payments.update');
     Route::delete('office-payments/{officePayment}', [OfficePaymentController::class, 'destroy'])->name('office-payments.destroy');
     Route::delete('office-payments/bulk/delete', [OfficePaymentController::class, 'bulkDelete'])->name('office-payments.bulk.delete');
+
+    // Fund Transfer routes
+    Route::get('fund-transfers', [FundTransferController::class, 'index'])->name('fund-transfers.index');
+    Route::get('fund-transfers/download-pdf', [FundTransferController::class, 'downloadPdf'])->name('fund-transfers.download.pdf');
+    Route::delete('fund-transfers/bulk/delete', [FundTransferController::class, 'bulkDelete'])->name('fund-transfers.bulk.delete');
+    Route::post('fund-transfers', [FundTransferController::class, 'store'])->name('fund-transfers.store');
+    Route::put('fund-transfers/{fundTransfer}', [FundTransferController::class, 'update'])->name('fund-transfers.update');
+    Route::delete('fund-transfers/{fundTransfer}', [FundTransferController::class, 'destroy'])->name('fund-transfers.destroy');
 
     // Stock routes
     Route::get('stocks', [StockController::class, 'index'])->name('stocks.index');

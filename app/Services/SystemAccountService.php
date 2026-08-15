@@ -57,6 +57,22 @@ class SystemAccountService
         );
     }
 
+    public function bankChargeExpense(): Account
+    {
+        $existing = Account::query()
+            ->whereHas('group', fn ($query) => $query
+                ->where('account_class', 'expense')
+                ->where(fn ($q) => $q
+                    ->where('name', 'like', '%bank charge%')
+                    ->orWhere('name', 'like', '%bank fee%')
+                    ->orWhere('name', 'like', '%transfer fee%')))
+            ->where('status', true)
+            ->orderBy('id')
+            ->first();
+
+        return $existing ?? $this->resolve('bank_charge_expense', 'Bank Charges and Fees', 'expense', 'debit');
+    }
+
     public function cashOnHand(): Account
     {
         $cash = Account::query()

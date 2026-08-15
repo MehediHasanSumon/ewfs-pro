@@ -312,7 +312,7 @@ class LedgerQueryService
         return "
             TIME(je.occurred_at) AS transaction_time,
             CASE WHEN jl.debit_amount > 0 THEN 'Dr' ELSE 'Cr' END AS transaction_type,
-            GREATEST(jl.debit_amount, jl.credit_amount) AS amount,
+            CASE WHEN jl.debit_amount >= jl.credit_amount THEN jl.debit_amount ELSE jl.credit_amount END AS amount,
             COALESCE(jl.description, je.description) AS description,
             jl.payment_method AS payment_type,
             COALESCE(v.voucher_date, je.business_date) AS voucher_date
