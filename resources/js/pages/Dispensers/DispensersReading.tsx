@@ -661,6 +661,10 @@ export default function DispenserReading({
 
         const submitData = {
             ...data,
+            dispenser_readings: data.dispenser_readings.map((reading) => ({
+                ...reading,
+                reading_by: reading.reading_by && reading.reading_by !== 'none' ? Number(reading.reading_by) : null,
+            })),
             cash_sales_other: otherProductsSummary.cash_sales.toFixed(2),
             other_product_sales: otherProductSalesData,
         };
@@ -1292,7 +1296,7 @@ export default function DispenserReading({
                                                         <td className="border border-gray-200 px-3 py-2 dark:border-gray-600">
                                                             <Select
                                                                 value={
-                                                                    reading.reading_by
+                                                                    reading.reading_by || 'none'
                                                                 }
                                                                 onValueChange={(
                                                                     value,
@@ -1308,7 +1312,7 @@ export default function DispenserReading({
                                                                             index
                                                                         ],
                                                                         reading_by:
-                                                                            value,
+                                                                            value === 'none' ? '' : value,
                                                                     };
                                                                     setData(
                                                                         'dispenser_readings',
@@ -1320,6 +1324,7 @@ export default function DispenserReading({
                                                                     <SelectValue placeholder="Select" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
+                                                                    <SelectItem value="none">-- None --</SelectItem>
                                                                     {employees.map(
                                                                         (
                                                                             emp,

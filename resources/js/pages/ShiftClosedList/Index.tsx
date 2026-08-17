@@ -420,16 +420,16 @@ export default function ShiftClosedList({ shiftClosedList, shifts, filters = {} 
                     isOpen={!!deletingItem}
                     onClose={() => setDeletingItem(null)}
                     onConfirm={confirmDelete}
-                    title="Delete Shift Record"
-                    message={`Are you sure you want to delete the shift record for "${deletingItem?.shift?.name}" on ${deletingItem ? new Date(deletingItem.close_date).toLocaleDateString() : ''}? This action cannot be undone.`}
+                    title="Delete / Reverse Shift Closing"
+                    message={`Are you sure you want to delete and reverse the closed shift for "${deletingItem?.shift?.name}" on ${deletingItem ? new Date(deletingItem.close_date).toLocaleDateString() : ''}? This will safely reverse related shift closing accounting adjustments and reopen the shift.`}
                 />
 
                 <DeleteModal
                     isOpen={isBulkDeleting}
                     onClose={() => setIsBulkDeleting(false)}
                     onConfirm={confirmBulkDelete}
-                    title="Delete Selected Records"
-                    message={`Are you sure you want to delete ${selectedItems.length} selected shift records? This action cannot be undone.`}
+                    title="Delete Selected Shift Closings"
+                    message={`Are you sure you want to delete and reverse ${selectedItems.length} selected shift records? This will safely reverse related shift closing accounting adjustments and reopen the shifts.`}
                 />
             </div>
         </AppLayout>

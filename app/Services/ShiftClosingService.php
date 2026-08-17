@@ -26,15 +26,13 @@ class ShiftClosingService
     public function close(array $data): ShiftClosing
     {
         return DB::transaction(function () use ($data) {
-            $existing = ShiftClosing::query()
+            if (ShiftClosing::query()
                 ->whereDate('business_date', $data['transaction_date'])
                 ->where('shift_id', $data['shift_id'])
-                ->lockForUpdate()
-                ->first();
-
-            if ($existing) {
+                ->whereIn('status', ['draft', 'posting', 'posted'])
+                ->exists()) {
                 throw ValidationException::withMessages([
-                    'shift_id' => 'This shift is already closed for the selected date.',
+                    'shift_id' => 'The selected shift is already closed for this date.',
                 ]);
             }
 
@@ -477,9 +475,42 @@ class ShiftClosingService
 
     public function reverse(ShiftClosing $closing): void
     {
-        throw ValidationException::withMessages([
-            'shift' => 'Posted shift closings require an explicit controlled reversal workflow.',
-        ]);
+        if ($closing->status === 'reversed') {
+            return;
+        }
+
+        if ($closing->status !== 'posted') {
+            throw ValidationException::withMessages([
+                'shift' => 'Only posted shift closings can be reversed.',
+            ]);
+        }
+
+        DB::transaction(function () use ($closing): void {
+            // First transition status to reversed so MySQL shift-lock triggers are released
+            $closing->update([
+                'status' => 'reversed',
+                'reversed_by' => auth()->id(),
+                'reversed_at' => now(),
+            ]);
+
+            // Reverse the posted journal entry if one was created during closing
+            if ($closing->journal_entry_id) {
+                $closing->loadMissing('journalEntry');
+                if ($closing->journalEntry && $closing->journalEntry->status === 'posted') {
+                    $this->accounting->reverse(
+                        $closing->journalEntry,
+                        'Shift closing #'.$closing->id.' reversed.'
+                    );
+                }
+            }
+
+            // Reverse inventory movements associated with this shift closing
+            $this->inventory->reverseSource(
+                ShiftClosing::class,
+                $closing->id,
+                'Shift closing #'.$closing->id.' reversed.'
+            );
+        });
     }
 
     private function bankSales(string $date, int $shiftId, bool $fuel): float

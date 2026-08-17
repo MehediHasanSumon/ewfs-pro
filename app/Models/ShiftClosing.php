@@ -21,6 +21,8 @@ class ShiftClosing extends Model
         'created_by',
         'closed_by',
         'closed_at',
+        'reversed_by',
+        'reversed_at',
         'reversal_of_id',
         'lock_version',
         'remarks',
@@ -34,6 +36,7 @@ class ShiftClosing extends Model
             'actual_cash' => 'decimal:4',
             'variance_amount' => 'decimal:4',
             'closed_at' => 'datetime',
+            'reversed_at' => 'datetime',
             'lock_version' => 'integer',
         ];
     }
