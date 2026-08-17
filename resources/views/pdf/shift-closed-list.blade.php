@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Shift Closed List</title>
+    <title>Shift Closing History</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -133,7 +133,7 @@
     </div>
 
     <div class="title-section">
-        <div class="title-box">Shift Closed List</div>
+        <div class="title-box">Shift Closing History</div>
     </div>
 
     <table>

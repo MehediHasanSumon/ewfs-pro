@@ -68,7 +68,7 @@ const mainNavItems = [
                 permission: 'view-dispenser-reading',
             },
             { title: 'Dispensers Setting', href: '/dispensers', icon: Fuel, permission: 'view-dispenser' },
-            { title: 'Shift Closed List', href: '/shift-closed-list', icon: FileText, permission: 'view-shift-closed-list' },
+            { title: 'Shift Closing History', href: '/shift-closed-list', icon: FileText, permission: 'view-shift-closed-list' },
             { title: 'Monthly Dispenser Report', href: '/reports/monthly-dispenser-report', icon: BarChart3 },
         ],
     },

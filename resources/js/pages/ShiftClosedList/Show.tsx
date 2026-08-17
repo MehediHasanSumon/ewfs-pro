@@ -56,20 +56,20 @@ interface ShiftClosedShowProps {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
-    { title: 'Shift Closed List', href: '/shift-closed-list' },
+    { title: 'Shift Closing History', href: '/shift-closed-list' },
     { title: 'Details', href: '#' },
 ];
 
 export default function ShiftClosedShow({ shiftClosed }: ShiftClosedShowProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Shift Details" />
+            <Head title="Shift Closing Details" />
 
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold dark:text-white">
-                            Shift Details
+                            Shift Closing Details
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
                             {shiftClosed.shift.name} -{' '}

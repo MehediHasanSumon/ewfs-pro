@@ -59,7 +59,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: dashboard().url,
     },
     {
-        title: 'Shift Closed List',
+        title: 'Shift Closing History',
         href: '/shift-closed-list',
     },
 ];
@@ -165,16 +165,16 @@ export default function ShiftClosedList({ shiftClosedList, shifts, filters = {} 
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Shift Closed List" />
+            <Head title="Shift Closing History" />
 
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold dark:text-white">
-                            Shift Closed List
+                            Shift Closing History
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            View all closed shift records
+                            View all closed shift records and settlements
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -406,7 +406,7 @@ export default function ShiftClosedList({ shiftClosedList, shifts, filters = {} 
                                                 className="p-8 text-center text-gray-500 dark:text-gray-400"
                                             >
                                                 <Clock className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                                                No shift closed records found
+                                                No shift closing records found
                                             </td>
                                         </tr>
                                     )}
