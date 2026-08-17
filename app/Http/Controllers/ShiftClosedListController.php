@@ -76,6 +76,8 @@ class ShiftClosedListController extends Controller implements HasMiddleware
 
         ShiftClosing::query()
             ->whereIn('id', $validated['ids'])
+            ->orderByDesc('business_date')
+            ->orderByDesc('id')
             ->get()
             ->each(fn (ShiftClosing $closing) => $this->closings->reverse($closing));
 

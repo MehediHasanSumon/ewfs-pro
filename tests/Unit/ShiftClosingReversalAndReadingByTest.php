@@ -777,8 +777,8 @@ it('Test Case 5: handles bulk delete / reverse of closed shifts', function (): v
 
     expect(ShiftClosing::query()->posted()->count())->toBe(2);
 
-    // Bulk reverse
-    $closings = ShiftClosing::query()->whereIn('id', [$closing1->id, $closing2->id])->get();
+    // Bulk reverse in reverse chronological order (LIFO)
+    $closings = ShiftClosing::query()->whereIn('id', [$closing1->id, $closing2->id])->orderByDesc('business_date')->orderByDesc('id')->get();
     foreach ($closings as $closing) {
         $closingService->reverse($closing);
     }

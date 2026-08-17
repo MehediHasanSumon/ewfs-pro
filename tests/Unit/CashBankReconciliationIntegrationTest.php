@@ -183,7 +183,16 @@ beforeEach(function (): void {
         $table->id();
         $table->foreignId('journal_entry_id')->nullable();
         $table->date('sale_date');
+        $table->string('sale_type', 20)->default('regular');
         $table->foreignId('shift_id')->nullable();
+        $table->timestamps();
+    });
+
+    Schema::create('sale_payment_details', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('sale_id')->constrained('sales')->cascadeOnDelete();
+        $table->foreignId('account_id')->nullable();
+        $table->string('payment_method', 30)->default('cash');
         $table->timestamps();
     });
 

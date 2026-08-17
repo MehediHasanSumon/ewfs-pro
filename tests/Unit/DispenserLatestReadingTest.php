@@ -9,6 +9,12 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 beforeEach(function () {
+    Schema::create('shift_closings', function (Blueprint $table) {
+        $table->id();
+        $table->string('status')->default('posted');
+        $table->timestamps();
+    });
+
     Schema::create('dispensers', function (Blueprint $table) {
         $table->id();
         $table->string('dispenser_name');
@@ -19,6 +25,7 @@ beforeEach(function () {
     Schema::create('dispenser_readings', function (Blueprint $table) {
         $table->id();
         $table->foreignId('dispenser_id');
+        $table->foreignId('shift_closing_id')->nullable();
         $table->decimal('start_reading', 24, 6);
         $table->decimal('end_reading', 24, 6);
         $table->decimal('unit_price', 24, 6);
@@ -29,9 +36,16 @@ beforeEach(function () {
 afterEach(function () {
     Schema::dropIfExists('dispenser_readings');
     Schema::dropIfExists('dispensers');
+    Schema::dropIfExists('shift_closings');
 });
 
 it('loads the latest dispenser reading with qualified selected columns', function () {
+    $closingId = DB::table('shift_closings')->insertGetId([
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     $dispenserId = DB::table('dispensers')->insertGetId([
         'dispenser_name' => 'Pump 1',
         'status' => true,
@@ -42,6 +56,7 @@ it('loads the latest dispenser reading with qualified selected columns', functio
     DB::table('dispenser_readings')->insert([
         [
             'dispenser_id' => $dispenserId,
+            'shift_closing_id' => $closingId,
             'start_reading' => 100,
             'end_reading' => 150,
             'unit_price' => 120,
@@ -50,6 +65,7 @@ it('loads the latest dispenser reading with qualified selected columns', functio
         ],
         [
             'dispenser_id' => $dispenserId,
+            'shift_closing_id' => $closingId,
             'start_reading' => 150,
             'end_reading' => 200,
             'unit_price' => 125,

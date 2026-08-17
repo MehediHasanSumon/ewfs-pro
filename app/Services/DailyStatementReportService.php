@@ -98,7 +98,7 @@ class DailyStatementReportService
                 $query->where('s.sale_type', 'white')
                     ->orWhere(function (Builder $q) use ($bankMethods) {
                         $q->where('s.sale_type', 'regular')
-                            ->whereNotIn(DB::raw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash')"), $bankMethods);
+                            ->whereRaw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash') NOT IN (?, ?, ?, ?)", $bankMethods);
                     });
             })
             ->groupBy(
@@ -149,7 +149,7 @@ class DailyStatementReportService
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('s.shift_id', $shiftId))
             ->where('s.sale_type', 'regular')
-            ->whereIn(DB::raw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash')"), $bankMethods)
+            ->whereRaw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash') IN (?, ?, ?, ?)", $bankMethods)
             ->groupBy(
                 'si.product_id',
                 'si.product_name_snapshot',
@@ -260,7 +260,6 @@ class DailyStatementReportService
                     ->where('vl.entry_side', $accountSide);
             })
             ->join('accounts as a', 'a.id', '=', 'vl.account_id')
-            ->leftJoin('accounts as fa', 'fa.id', '=', 'v.from_account_id')
             ->leftJoinSub(
                 DB::table('voucher_lines')
                     ->select('voucher_id', DB::raw('MIN(id) AS id'))
@@ -292,8 +291,8 @@ class DailyStatementReportService
             ->orderBy('v.voucher_date')
             ->orderBy('v.id')
             ->get([
-                DB::raw("CASE WHEN v.voucher_type = 'office_payment' THEN COALESCE(fa.name, a.name) ELSE a.name END as account_name"),
-                DB::raw("COALESCE(payment.payment_method, v.payment_method, 'Cash') as payment_type"),
+                'a.name as account_name',
+                DB::raw("COALESCE(payment.payment_method, 'cash') as payment_type"),
                 'vl.amount',
                 'v.description',
             ])
