@@ -369,6 +369,36 @@
         </tbody>
     </table>
 
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">8. Office Payment Summary</h3>
+    <table>
+        <thead>
+            <tr>
+                <th class="text-center" style="width: 50px;">Sl</th>
+                <th>Name</th>
+                <th>Payment Type</th>
+                <th class="text-right">Payment Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($officePayment as $index => $item)
+            <tr>
+                <td class="text-center">{{ $index + 1 }}</td>
+                <td>{{ $item->account_name }}</td>
+                <td>{{ $item->payment_type ?? '-' }}</td>
+                <td class="text-right">{{ number_format($item->amount, 2) }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="4" class="text-center">No records</td></tr>
+            @endforelse
+            @if(count($officePayment) > 0)
+            <tr style="font-weight: bold; background-color: #e0e0e0;">
+                <td colspan="3">Total:</td>
+                <td class="text-right">{{ number_format($officePayment->sum('amount'), 2) }}</td>
+            </tr>
+            @endif
+        </tbody>
+    </table>
+
     <table style="margin-top: 30px; border: 1px solid #000;">
         <tr>
             <td style="width: 50%; border-right: 1px solid #000; padding: 80px 20px 20px 20px; vertical-align: bottom;">
@@ -400,13 +430,17 @@
                         <td style="border: none; padding: 5px;">Cash Payment Summary:</td>
                         <td style="border: none; padding: 5px; text-align: right;">{{ number_format($cashPayment->sum('amount'), 2) }}</td>
                     </tr>
+                    <tr>
+                        <td style="border: none; padding: 5px;">Office Payment Summary:</td>
+                        <td style="border: none; padding: 5px; text-align: right;">{{ number_format($officePayment->sum('amount'), 2) }}</td>
+                    </tr>
                     <tr style="border-bottom: 1px solid #000;">
                         <td style="border: none; padding: 5px; font-weight: bold;">Total Payment:</td>
-                        <td style="border: none; padding: 5px; text-align: right; font-weight: bold; border-bottom: 1px solid #000;">{{ number_format($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount'), 2) }}</td>
+                        <td style="border: none; padding: 5px; text-align: right; font-weight: bold; border-bottom: 1px solid #000;">{{ number_format($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount') + $officePayment->sum('amount'), 2) }}</td>
                     </tr>
                     <tr>
                         <td style="border: none; padding: 5px; padding-top: 15px; font-weight: bold; font-size: 14px;">CASH IN HAND</td>
-                        <td style="border: none; padding: 5px; padding-top: 15px; text-align: right; font-weight: bold; font-size: 14px;">{{ number_format((collect($allProductSales)->sum('total_amount') + $cashReceived->sum('amount')) - ($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount')), 2) }}</td>
+                        <td style="border: none; padding: 5px; padding-top: 15px; text-align: right; font-weight: bold; font-size: 14px;">{{ number_format((collect($allProductSales)->sum('total_amount') + $cashReceived->sum('amount')) - ($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount') + $officePayment->sum('amount')), 2) }}</td>
                     </tr>
                 </table>
             </td>

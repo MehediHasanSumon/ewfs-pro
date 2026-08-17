@@ -62,6 +62,7 @@ interface DailyStatementProps {
     customerWiseSales: CustomerSale[];
     cashReceived: CashTransaction[];
     cashPayment: CashTransaction[];
+    officePayment: CashTransaction[];
     customers: Customer[];
     shifts: Shift[];
     filters: {
@@ -73,7 +74,7 @@ interface DailyStatementProps {
     };
 }
 
-export default function DailyStatement({ productWiseSales = [], cashSales = [], bankSales = [], cashBankSales = [], creditSales = [], customerWiseSales = [], cashReceived = [], cashPayment = [], customers = [], shifts = [], filters = {} }: DailyStatementProps) {
+export default function DailyStatement({ productWiseSales = [], cashSales = [], bankSales = [], cashBankSales = [], creditSales = [], customerWiseSales = [], cashReceived = [], cashPayment = [], officePayment = [], customers = [], shifts = [], filters = {} }: DailyStatementProps) {
     const { can } = usePermission();
     const canFilter = can('can-account-filter');
     const canDownload = can('can-account-download');
@@ -492,6 +493,48 @@ export default function DailyStatement({ productWiseSales = [], cashSales = [], 
                                                 <tr className="border-b font-bold dark:border-gray-700">
                                                     <td colSpan={3} className="p-2 text-[13px] dark:text-white">Total:</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{cashPayment.reduce((sum, item) => sum + Number(item.amount), 0).toFixed(2)}</td>
+                                                </tr>
+                                            </>
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={4} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">No records</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader>
+                            <CardTitle className="dark:text-white">8. Office Payment Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b dark:border-gray-700">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Sl</th>
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Name</th>
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Type</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Payment Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {officePayment.length > 0 ? (
+                                            <>
+                                                {officePayment.map((item, index) => (
+                                                    <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                        <td className="p-2 text-[13px] dark:text-white">{index + 1}</td>
+                                                        <td className="p-2 text-[13px] dark:text-white">{item.account_name}</td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">{item.payment_type || '-'}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.amount.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="border-b font-bold dark:border-gray-700">
+                                                    <td colSpan={3} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-white">{officePayment.reduce((sum, item) => sum + Number(item.amount), 0).toFixed(2)}</td>
                                                 </tr>
                                             </>
                                         ) : (

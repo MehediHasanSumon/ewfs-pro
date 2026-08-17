@@ -58,6 +58,13 @@ class DailyStatementReportService
                 $endDate,
                 $shiftId
             ),
+            'officePayment' => $this->voucherRows(
+                'office_payment',
+                'debit',
+                $startDate,
+                $endDate,
+                $shiftId
+            ),
         ];
     }
 
@@ -253,6 +260,7 @@ class DailyStatementReportService
                     ->where('vl.entry_side', $accountSide);
             })
             ->join('accounts as a', 'a.id', '=', 'vl.account_id')
+            ->leftJoin('accounts as fa', 'fa.id', '=', 'v.from_account_id')
             ->leftJoinSub(
                 DB::table('voucher_lines')
                     ->select('voucher_id', DB::raw('MIN(id) AS id'))
@@ -271,8 +279,10 @@ class DailyStatementReportService
             ->where(function (Builder $query) use ($voucherType) {
                 if (in_array($voucherType, ['receipt', 'received'])) {
                     $query->whereIn('v.voucher_type', ['receipt', 'received']);
+                } elseif ($voucherType === 'office_payment') {
+                    $query->where('v.voucher_type', 'office_payment');
                 } else {
-                    $query->whereIn('v.voucher_type', ['payment', 'office_payment']);
+                    $query->where('v.voucher_type', 'payment');
                 }
             })
             ->whereDate('v.voucher_date', '>=', $startDate)
@@ -282,8 +292,8 @@ class DailyStatementReportService
             ->orderBy('v.voucher_date')
             ->orderBy('v.id')
             ->get([
-                'a.name as account_name',
-                'payment.payment_method as payment_type',
+                DB::raw("CASE WHEN v.voucher_type = 'office_payment' THEN COALESCE(fa.name, a.name) ELSE a.name END as account_name"),
+                DB::raw("COALESCE(payment.payment_method, v.payment_method, 'Cash') as payment_type"),
                 'vl.amount',
                 'v.description',
             ])

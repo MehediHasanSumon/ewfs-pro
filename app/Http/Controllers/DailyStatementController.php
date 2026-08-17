@@ -62,6 +62,7 @@ class DailyStatementController extends Controller implements HasMiddleware
         $customerWiseSales = $report['customerWiseSales'];
         $cashReceived = $report['cashReceived'];
         $cashPayment = $report['cashPayment'];
+        $officePayment = $report['officePayment'];
         $companySetting = CompanySetting::query()->first();
 
         return Pdf::loadView(
@@ -75,6 +76,7 @@ class DailyStatementController extends Controller implements HasMiddleware
                 'customerWiseSales',
                 'cashReceived',
                 'cashPayment',
+                'officePayment',
                 'companySetting',
                 'startDate',
                 'endDate'
