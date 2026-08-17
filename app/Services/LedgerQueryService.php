@@ -94,6 +94,26 @@ class LedgerQueryService
             ->get();
     }
 
+    public function bankAccountIds(): Collection
+    {
+        return Account::query()
+            ->active()
+            ->where(function (EloquentBuilder $query) {
+                $query->whereIn('semantic_code', ['bank_account', 'mobile_bank'])
+                    ->orWhere('name', 'like', '%bank%')
+                    ->orWhereHas('group', fn (EloquentBuilder $group) => $group
+                        ->where('account_class', 'asset')
+                        ->where(function (EloquentBuilder $bankGroup) {
+                            $bankGroup->whereIn(
+                                'code',
+                                AccountGroupHelper::codes(['bank_account', 'mobile_bank'])
+                            )
+                                ->orWhere('name', 'like', '%bank%');
+                        }));
+            })
+            ->pluck('id');
+    }
+
     public function accountLedger(Account $account, string $startDate, string $endDate): array
     {
         $account->loadMissing('group');
@@ -292,12 +312,13 @@ class LedgerQueryService
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
             ->leftJoin('vouchers as v', function ($join) {
                 $join->on('v.id', '=', 'je.source_id')
-                    ->where('je.source_type', Voucher::class);
+                    ->where('je.source_type', '=', Voucher::class);
             })
             ->leftJoin('shifts as s', 's.id', '=', 'je.shift_id')
             ->where('jl.account_id', $accountId)
             ->whereIn('je.status', ['posted', 'reversed'])
-            ->whereBetween('je.business_date', [$startDate, $endDate]);
+            ->whereDate('je.business_date', '>=', $startDate)
+            ->whereDate('je.business_date', '<=', $endDate);
     }
 
     private function accountPeriodTotals(
