@@ -173,7 +173,7 @@
         </tbody>
     </table>
 
-    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">2. Sales Summary (Cash & Bank)</h3>
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">2. Sales Summary (Cash)</h3>
     <table>
         <thead>
             <tr>
@@ -185,7 +185,7 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($cashBankSales as $sale)
+            @forelse($cashSales as $sale)
             <tr>
                 <td>{{ $sale->product_name }}</td>
                 <td>{{ $sale->unit_name }}</td>
@@ -196,17 +196,50 @@
             @empty
             <tr><td colspan="5" class="text-center">No records</td></tr>
             @endforelse
-            @if(count($cashBankSales) > 0)
+            @if(count($cashSales) > 0)
             <tr style="font-weight: bold; background-color: #e0e0e0;">
                 <td colspan="3">Total:</td>
-                <td class="text-right">{{ number_format($cashBankSales->sum('total_quantity'), 2) }}</td>
-                <td class="text-right">{{ number_format($cashBankSales->sum('total_amount'), 2) }}</td>
+                <td class="text-right">{{ number_format($cashSales->sum('total_quantity'), 2) }}</td>
+                <td class="text-right">{{ number_format($cashSales->sum('total_amount'), 2) }}</td>
             </tr>
             @endif
         </tbody>
     </table>
 
-    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">3. Sales Summary (Credit)</h3>
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">3. Sales Summary (Bank)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Product Name</th>
+                <th>Unit Name</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Total Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($bankSales as $sale)
+            <tr>
+                <td>{{ $sale->product_name }}</td>
+                <td>{{ $sale->unit_name }}</td>
+                <td class="text-right">{{ number_format($sale->unit_price, 2) }}</td>
+                <td class="text-right">{{ number_format($sale->total_quantity, 2) }}</td>
+                <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="5" class="text-center">No records</td></tr>
+            @endforelse
+            @if(count($bankSales) > 0)
+            <tr style="font-weight: bold; background-color: #e0e0e0;">
+                <td colspan="3">Total:</td>
+                <td class="text-right">{{ number_format($bankSales->sum('total_quantity'), 2) }}</td>
+                <td class="text-right">{{ number_format($bankSales->sum('total_amount'), 2) }}</td>
+            </tr>
+            @endif
+        </tbody>
+    </table>
+
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">4. Sales Summary (Credit)</h3>
     <table>
         <thead>
             <tr>
@@ -239,7 +272,7 @@
         </tbody>
     </table>
 
-    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">4. Customer Wise Sales Summary (Credit)</h3>
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">5. Customer Wise Sales Summary (Credit)</h3>
     <table>
         <thead>
             <tr>
@@ -276,7 +309,7 @@
         </tbody>
     </table>
 
-    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">5. Cash Received Summary</h3>
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">6. Cash Received Summary</h3>
     <table>
         <thead>
             <tr>
@@ -306,7 +339,7 @@
         </tbody>
     </table>
 
-    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">6. Cash Payment Summary</h3>
+    <h3 style="margin: 20px 0 10px 0; font-size: 14px;">7. Cash Payment Summary</h3>
     <table>
         <thead>
             <tr>
@@ -361,7 +394,7 @@
                     </tr>
                     <tr>
                         <td style="border: none; padding: 5px;">Sales Summary (Bank):</td>
-                        <td style="border: none; padding: 5px; text-align: right;">{{ number_format($cashBankSales->sum('total_amount'), 2) }}</td>
+                        <td style="border: none; padding: 5px; text-align: right;">{{ number_format($bankSales->sum('total_amount'), 2) }}</td>
                     </tr>
                     <tr>
                         <td style="border: none; padding: 5px;">Cash Payment Summary:</td>
@@ -369,11 +402,11 @@
                     </tr>
                     <tr style="border-bottom: 1px solid #000;">
                         <td style="border: none; padding: 5px; font-weight: bold;">Total Payment:</td>
-                        <td style="border: none; padding: 5px; text-align: right; font-weight: bold; border-bottom: 1px solid #000;">{{ number_format($creditSales->sum('total_amount') + $cashBankSales->sum('total_amount') + $cashPayment->sum('amount'), 2) }}</td>
+                        <td style="border: none; padding: 5px; text-align: right; font-weight: bold; border-bottom: 1px solid #000;">{{ number_format($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount'), 2) }}</td>
                     </tr>
                     <tr>
                         <td style="border: none; padding: 5px; padding-top: 15px; font-weight: bold; font-size: 14px;">CASH IN HAND</td>
-                        <td style="border: none; padding: 5px; padding-top: 15px; text-align: right; font-weight: bold; font-size: 14px;">{{ number_format((collect($allProductSales)->sum('total_amount') + $cashReceived->sum('amount')) - ($creditSales->sum('total_amount') + $cashBankSales->sum('total_amount') + $cashPayment->sum('amount')), 2) }}</td>
+                        <td style="border: none; padding: 5px; padding-top: 15px; text-align: right; font-weight: bold; font-size: 14px;">{{ number_format((collect($allProductSales)->sum('total_amount') + $cashReceived->sum('amount')) - ($creditSales->sum('total_amount') + $bankSales->sum('total_amount') + $cashPayment->sum('amount')), 2) }}</td>
                     </tr>
                 </table>
             </td>

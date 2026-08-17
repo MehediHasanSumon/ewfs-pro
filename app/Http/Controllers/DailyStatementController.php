@@ -55,6 +55,8 @@ class DailyStatementController extends Controller implements HasMiddleware
         [$startDate, $endDate, $shiftId] = $this->filters($request);
         $report = $this->reports->report($startDate, $endDate, $shiftId);
         $allProductSales = $report['productWiseSales'];
+        $cashSales = $report['cashSales'];
+        $bankSales = $report['bankSales'];
         $cashBankSales = $report['cashBankSales'];
         $creditSales = $report['creditSales'];
         $customerWiseSales = $report['customerWiseSales'];
@@ -66,6 +68,8 @@ class DailyStatementController extends Controller implements HasMiddleware
             'pdf.daily-statement',
             compact(
                 'allProductSales',
+                'cashSales',
+                'bankSales',
                 'cashBankSales',
                 'creditSales',
                 'customerWiseSales',

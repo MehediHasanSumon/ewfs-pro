@@ -13,7 +13,12 @@ class DailyStatementReportService
         string $endDate,
         ?int $shiftId = null
     ): array {
-        $cashBankSales = $this->cashBankSales(
+        $cashSales = $this->cashSales(
+            $startDate,
+            $endDate,
+            $shiftId
+        );
+        $bankSales = $this->bankSales(
             $startDate,
             $endDate,
             $shiftId
@@ -26,10 +31,13 @@ class DailyStatementReportService
 
         return [
             'productWiseSales' => $this->combineProductSales(
-                $cashBankSales,
+                $cashSales,
+                $bankSales,
                 $creditSales
             ),
-            'cashBankSales' => $cashBankSales,
+            'cashSales' => $cashSales,
+            'bankSales' => $bankSales,
+            'cashBankSales' => $cashSales->concat($bankSales)->sortBy('product_name')->values(),
             'creditSales' => $creditSales,
             'customerWiseSales' => $this->customerWiseSales(
                 $startDate,
@@ -53,20 +61,88 @@ class DailyStatementReportService
         ];
     }
 
-    private function cashBankSales(
+    private function cashSales(
         string $startDate,
         string $endDate,
         ?int $shiftId
     ): Collection {
+        $legacyPaymentMethods = DB::table('journal_lines')
+            ->select('journal_entry_id')
+            ->selectRaw('MAX(payment_method) AS payment_method')
+            ->where('debit_amount', '>', 0)
+            ->whereNotNull('payment_method')
+            ->groupBy('journal_entry_id');
+
+        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online'];
+
         return DB::table('sale_items as si')
             ->join('sales as s', 's.id', '=', 'si.sale_id')
             ->join('journal_entries as je', function ($join) {
                 $join->on('je.id', '=', 's.journal_entry_id')
                     ->where('je.status', 'posted');
             })
+            ->leftJoin('sale_payment_details as spd', 'spd.sale_id', '=', 's.id')
+            ->leftJoinSub($legacyPaymentMethods, 'jl_pay', fn ($join) => $join
+                ->on('jl_pay.journal_entry_id', '=', 's.journal_entry_id'))
             ->whereBetween('s.sale_date', [$startDate, $endDate])
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('s.shift_id', $shiftId))
+            ->where(function (Builder $query) use ($bankMethods) {
+                $query->where('s.sale_type', 'white')
+                    ->orWhere(function (Builder $q) use ($bankMethods) {
+                        $q->where('s.sale_type', 'regular')
+                            ->whereNotIn(DB::raw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash')"), $bankMethods);
+                    });
+            })
+            ->groupBy(
+                'si.product_id',
+                'si.product_name_snapshot',
+                'si.unit_name_snapshot'
+            )
+            ->orderBy('si.product_name_snapshot')
+            ->selectRaw(
+                'si.product_id,
+                 si.product_name_snapshot AS product_name,
+                 si.unit_name_snapshot AS unit_name,
+                 SUM(si.quantity) AS total_quantity,
+                 SUM(si.line_total) AS total_amount,
+                 CASE WHEN SUM(si.quantity) > 0
+                    THEN SUM(si.line_total) / SUM(si.quantity)
+                    ELSE 0
+                 END AS unit_price'
+            )
+            ->get()
+            ->map(fn (object $sale) => $this->castProductSale($sale));
+    }
+
+    private function bankSales(
+        string $startDate,
+        string $endDate,
+        ?int $shiftId
+    ): Collection {
+        $legacyPaymentMethods = DB::table('journal_lines')
+            ->select('journal_entry_id')
+            ->selectRaw('MAX(payment_method) AS payment_method')
+            ->where('debit_amount', '>', 0)
+            ->whereNotNull('payment_method')
+            ->groupBy('journal_entry_id');
+
+        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online'];
+
+        return DB::table('sale_items as si')
+            ->join('sales as s', 's.id', '=', 'si.sale_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 's.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->leftJoin('sale_payment_details as spd', 'spd.sale_id', '=', 's.id')
+            ->leftJoinSub($legacyPaymentMethods, 'jl_pay', fn ($join) => $join
+                ->on('jl_pay.journal_entry_id', '=', 's.journal_entry_id'))
+            ->whereBetween('s.sale_date', [$startDate, $endDate])
+            ->when($shiftId, fn (Builder $query) => $query
+                ->where('s.shift_id', $shiftId))
+            ->where('s.sale_type', 'regular')
+            ->whereIn(DB::raw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash')"), $bankMethods)
             ->groupBy(
                 'si.product_id',
                 'si.product_name_snapshot',
@@ -219,11 +295,14 @@ class DailyStatementReportService
     }
 
     private function combineProductSales(
-        Collection $cashBankSales,
-        Collection $creditSales
+        Collection ...$salesCollections
     ): Collection {
-        return $cashBankSales
-            ->concat($creditSales)
+        $combined = collect();
+        foreach ($salesCollections as $collection) {
+            $combined = $combined->concat($collection);
+        }
+
+        return $combined
             ->groupBy('product_id')
             ->map(function (Collection $items) {
                 $quantity = (float) $items->sum('total_quantity');

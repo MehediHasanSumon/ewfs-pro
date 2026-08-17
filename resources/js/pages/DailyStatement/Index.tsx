@@ -55,7 +55,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface DailyStatementProps {
     productWiseSales: ProductSale[];
-    cashBankSales: ProductSale[];
+    cashSales: ProductSale[];
+    bankSales: ProductSale[];
+    cashBankSales?: ProductSale[];
     creditSales: ProductSale[];
     customerWiseSales: CustomerSale[];
     cashReceived: CashTransaction[];
@@ -71,7 +73,7 @@ interface DailyStatementProps {
     };
 }
 
-export default function DailyStatement({ productWiseSales = [], cashBankSales = [], creditSales = [], customerWiseSales = [], cashReceived = [], cashPayment = [], customers = [], shifts = [], filters = {} }: DailyStatementProps) {
+export default function DailyStatement({ productWiseSales = [], cashSales = [], bankSales = [], cashBankSales = [], creditSales = [], customerWiseSales = [], cashReceived = [], cashPayment = [], customers = [], shifts = [], filters = {} }: DailyStatementProps) {
     const { can } = usePermission();
     const canFilter = can('can-account-filter');
     const canDownload = can('can-account-download');
@@ -237,7 +239,7 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
 
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
-                            <CardTitle className="dark:text-white">2. Sales Summary (Cash & Bank)</CardTitle>
+                            <CardTitle className="dark:text-white">2. Sales Summary (Cash)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
@@ -252,9 +254,9 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {cashBankSales.length > 0 ? (
+                                        {cashSales.length > 0 ? (
                                             <>
-                                                {cashBankSales.map((sale, index) => (
+                                                {cashSales.map((sale, index) => (
                                                     <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                         <td className="p-2 text-[13px] dark:text-white">{sale.product_name}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
@@ -265,8 +267,8 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
                                                 ))}
                                                 <tr className="border-b font-bold dark:border-gray-700">
                                                     <td colSpan={3} className="p-2 text-[13px] dark:text-white">Total:</td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-white">{cashBankSales.reduce((sum, sale) => sum + Number(sale.total_quantity), 0).toFixed(2)}</td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-white">{cashBankSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0).toFixed(2)}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-white">{cashSales.reduce((sum, sale) => sum + Number(sale.total_quantity), 0).toFixed(2)}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-white">{cashSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0).toFixed(2)}</td>
                                                 </tr>
                                             </>
                                         ) : (
@@ -282,7 +284,52 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
 
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
-                            <CardTitle className="dark:text-white">3. Sales Summary (Credit)</CardTitle>
+                            <CardTitle className="dark:text-white">3. Sales Summary (Bank)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b dark:border-gray-700">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product Name</th>
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit Name</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Unit Price</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bankSales.length > 0 ? (
+                                            <>
+                                                {bankSales.map((sale, index) => (
+                                                    <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                        <td className="p-2 text-[13px] dark:text-white">{sale.product_name}</td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.unit_price?.toLocaleString() || '0'}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.total_quantity.toLocaleString()}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="border-b font-bold dark:border-gray-700">
+                                                    <td colSpan={3} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-white">{bankSales.reduce((sum, sale) => sum + Number(sale.total_quantity), 0).toFixed(2)}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-white">{bankSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0).toFixed(2)}</td>
+                                                </tr>
+                                            </>
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">No records</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader>
+                            <CardTitle className="dark:text-white">4. Sales Summary (Credit)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
@@ -327,7 +374,7 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
 
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
-                            <CardTitle className="dark:text-white">4. Customer Wise Sales Summary (Credit)</CardTitle>
+                            <CardTitle className="dark:text-white">5. Customer Wise Sales Summary (Credit)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
@@ -376,7 +423,7 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
 
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
-                            <CardTitle className="dark:text-white">5. Cash Received Summary</CardTitle>
+                            <CardTitle className="dark:text-white">6. Cash Received Summary</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
@@ -418,7 +465,7 @@ export default function DailyStatement({ productWiseSales = [], cashBankSales = 
 
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
-                            <CardTitle className="dark:text-white">6. Cash Payment Summary</CardTitle>
+                            <CardTitle className="dark:text-white">7. Cash Payment Summary</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
