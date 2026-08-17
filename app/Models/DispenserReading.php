@@ -46,6 +46,11 @@ class DispenserReading extends Model
         return $this->belongsTo(ShiftClosing::class, 'shift_closing_id');
     }
 
+    public function shiftClosing(): BelongsTo
+    {
+        return $this->belongsTo(ShiftClosing::class, 'shift_closing_id');
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

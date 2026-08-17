@@ -298,8 +298,8 @@ export default function DispenserReading({
             [field]: parseFloat(value) || 0,
         };
         const reading = newReadings[index];
-        const netReading =
-            reading.end_reading - reading.start_reading - reading.meter_test;
+        const grossDiff = Math.max(0, reading.end_reading - reading.start_reading);
+        const netReading = Math.max(0, grossDiff - reading.meter_test);
         const totalSale = netReading * reading.item_rate;
         newReadings[index].net_reading = netReading;
         newReadings[index].total_sale = totalSale;
@@ -550,6 +550,23 @@ export default function DispenserReading({
             setIsValidationModalOpen(true);
             return;
         }
+
+        for (let i = 0; i < data.dispenser_readings.length; i++) {
+            const r = data.dispenser_readings[i];
+            const dispenserInfo = dispenserReading.find((d) => d.dispenser_id === r.dispenser_id);
+            const name = dispenserInfo?.dispenser?.dispenser_name || `Dispenser #${r.dispenser_id}`;
+            if (r.end_reading < r.start_reading) {
+                setValidationError(`New Reading (${r.end_reading}) cannot be less than Old Reading (${r.start_reading}) for ${name}.`);
+                setIsValidationModalOpen(true);
+                return;
+            }
+            if (r.meter_test > (r.end_reading - r.start_reading)) {
+                setValidationError(`Meter test (${r.meter_test}) cannot exceed gross reading difference (${(r.end_reading - r.start_reading).toFixed(2)}) for ${name}.`);
+                setIsValidationModalOpen(true);
+                return;
+            }
+        }
+
         if (otherProductsError || !otherProductsSummary.is_balanced) {
             setValidationError(
                 otherProductsError ||

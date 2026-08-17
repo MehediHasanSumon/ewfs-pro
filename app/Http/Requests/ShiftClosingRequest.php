@@ -85,4 +85,35 @@ class ShiftClosingRequest extends FormRequest
             'remarks' => ['nullable', 'string', 'max:2000'],
         ];
     }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $readings = $this->input('dispenser_readings', []);
+            if (! is_array($readings)) {
+                return;
+            }
+
+            foreach ($readings as $index => $reading) {
+                $start = (float) ($reading['start_reading'] ?? 0);
+                $end = (float) ($reading['end_reading'] ?? 0);
+                $meterTest = (float) ($reading['meter_test'] ?? 0);
+
+                if ($end < $start) {
+                    $validator->errors()->add(
+                        "dispenser_readings.{$index}.end_reading",
+                        "New reading ({$end}) cannot be less than old reading ({$start})."
+                    );
+                }
+
+                $grossDiff = round($end - $start, 6);
+                if ($meterTest > $grossDiff) {
+                    $validator->errors()->add(
+                        "dispenser_readings.{$index}.meter_test",
+                        "Meter test ({$meterTest}) cannot exceed gross reading difference ({$grossDiff})."
+                    );
+                }
+            }
+        });
+    }
 }

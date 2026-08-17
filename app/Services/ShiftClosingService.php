@@ -108,11 +108,25 @@ class ShiftClosingService
                     ]);
                 }
 
+                $startReading = (float) $readingData['start_reading'];
+                $endReading = (float) $readingData['end_reading'];
+                $meterTest = (float) ($readingData['meter_test'] ?? 0);
+
+                if ($endReading < $startReading) {
+                    throw ValidationException::withMessages([
+                        'dispenser_readings' => "End reading ({$endReading}) cannot be less than start reading ({$startReading}) for dispenser #{$dispenser->id}.",
+                    ]);
+                }
+
+                if ($meterTest > ($endReading - $startReading)) {
+                    throw ValidationException::withMessages([
+                        'dispenser_readings' => "Meter test ({$meterTest}) cannot exceed gross reading difference (".($endReading - $startReading).") for dispenser #{$dispenser->id}.",
+                    ]);
+                }
+
                 $netQuantity = max(
                     0,
-                    (float) $readingData['end_reading']
-                    - (float) $readingData['start_reading']
-                    - (float) ($readingData['meter_test'] ?? 0)
+                    round($endReading - $startReading - $meterTest, 6)
                 );
                 $unitPrice = (float) (
                     $dispenser->product->activeRate?->sales_price ?? 0
@@ -124,9 +138,9 @@ class ShiftClosingService
                     'dispenser_id' => $dispenser->id,
                     'product_id' => $dispenser->product_id,
                     'employee_id' => $readingData['reading_by'] ?? null,
-                    'start_reading' => $readingData['start_reading'],
-                    'end_reading' => $readingData['end_reading'],
-                    'meter_test' => $readingData['meter_test'] ?? 0,
+                    'start_reading' => $startReading,
+                    'end_reading' => $endReading,
+                    'meter_test' => $meterTest,
                     'net_quantity' => $netQuantity,
                     'unit_price' => $unitPrice,
                     'gross_amount' => $grossAmount,
@@ -482,6 +496,26 @@ class ShiftClosingService
         if ($closing->status !== 'posted') {
             throw ValidationException::withMessages([
                 'shift' => 'Only posted shift closings can be reversed.',
+            ]);
+        }
+
+        // Dependent shift protection: Check if subsequent posted shift closings exist
+        $laterClosing = ShiftClosing::query()
+            ->where('status', 'posted')
+            ->where(function ($query) use ($closing) {
+                $query->whereDate('business_date', '>', $closing->business_date)
+                    ->orWhere(function ($q) use ($closing) {
+                        $q->whereDate('business_date', '=', $closing->business_date)
+                            ->where('id', '>', $closing->id);
+                    });
+            })
+            ->first();
+
+        if ($laterClosing) {
+            $formattedDate = $closing->business_date ? $closing->business_date->format('Y-m-d') : '';
+            $laterFormattedDate = $laterClosing->business_date ? $laterClosing->business_date->format('Y-m-d') : '';
+            throw ValidationException::withMessages([
+                'shift' => "Cannot reverse shift closing #{$closing->id} ({$formattedDate}) because subsequent shift closing #{$laterClosing->id} ({$laterFormattedDate}) has already been posted. Please reverse subsequent shifts first in reverse chronological order.",
             ]);
         }
 

@@ -38,6 +38,11 @@ class Dispenser extends Model
 
     public function latestReading(): HasOne
     {
-        return $this->hasOne(DispenserReading::class)->latestOfMany();
+        return $this->hasOne(DispenserReading::class)
+            ->ofMany([
+                'id' => 'max',
+            ], function ($query) {
+                $query->whereHas('closing', fn ($q) => $q->where('status', 'posted'));
+            });
     }
 }
