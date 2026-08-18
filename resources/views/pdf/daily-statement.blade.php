@@ -137,7 +137,7 @@
     </div>
 
     <div class="title-section">
-        <div class="title-box">Daily Statement Report ({{ $startDate }} to {{ $endDate }})</div>
+        <div class="title-box">Daily Statement Report (Date: {{ \Carbon\Carbon::parse($date ?? $startDate)->format('d F Y') }}{{ isset($selectedShift) && $selectedShift ? ' | Shift: ' . $selectedShift->name : '' }})</div>
     </div>
 
     <h3 style="margin: 20px 0 10px 0; font-size: 14px;">1. Sales Summary (Product Wise)</h3>

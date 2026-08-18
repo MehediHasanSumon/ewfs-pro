@@ -28,8 +28,8 @@ class DailyStatementController extends Controller implements HasMiddleware
 
     public function index(Request $request)
     {
-        [$startDate, $endDate, $shiftId] = $this->filters($request);
-        $report = $this->reports->report($startDate, $endDate, $shiftId);
+        [$date, $shiftId] = $this->filters($request);
+        $report = $this->reports->report($date, $shiftId);
 
         return Inertia::render('DailyStatement/Index', [
             ...$report,
@@ -40,20 +40,19 @@ class DailyStatementController extends Controller implements HasMiddleware
                 ->where('status', true)
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'filters' => $request->only([
-                'search',
-                'customer_id',
-                'start_date',
-                'end_date',
-                'shift_id',
-            ]),
+            'filters' => [
+                'date' => $date,
+                'start_date' => $date,
+                'end_date' => $date,
+                'shift_id' => $shiftId ? (string) $shiftId : 'all',
+            ],
         ]);
     }
 
     public function downloadPdf(Request $request)
     {
-        [$startDate, $endDate, $shiftId] = $this->filters($request);
-        $report = $this->reports->report($startDate, $endDate, $shiftId);
+        [$date, $shiftId] = $this->filters($request);
+        $report = $this->reports->report($date, $shiftId);
         $allProductSales = $report['productWiseSales'];
         $cashSales = $report['cashSales'];
         $bankSales = $report['bankSales'];
@@ -64,6 +63,9 @@ class DailyStatementController extends Controller implements HasMiddleware
         $cashPayment = $report['cashPayment'];
         $officePayment = $report['officePayment'];
         $companySetting = CompanySetting::query()->first();
+        $selectedShift = $shiftId ? Shift::find($shiftId) : null;
+        $startDate = $date;
+        $endDate = $date;
 
         return Pdf::loadView(
             'pdf.daily-statement',
@@ -78,6 +80,8 @@ class DailyStatementController extends Controller implements HasMiddleware
                 'cashPayment',
                 'officePayment',
                 'companySetting',
+                'date',
+                'selectedShift',
                 'startDate',
                 'endDate'
             )
@@ -87,17 +91,23 @@ class DailyStatementController extends Controller implements HasMiddleware
     private function filters(Request $request): array
     {
         $validated = $request->validate([
+            'date' => ['nullable', 'date'],
             'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
+            'end_date' => ['nullable', 'date'],
+            'shift_id' => ['nullable'],
         ]);
 
+        $date = $validated['date']
+            ?? $validated['start_date']
+            ?? today()->toDateString();
+
+        $shiftId = isset($validated['shift_id']) && $validated['shift_id'] !== 'all' && $validated['shift_id'] !== ''
+            ? (int) $validated['shift_id']
+            : null;
+
         return [
-            $validated['start_date'] ?? today()->toDateString(),
-            $validated['end_date'] ?? today()->toDateString(),
-            isset($validated['shift_id'])
-                ? (int) $validated['shift_id']
-                : null,
+            $date,
+            $shiftId,
         ];
     }
 }

@@ -9,10 +9,22 @@ use Illuminate\Support\Facades\DB;
 class DailyStatementReportService
 {
     public function report(
-        string $startDate,
-        string $endDate,
+        string $dateOrStartDate,
+        string|int|null $endDateOrShiftId = null,
         ?int $shiftId = null
     ): array {
+        if (is_int($endDateOrShiftId) && $shiftId === null) {
+            $startDate = $dateOrStartDate;
+            $endDate = $dateOrStartDate;
+            $shiftId = $endDateOrShiftId;
+        } elseif (is_string($endDateOrShiftId) && ! empty($endDateOrShiftId)) {
+            $startDate = $dateOrStartDate;
+            $endDate = $endDateOrShiftId;
+        } else {
+            $startDate = $dateOrStartDate;
+            $endDate = $dateOrStartDate;
+        }
+
         $cashSales = $this->cashSales(
             $startDate,
             $endDate,
@@ -80,7 +92,8 @@ class DailyStatementReportService
             ->whereNotNull('payment_method')
             ->groupBy('journal_entry_id');
 
-        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online'];
+        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online', 'mobile bank'];
+        $bankGroupCodes = ['100020003', '100020004'];
 
         return DB::table('sale_items as si')
             ->join('sales as s', 's.id', '=', 'si.sale_id')
@@ -89,16 +102,28 @@ class DailyStatementReportService
                     ->where('je.status', 'posted');
             })
             ->leftJoin('sale_payment_details as spd', 'spd.sale_id', '=', 's.id')
+            ->leftJoin('accounts as spd_acc', 'spd_acc.id', '=', 'spd.account_id')
+            ->leftJoin('groups as spd_grp', 'spd_grp.id', '=', 'spd_acc.group_id')
             ->leftJoinSub($legacyPaymentMethods, 'jl_pay', fn ($join) => $join
                 ->on('jl_pay.journal_entry_id', '=', 's.journal_entry_id'))
-            ->whereBetween('s.sale_date', [$startDate, $endDate])
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('s.sale_date', $startDate),
+                fn (Builder $query) => $query->whereDate('s.sale_date', '>=', $startDate)->whereDate('s.sale_date', '<=', $endDate)
+            )
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('s.shift_id', $shiftId))
-            ->where(function (Builder $query) use ($bankMethods) {
+            ->where(function (Builder $query) use ($bankMethods, $bankGroupCodes) {
                 $query->where('s.sale_type', 'white')
-                    ->orWhere(function (Builder $q) use ($bankMethods) {
+                    ->orWhere(function (Builder $q) use ($bankMethods, $bankGroupCodes) {
                         $q->where('s.sale_type', 'regular')
-                            ->whereRaw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash') NOT IN (?, ?, ?, ?)", $bankMethods);
+                            ->where(function (Builder $sub) use ($bankMethods, $bankGroupCodes) {
+                                $sub->whereRaw("LOWER(COALESCE(spd.payment_method, jl_pay.payment_method, 'cash')) NOT IN (?, ?, ?, ?, ?)", $bankMethods)
+                                    ->where(function (Builder $grpSub) use ($bankGroupCodes) {
+                                        $grpSub->whereNull('spd_grp.code')
+                                            ->orWhereRaw("spd_grp.code NOT IN (?, ?)", $bankGroupCodes);
+                                    });
+                            });
                     });
             })
             ->groupBy(
@@ -134,7 +159,8 @@ class DailyStatementReportService
             ->whereNotNull('payment_method')
             ->groupBy('journal_entry_id');
 
-        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online'];
+        $bankMethods = ['bank', 'mobile_bank', 'cheque', 'online', 'mobile bank'];
+        $bankGroupCodes = ['100020003', '100020004'];
 
         return DB::table('sale_items as si')
             ->join('sales as s', 's.id', '=', 'si.sale_id')
@@ -143,13 +169,22 @@ class DailyStatementReportService
                     ->where('je.status', 'posted');
             })
             ->leftJoin('sale_payment_details as spd', 'spd.sale_id', '=', 's.id')
+            ->leftJoin('accounts as spd_acc', 'spd_acc.id', '=', 'spd.account_id')
+            ->leftJoin('groups as spd_grp', 'spd_grp.id', '=', 'spd_acc.group_id')
             ->leftJoinSub($legacyPaymentMethods, 'jl_pay', fn ($join) => $join
                 ->on('jl_pay.journal_entry_id', '=', 's.journal_entry_id'))
-            ->whereBetween('s.sale_date', [$startDate, $endDate])
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('s.sale_date', $startDate),
+                fn (Builder $query) => $query->whereDate('s.sale_date', '>=', $startDate)->whereDate('s.sale_date', '<=', $endDate)
+            )
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('s.shift_id', $shiftId))
             ->where('s.sale_type', 'regular')
-            ->whereRaw("COALESCE(spd.payment_method, jl_pay.payment_method, 'cash') IN (?, ?, ?, ?)", $bankMethods)
+            ->where(function (Builder $query) use ($bankMethods, $bankGroupCodes) {
+                $query->whereRaw("LOWER(COALESCE(spd.payment_method, jl_pay.payment_method, '')) IN (?, ?, ?, ?, ?)", $bankMethods)
+                    ->orWhereRaw("spd_grp.code IN (?, ?)", $bankGroupCodes);
+            })
             ->groupBy(
                 'si.product_id',
                 'si.product_name_snapshot',
@@ -183,7 +218,11 @@ class DailyStatementReportService
                 $join->on('je.id', '=', 'csc.journal_entry_id')
                     ->where('je.status', 'posted');
             })
-            ->whereBetween('cs.sale_date', [$startDate, $endDate])
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('cs.sale_date', $startDate),
+                fn (Builder $query) => $query->whereDate('cs.sale_date', '>=', $startDate)->whereDate('cs.sale_date', '<=', $endDate)
+            )
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('cs.shift_id', $shiftId))
             ->groupBy(
@@ -219,7 +258,11 @@ class DailyStatementReportService
                 $join->on('je.id', '=', 'csc.journal_entry_id')
                     ->where('je.status', 'posted');
             })
-            ->whereBetween('cs.sale_date', [$startDate, $endDate])
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('cs.sale_date', $startDate),
+                fn (Builder $query) => $query->whereDate('cs.sale_date', '>=', $startDate)->whereDate('cs.sale_date', '<=', $endDate)
+            )
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('cs.shift_id', $shiftId))
             ->orderBy('csc.customer_name_snapshot')
@@ -284,8 +327,11 @@ class DailyStatementReportService
                     $query->where('v.voucher_type', 'payment');
                 }
             })
-            ->whereDate('v.voucher_date', '>=', $startDate)
-            ->whereDate('v.voucher_date', '<=', $endDate)
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('v.voucher_date', $startDate),
+                fn (Builder $query) => $query->whereDate('v.voucher_date', '>=', $startDate)->whereDate('v.voucher_date', '<=', $endDate)
+            )
             ->when($shiftId, fn (Builder $query) => $query
                 ->where('v.shift_id', $shiftId))
             ->orderBy('v.voucher_date')

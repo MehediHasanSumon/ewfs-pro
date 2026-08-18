@@ -68,6 +68,7 @@ interface DailyStatementProps {
     filters: {
         search?: string;
         customer_id?: string;
+        date?: string;
         start_date?: string;
         end_date?: string;
         shift_id?: string;
@@ -82,13 +83,11 @@ export default function DailyStatement({ productWiseSales = [], cashSales = [], 
     const [search, setSearch] = useState(filters.search || '');
     const [customerId, setCustomerId] = useState(filters.customer_id || 'all');
     const [shiftId, setShiftId] = useState(filters.shift_id || 'all');
-    const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(filters.date || filters.start_date || new Date().toISOString().split('T')[0]);
 
     const applyFilters = () => {
         const params: any = {
-            start_date: startDate,
-            end_date: endDate,
+            date: date,
         };
         if (shiftId !== 'all') {
             params.shift_id = shiftId;
@@ -98,12 +97,10 @@ export default function DailyStatement({ productWiseSales = [], cashSales = [], 
 
     const clearFilters = () => {
         const today = new Date().toISOString().split('T')[0];
-        setStartDate(today);
-        setEndDate(today);
+        setDate(today);
         setShiftId('all');
         router.get('/daily-statement', {
-            start_date: today,
-            end_date: today,
+            date: today,
         }, { preserveState: true });
     };
 
@@ -124,8 +121,7 @@ export default function DailyStatement({ productWiseSales = [], cashSales = [], 
                             variant="success"
                             onClick={() => {
                                 const params = new URLSearchParams();
-                                params.append('start_date', startDate);
-                                params.append('end_date', endDate);
+                                params.append('date', date);
                                 if (shiftId !== 'all') {
                                     params.append('shift_id', shiftId);
                                 }
@@ -146,22 +142,13 @@ export default function DailyStatement({ productWiseSales = [], cashSales = [], 
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                                 <div>
-                                    <Label className="dark:text-gray-200">Start Date</Label>
+                                    <Label className="dark:text-gray-200">Date</Label>
                                     <Input
                                         type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="dark:text-gray-200">End Date</Label>
-                                    <Input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
