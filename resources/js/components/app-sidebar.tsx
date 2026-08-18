@@ -151,6 +151,12 @@ const mainNavItems = [
             { title: 'Sales', href: '/sales', icon: DollarSign, permission: 'view-sale' },
             { title: 'White Sales', href: '/white-sales', icon: ShoppingCart, permission: 'view-white-sale' },
             {
+                title: 'Sales Report',
+                href: '/sales-report',
+                icon: BarChart3,
+                permission: 'view-sale',
+            },
+            {
                 title: 'Customer Sales Reports',
                 href: '/customer-wise-sales-reports',
                 icon: BarChart3,

@@ -40,6 +40,7 @@ use App\Http\Controllers\ReceivedVoucherController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SalaryPaymentController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\ShiftClosedListController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SMSConfigController;
@@ -397,6 +398,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Customer Sales Reports routes
     Route::get('customer-wise-sales-reports', [CustomerSalesReportController::class, 'index'])->name('customer-sales-reports.index');
     Route::get('customer-wise-sales-reports/download-pdf', [CustomerSalesReportController::class, 'downloadPdf'])->name('customer-sales-reports.download.pdf');
+
+    // Sales Report (Details) routes
+    Route::get('sales-report', [SalesReportController::class, 'index'])->name('sales-report.index');
+    Route::get('sales-report/download-pdf', [SalesReportController::class, 'downloadPdf'])->name('sales-report.download.pdf');
 
     // Bank Book Ledger routes
     Route::get('bank-book-ledger', [BankBookLedgerController::class, 'index'])->name('bank-book-ledger.index');
