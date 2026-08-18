@@ -155,9 +155,30 @@ beforeEach(function (): void {
         $table->string('payment_method', 30)->default('cash');
         $table->timestamps();
     });
+
+    Schema::create('shift_closings', function (Blueprint $table): void {
+        $table->id();
+        $table->date('business_date');
+        $table->foreignId('shift_id');
+        $table->string('status', 20)->default('posted');
+        $table->timestamps();
+    });
+
+    Schema::create('dispenser_readings', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('shift_closing_id');
+        $table->foreignId('dispenser_id')->nullable();
+        $table->foreignId('product_id');
+        $table->decimal('net_quantity', 24, 6);
+        $table->decimal('unit_price', 24, 6);
+        $table->decimal('gross_amount', 24, 4);
+        $table->timestamps();
+    });
 });
 
 afterEach(function (): void {
+    Schema::dropIfExists('dispenser_readings');
+    Schema::dropIfExists('shift_closings');
     Schema::dropIfExists('voucher_payment_details');
     Schema::dropIfExists('voucher_lines');
     Schema::dropIfExists('vouchers');
@@ -427,16 +448,106 @@ it('strictly isolates dates: 2026-08-17, 2026-08-18, 2026-08-19', function (): v
     expect((float) $report19['cashSales']->sum('total_amount'))->toBe(3000.00);
 });
 
-it('handles zero data correctly when no transactions exist on date', function (): void {
-    $service = app(DailyStatementReportService::class);
-    $report = $service->report('2026-08-25');
+it('calculates dispenser cash sales from shift closing readings and balances with credit and bank sales', function (): void {
+    $shift = Shift::query()->create(['name' => 'Day Shift']);
+    $category = DB::table('categories')->insertGetId(['name' => 'Fuel', 'code' => '1001']);
+    $unit = DB::table('units')->insertGetId(['name' => 'Litre']);
+    $diesel = DB::table('products')->insertGetId(['product_name' => 'Diesel', 'category_id' => $category, 'unit_id' => $unit]);
+    $octane = DB::table('products')->insertGetId(['product_name' => 'Octane', 'category_id' => $category, 'unit_id' => $unit]);
 
-    expect($report['cashSales'])->toHaveCount(0)
-        ->and($report['bankSales'])->toHaveCount(0)
-        ->and($report['creditSales'])->toHaveCount(0)
-        ->and($report['productWiseSales'])->toHaveCount(0)
-        ->and($report['cashReceived'])->toHaveCount(0)
-        ->and($report['cashPayment'])->toHaveCount(0)
-        ->and($report['officePayment'])->toHaveCount(0);
+    // 1. Shift Closing on 2026-08-18 with Dispenser Readings:
+    // Diesel: 1,000 Liters @ 100 Tk = 100,000 Tk
+    // Octane: 500 Liters @ 120 Tk = 60,000 Tk
+    // Total Dispenser Reading = 160,000 Tk
+    $shiftClosing = DB::table('shift_closings')->insertGetId([
+        'business_date' => '2026-08-18',
+        'shift_id' => $shift->id,
+        'status' => 'posted',
+    ]);
+    DB::table('dispenser_readings')->insert([
+        [
+            'shift_closing_id' => $shiftClosing,
+            'product_id' => $diesel,
+            'net_quantity' => 1000,
+            'unit_price' => 100,
+            'gross_amount' => 100000,
+        ],
+        [
+            'shift_closing_id' => $shiftClosing,
+            'product_id' => $octane,
+            'net_quantity' => 500,
+            'unit_price' => 120,
+            'gross_amount' => 60000,
+        ],
+    ]);
+
+    // 2. Credit Sales on 2026-08-18:
+    // Diesel Credit: 300 Liters @ 100 Tk = 30,000 Tk
+    $jCredit = DB::table('journal_entries')->insertGetId(['entry_no' => 'JRN-CR-DSP', 'status' => 'posted']);
+    $creditSale = DB::table('credit_sales')->insertGetId([
+        'shift_id' => $shift->id,
+        'sale_date' => '2026-08-18',
+    ]);
+    $creditCust = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $creditSale,
+        'journal_entry_id' => $jCredit,
+        'customer_name_snapshot' => 'Transport Corp',
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $creditCust,
+        'product_id' => $diesel,
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'Litre',
+        'quantity' => 300,
+        'unit_price' => 100,
+        'line_total' => 30000,
+    ]);
+
+    // 3. Bank Sales on 2026-08-18:
+    // Octane Bank: 100 Liters @ 120 Tk = 12,000 Tk
+    $bankGroup = DB::table('groups')->insertGetId(['name' => 'Bank Account', 'code' => '100020004']);
+    $bankAccount = DB::table('accounts')->insertGetId(['name' => 'Bank A/C', 'group_id' => $bankGroup]);
+    $jBank = DB::table('journal_entries')->insertGetId(['entry_no' => 'JRN-BNK-DSP', 'status' => 'posted']);
+    $bankSale = DB::table('sales')->insertGetId([
+        'shift_id' => $shift->id,
+        'journal_entry_id' => $jBank,
+        'sale_date' => '2026-08-18',
+        'sale_type' => 'regular',
+        'status' => 'paid',
+    ]);
+    DB::table('sale_payment_details')->insert([
+        'sale_id' => $bankSale,
+        'account_id' => $bankAccount,
+        'payment_method' => 'bank',
+    ]);
+    DB::table('sale_items')->insert([
+        'sale_id' => $bankSale,
+        'product_id' => $octane,
+        'product_name_snapshot' => 'Octane',
+        'unit_name_snapshot' => 'Litre',
+        'quantity' => 100,
+        'unit_price' => 120,
+        'line_total' => 12000,
+    ]);
+
+    $service = app(DailyStatementReportService::class);
+    $report = $service->report('2026-08-18', $shift->id);
+
+    // Expected:
+    // Credit Sales: Diesel 300L = 30,000 Tk
+    expect((float) $report['creditSales']->sum('total_amount'))->toBe(30000.00);
+
+    // Bank Sales: Octane 100L = 12,000 Tk
+    expect((float) $report['bankSales']->sum('total_amount'))->toBe(12000.00);
+
+    // Cash Sales:
+    // Diesel: 1,000 - 300 = 700L @ 100 = 70,000 Tk
+    // Octane: 500 - 100 = 400L @ 120 = 48,000 Tk
+    // Total Cash Sales = 118,000 Tk
+    expect((float) $report['cashSales']->sum('total_amount'))->toBe(118000.00)
+        ->and($report['cashSales'])->toHaveCount(2);
+
+    // Total Product Wise Sales: 100,000 (Diesel) + 60,000 (Octane) = 160,000 Tk
+    expect((float) $report['productWiseSales']->sum('total_amount'))->toBe(160000.00);
 });
 

@@ -25,7 +25,7 @@ class DailyStatementReportService
             $endDate = $dateOrStartDate;
         }
 
-        $cashSales = $this->cashSales(
+        $posCashSales = $this->cashSales(
             $startDate,
             $endDate,
             $shiftId
@@ -39,6 +39,29 @@ class DailyStatementReportService
             $startDate,
             $endDate,
             $shiftId
+        );
+
+        $dispenserCash = $this->dispenserCashSales(
+            $startDate,
+            $endDate,
+            $shiftId,
+            $posCashSales,
+            $bankSales,
+            $creditSales
+        );
+        $otherClosingCash = $this->shiftClosingOtherProductCashSales(
+            $startDate,
+            $endDate,
+            $shiftId,
+            $posCashSales,
+            $bankSales,
+            $creditSales
+        );
+
+        $cashSales = $this->combineProductCollections(
+            $posCashSales,
+            $dispenserCash,
+            $otherClosingCash
         );
 
         return [
@@ -349,6 +372,177 @@ class DailyStatementReportService
             });
     }
 
+    private function dispenserCashSales(
+        string $startDate,
+        string $endDate,
+        ?int $shiftId,
+        Collection $posCashSales,
+        Collection $posBankSales,
+        Collection $creditSales
+    ): Collection {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('shift_closings')
+            || ! \Illuminate\Support\Facades\Schema::hasTable('dispenser_readings')) {
+            return collect();
+        }
+
+        $readings = DB::table('dispenser_readings as dr')
+            ->join('shift_closings as sc', 'sc.id', '=', 'dr.shift_closing_id')
+            ->join('products as p', 'p.id', '=', 'dr.product_id')
+            ->leftJoin('units as u', 'u.id', '=', 'p.unit_id')
+            ->where('sc.status', 'posted')
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('sc.business_date', $startDate),
+                fn (Builder $query) => $query->whereDate('sc.business_date', '>=', $startDate)->whereDate('sc.business_date', '<=', $endDate)
+            )
+            ->when($shiftId, fn (Builder $query) => $query->where('sc.shift_id', $shiftId))
+            ->groupBy('dr.product_id', 'p.product_name', 'u.name')
+            ->selectRaw('
+                dr.product_id,
+                p.product_name,
+                COALESCE(u.name, "Litre") as unit_name,
+                SUM(dr.net_quantity) as total_quantity,
+                SUM(dr.gross_amount) as total_amount
+            ')
+            ->get();
+
+        $creditByProduct = $creditSales->keyBy('product_id');
+        $bankByProduct = $posBankSales->keyBy('product_id');
+        $posCashByProduct = $posCashSales->keyBy('product_id');
+
+        $result = collect();
+
+        foreach ($readings as $row) {
+            $productId = (int) $row->product_id;
+            $grossQty = (float) $row->total_quantity;
+            $grossAmt = (float) $row->total_amount;
+
+            $creditQty = (float) ($creditByProduct->get($productId)?->total_quantity ?? 0);
+            $creditAmt = (float) ($creditByProduct->get($productId)?->total_amount ?? 0);
+
+            $bankQty = (float) ($bankByProduct->get($productId)?->total_quantity ?? 0);
+            $bankAmt = (float) ($bankByProduct->get($productId)?->total_amount ?? 0);
+
+            $posCashQty = (float) ($posCashByProduct->get($productId)?->total_quantity ?? 0);
+            $posCashAmt = (float) ($posCashByProduct->get($productId)?->total_amount ?? 0);
+
+            $unrecordedQty = max(0, round($grossQty - $creditQty - $bankQty - $posCashQty, 6));
+            $unrecordedAmt = max(0, round($grossAmt - $creditAmt - $bankAmt - $posCashAmt, 4));
+
+            if ($unrecordedQty > 0.000001 && $unrecordedAmt > 0.0001) {
+                $unitPrice = $unrecordedQty > 0 ? round($unrecordedAmt / $unrecordedQty, 6) : 0;
+                $result->push((object) [
+                    'product_id' => $productId,
+                    'product_name' => $row->product_name,
+                    'unit_name' => $row->unit_name,
+                    'total_quantity' => $unrecordedQty,
+                    'total_amount' => $unrecordedAmt,
+                    'unit_price' => $unitPrice,
+                ]);
+            }
+        }
+
+        return $result;
+    }
+
+    private function shiftClosingOtherProductCashSales(
+        string $startDate,
+        string $endDate,
+        ?int $shiftId,
+        Collection $posCashSales,
+        Collection $posBankSales,
+        Collection $creditSales
+    ): Collection {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('shift_closings')
+            || ! \Illuminate\Support\Facades\Schema::hasTable('shift_closing_product_items')) {
+            return collect();
+        }
+
+        $items = DB::table('shift_closing_product_items as scpi')
+            ->join('shift_closings as sc', 'sc.id', '=', 'scpi.shift_closing_id')
+            ->where('sc.status', 'posted')
+            ->when(
+                $startDate === $endDate,
+                fn (Builder $query) => $query->whereDate('sc.business_date', $startDate),
+                fn (Builder $query) => $query->whereDate('sc.business_date', '>=', $startDate)->whereDate('sc.business_date', '<=', $endDate)
+            )
+            ->when($shiftId, fn (Builder $query) => $query->where('sc.shift_id', $shiftId))
+            ->groupBy('scpi.product_id', 'scpi.product_name_snapshot', 'scpi.unit_name_snapshot')
+            ->selectRaw('
+                scpi.product_id,
+                scpi.product_name_snapshot as product_name,
+                scpi.unit_name_snapshot as unit_name,
+                SUM(scpi.quantity) as total_quantity,
+                SUM(scpi.line_total) as total_amount
+            ')
+            ->get();
+
+        $creditByProduct = $creditSales->keyBy('product_id');
+        $bankByProduct = $posBankSales->keyBy('product_id');
+        $posCashByProduct = $posCashSales->keyBy('product_id');
+
+        $result = collect();
+
+        foreach ($items as $row) {
+            $productId = (int) $row->product_id;
+            $grossQty = (float) $row->total_quantity;
+            $grossAmt = (float) $row->total_amount;
+
+            $creditQty = (float) ($creditByProduct->get($productId)?->total_quantity ?? 0);
+            $creditAmt = (float) ($creditByProduct->get($productId)?->total_amount ?? 0);
+
+            $bankQty = (float) ($bankByProduct->get($productId)?->total_quantity ?? 0);
+            $bankAmt = (float) ($bankByProduct->get($productId)?->total_amount ?? 0);
+
+            $posCashQty = (float) ($posCashByProduct->get($productId)?->total_quantity ?? 0);
+            $posCashAmt = (float) ($posCashByProduct->get($productId)?->total_amount ?? 0);
+
+            $unrecordedQty = max(0, round($grossQty - $creditQty - $bankQty - $posCashQty, 6));
+            $unrecordedAmt = max(0, round($grossAmt - $creditAmt - $bankAmt - $posCashAmt, 4));
+
+            if ($unrecordedQty > 0.000001 && $unrecordedAmt > 0.0001) {
+                $unitPrice = $unrecordedQty > 0 ? round($unrecordedAmt / $unrecordedQty, 6) : 0;
+                $result->push((object) [
+                    'product_id' => $productId,
+                    'product_name' => $row->product_name,
+                    'unit_name' => $row->unit_name,
+                    'total_quantity' => $unrecordedQty,
+                    'total_amount' => $unrecordedAmt,
+                    'unit_price' => $unitPrice,
+                ]);
+            }
+        }
+
+        return $result;
+    }
+
+    private function combineProductCollections(
+        Collection ...$salesCollections
+    ): Collection {
+        $combined = collect();
+        foreach ($salesCollections as $collection) {
+            $combined = $combined->concat($collection);
+        }
+
+        return $combined
+            ->groupBy('product_id')
+            ->map(function (Collection $items) {
+                $quantity = (float) $items->sum('total_quantity');
+                $amount = (float) $items->sum('total_amount');
+
+                return (object) [
+                    'product_id' => $items->first()->product_id ?? null,
+                    'product_name' => $items->first()->product_name,
+                    'unit_name' => $items->first()->unit_name,
+                    'unit_price' => $quantity > 0 ? $amount / $quantity : 0,
+                    'total_quantity' => $quantity,
+                    'total_amount' => $amount,
+                ];
+            })
+            ->sortBy('product_name')
+            ->values();
+    }
+
     private function combineProductSales(
         Collection ...$salesCollections
     ): Collection {
@@ -364,6 +558,7 @@ class DailyStatementReportService
                 $amount = (float) $items->sum('total_amount');
 
                 return [
+                    'product_id' => $items->first()->product_id ?? null,
                     'product_name' => $items->first()->product_name,
                     'unit_name' => $items->first()->unit_name,
                     'unit_price' => $quantity > 0 ? $amount / $quantity : 0,

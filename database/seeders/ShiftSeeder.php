@@ -12,20 +12,20 @@ class ShiftSeeder extends Seeder
         $shifts = [
             [
                 'name' => 'Morning Shift',
-                'start_time' => '07:00 AM',
-                'end_time' => '03:00 PM',
+                'start_time' => '07:00:00',
+                'end_time' => '15:00:00',
                 'status' => true
             ],
             [
                 'name' => 'Evening Shift', 
-                'start_time' => '03:00 PM',
-                'end_time' => '11:00 PM',
+                'start_time' => '15:00:00',
+                'end_time' => '23:00:00',
                 'status' => true
             ],
             [
                 'name' => 'Night Shift',
-                'start_time' => '11:00 PM', 
-                'end_time' => '07:00 AM',
+                'start_time' => '23:00:00', 
+                'end_time' => '07:00:00',
                 'status' => false
             ]
         ];
