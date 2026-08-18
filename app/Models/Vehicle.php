@@ -23,6 +23,11 @@ class Vehicle extends Model
         'status' => 'boolean',
     ];
 
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', true);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

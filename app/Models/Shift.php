@@ -14,6 +14,11 @@ class Shift extends Model
         'status' => 'boolean',
     ];
 
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', true);
+    }
+
     public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);

@@ -110,22 +110,22 @@ class SalesReportService
     public function filterOptions(): array
     {
         $customers = Customer::query()
-            ->active()
+            ->where('status', true)
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $vehicles = Vehicle::query()
-            ->active()
+            ->where('status', true)
             ->orderBy('vehicle_number')
             ->get(['id', 'vehicle_number']);
 
         $products = Product::query()
-            ->active()
+            ->where('status', true)
             ->orderBy('product_name')
             ->get(['id', 'product_name']);
 
         $shifts = Shift::query()
-            ->active()
+            ->where('status', true)
             ->orderBy('name')
             ->get(['id', 'name']);
 
