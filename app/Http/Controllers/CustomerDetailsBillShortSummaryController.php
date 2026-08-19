@@ -85,7 +85,7 @@ class CustomerDetailsBillShortSummaryController extends Controller implements Ha
         ]);
 
         return [
-            $validated['start_date'] ?? today()->toDateString(),
+            $validated['start_date'] ?? now()->startOfMonth()->toDateString(),
             $validated['end_date'] ?? today()->toDateString(),
             isset($validated['customer_id']) && $validated['customer_id'] !== ''
                 ? (int) $validated['customer_id']

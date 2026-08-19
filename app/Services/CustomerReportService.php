@@ -356,10 +356,10 @@ class CustomerReportService
             ->all();
     }
 
-    private function salesRows(
+    public function salesRows(
         string $startDate,
         string $endDate,
-        ?int $customerId,
+        ?int $customerId = null,
         ?int $vehicleId = null
     ): Collection {
         $rates = Schema::hasTable('product_rates')

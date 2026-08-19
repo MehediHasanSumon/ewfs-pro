@@ -85,9 +85,16 @@ export default function CustomerDetailsBillShortSummary({
     const canFilter = can('can-customer-filter');
     const canDownload = can('can-customer-download');
 
+    const defaultStartDate = useMemo(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}-01`;
+    }, []);
+
     const [customerId, setCustomerId] = useState(filters.customer_id || '');
     const [vehicleId, setVehicleId] = useState(filters.vehicle_id || 'all');
-    const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(filters.start_date || defaultStartDate);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
 
     const availableVehicles = useMemo(() => {
@@ -115,11 +122,10 @@ export default function CustomerDetailsBillShortSummary({
     };
 
     const clearFilters = () => {
-        const today = new Date().toISOString().split('T')[0];
         setCustomerId('');
         setVehicleId('all');
-        setStartDate(today);
-        setEndDate(today);
+        setStartDate(defaultStartDate);
+        setEndDate(new Date().toISOString().split('T')[0]);
         router.get('/customer-details-bill-short-summary', {}, { preserveState: true });
     };
 
@@ -131,7 +137,7 @@ export default function CustomerDetailsBillShortSummary({
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold dark:text-white">Customer Details Bill (Short Summary)</h1>
-                        <p className="text-gray-600 dark:text-gray-400">View compact customer credit sales summary</p>
+                        <p className="text-gray-600 dark:text-gray-400">View customer credit sales short summary report</p>
                     </div>
                     {canDownload && (
                         <Button
@@ -230,102 +236,60 @@ export default function CustomerDetailsBillShortSummary({
 
                 {report ? (
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardContent className="p-6 space-y-6">
-                            {/* Customer Information Section */}
-                            <div className="border-b dark:border-gray-700 pb-4">
-                                <div className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">To,</div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1 text-[13px]">
-                                    <div>
-                                        <div><span className="font-bold text-gray-800 dark:text-gray-200">Name : </span><span className="text-gray-700 dark:text-gray-300">{report.customer.name}</span></div>
-                                        <div><span className="font-bold text-gray-800 dark:text-gray-200">Phone : </span><span className="text-gray-700 dark:text-gray-300">{report.customer.mobile || '-'}</span></div>
-                                        <div><span className="font-bold text-gray-800 dark:text-gray-200">Address : </span><span className="text-gray-700 dark:text-gray-300">{report.customer.address || '-'}</span></div>
-                                    </div>
-                                    <div className="md:text-right">
-                                        <div><span className="font-bold text-gray-800 dark:text-gray-200">Period : </span><span className="text-gray-700 dark:text-gray-300">{report.period.formatted}</span></div>
-                                        {report.selected_vehicle && (
-                                            <div><span className="font-bold text-gray-800 dark:text-gray-200">Vehicle : </span><span className="text-gray-700 dark:text-gray-300">{report.selected_vehicle.vehicle_number}</span></div>
-                                        )}
-                                    </div>
+                        <CardHeader className="border-b dark:border-gray-700">
+                            <CardTitle className="text-[16px] font-bold dark:text-white">Customer Details</CardTitle>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-[13px]">
+                                <div className="space-y-1">
+                                    <div><span className="font-semibold dark:text-gray-300">Customer:</span> <span className="dark:text-white">{report.customer.name}</span></div>
+                                    <div><span className="font-semibold dark:text-gray-300">Mobile:</span> <span className="dark:text-white">{report.customer.mobile || '-'}</span></div>
+                                    <div><span className="font-semibold dark:text-gray-300">Address:</span> <span className="dark:text-white">{report.customer.address || '-'}</span></div>
+                                </div>
+                                <div className="space-y-1 md:text-right">
+                                    <div><span className="font-semibold dark:text-gray-300">Period:</span> <span className="dark:text-white">{report.period.formatted}</span></div>
+                                    {report.selected_vehicle && (
+                                        <div><span className="font-semibold dark:text-gray-300">Vehicle:</span> <span className="dark:text-white">{report.selected_vehicle.vehicle_number}</span></div>
+                                    )}
                                 </div>
                             </div>
-
-                            {/* Title & Introduction Text */}
-                            <div className="text-center">
-                                <div className="inline-block border border-gray-400 dark:border-gray-600 px-6 py-2 bg-gray-100 dark:bg-gray-700 font-bold text-sm text-gray-900 dark:text-white">
-                                    Bill (Short Summary)
-                                </div>
-                            </div>
-
-                            <div className="text-[13px] text-gray-700 dark:text-gray-300 space-y-1">
-                                <div className="font-semibold">Dear Sir,</div>
-                                <div>For your kind information details bill given below your consideration and early payment.</div>
-                            </div>
-
-                            {/* Main Table: ONLY 5 Columns */}
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {/* Standard Clean ERP Product Summary Table */}
                             <div className="overflow-x-auto">
-                                <table className="w-full border border-gray-300 dark:border-gray-700">
+                                <table className="w-full">
                                     <thead>
-                                        <tr className="border-b bg-gray-100 dark:bg-gray-750 dark:border-gray-700">
-                                            <th className="p-2 text-center text-[13px] font-bold text-gray-800 dark:text-gray-200 w-16 border-r dark:border-gray-700">SN</th>
-                                            <th className="p-2 text-left text-[13px] font-bold text-gray-800 dark:text-gray-200 border-r dark:border-gray-700">Product Name</th>
-                                            <th className="p-2 text-right text-[13px] font-bold text-gray-800 dark:text-gray-200 w-32 border-r dark:border-gray-700">Sales Price</th>
-                                            <th className="p-2 text-right text-[13px] font-bold text-gray-800 dark:text-gray-200 w-32 border-r dark:border-gray-700">Quantity</th>
-                                            <th className="p-2 text-right text-[13px] font-bold text-gray-800 dark:text-gray-200 w-36">Amount</th>
+                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                            <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SN</th>
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product Name</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Sales Price</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {report.product_summary.length > 0 ? (
                                             report.product_summary.map((item) => (
                                                 <tr key={item.sn} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                    <td className="p-2 text-center text-[13px] text-gray-700 dark:text-gray-300 border-r dark:border-gray-700">{item.sn}</td>
-                                                    <td className="p-2 text-[13px] font-medium text-gray-900 dark:text-white border-r dark:border-gray-700">{item.product_name}</td>
-                                                    <td className="p-2 text-right text-[13px] text-gray-700 dark:text-gray-300 border-r dark:border-gray-700">{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="p-2 text-right text-[13px] text-gray-700 dark:text-gray-300 border-r dark:border-gray-700">{item.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="p-2 text-right text-[13px] text-gray-700 dark:text-gray-300">{item.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="p-2 text-center text-[13px] dark:text-gray-300">{item.sn}</td>
+                                                    <td className="p-2 text-[13px] font-medium dark:text-white">{item.product_name}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan={5} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">No records found for the selected period</td>
+                                                <td colSpan={5} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
+                                                    No records found for the selected period
+                                                </td>
                                             </tr>
                                         )}
                                         <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                            <td colSpan={3} className="p-2 text-right text-[13px] text-gray-900 dark:text-white border-r dark:border-gray-700">Total:</td>
-                                            <td className="p-2 text-right text-[13px] text-gray-900 dark:text-white border-r dark:border-gray-700">{report.total_quantity.toFixed(2)}</td>
-                                            <td className="p-2 text-right text-[13px] text-gray-900 dark:text-white">{report.total.toFixed(2)}</td>
+                                            <td colSpan={3} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{report.total_quantity.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{report.total.toFixed(2)}</td>
                                         </tr>
                                     </tbody>
                                 </table>
-                            </div>
-
-                            {/* Summary Totals & Calculations */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[13px] pt-2">
-                                <div className="space-y-2">
-                                    <div><span className="font-bold text-gray-800 dark:text-gray-200">Total Slip Quantity : </span><span className="text-gray-700 dark:text-gray-300">{report.total_slip_quantity}</span></div>
-                                    <div><span className="font-bold text-gray-800 dark:text-gray-200">In Words : </span><span className="italic text-gray-700 dark:text-gray-300">{report.amount_in_words}</span></div>
-                                    <div className="pt-2 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                        Note : Supply on Credit will be stopped without notice if the bill is not paid within 15 days from date issue.
-                                    </div>
-                                </div>
-                                <div className="md:text-right space-y-1">
-                                    <div><span className="font-bold text-gray-800 dark:text-gray-200">Total : </span><span className="font-semibold text-gray-900 dark:text-white">{report.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                    <div><span className="font-bold text-gray-800 dark:text-gray-200">VAT {report.vat_percent.toFixed(2)} % : </span><span className="text-gray-700 dark:text-gray-300">{report.vat_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                    <div className="text-[14px] font-bold text-gray-900 dark:text-white pt-1">
-                                        <span>Grand Total : </span><span>{report.grand_total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Signature Section */}
-                            <div className="pt-12 border-t dark:border-gray-700">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 text-center text-[12px] font-semibold text-gray-700 dark:text-gray-300">
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Prepared By</div>
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Checked By</div>
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Chief Accountant</div>
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Manager</div>
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Director</div>
-                                    <div className="border-t border-gray-400 dark:border-gray-600 pt-1">Managing Director</div>
-                                </div>
                             </div>
                         </CardContent>
                     </Card>

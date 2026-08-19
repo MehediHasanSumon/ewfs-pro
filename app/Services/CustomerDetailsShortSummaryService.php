@@ -6,11 +6,14 @@ use App\Helpers\NumberToWordsHelper;
 use App\Models\Customer;
 use App\Models\Vehicle;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class CustomerDetailsShortSummaryService
 {
+    public function __construct(
+        private readonly CustomerReportService $customerReports
+    ) {
+    }
+
     public function getShortSummary(
         string $startDate,
         string $endDate,
@@ -23,7 +26,7 @@ class CustomerDetailsShortSummaryService
         }
 
         $selectedVehicle = $vehicleId ? Vehicle::query()->find($vehicleId) : null;
-        $sales = $this->salesRows($startDate, $endDate, $customerId, $vehicleId);
+        $sales = $this->customerReports->salesRows($startDate, $endDate, $customerId, $vehicleId);
 
         $productSummary = $sales
             ->groupBy(function (object $item) {
@@ -88,81 +91,5 @@ class CustomerDetailsShortSummaryService
             'grand_total' => $grandTotal,
             'amount_in_words' => $amountInWords,
         ];
-    }
-
-    private function salesRows(
-        string $startDate,
-        string $endDate,
-        int $customerId,
-        ?int $vehicleId = null
-    ): Collection {
-        $rates = Schema::hasTable('product_rates')
-            ? DB::table('product_rates')
-                ->where('status', true)
-                ->where('effective_date', '<=', $endDate)
-                ->orderBy('effective_date')
-                ->orderBy('id')
-                ->get()
-            : collect();
-
-        return DB::table('credit_sale_items as csi')
-            ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
-            ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
-            ->join('customers as c', 'c.id', '=', 'csc.customer_id')
-            ->join('journal_entries as je', function ($join) {
-                $join->on('je.id', '=', 'csc.journal_entry_id')
-                    ->where('je.status', 'posted');
-            })
-            ->leftJoin('vehicles as vehicle', 'vehicle.id', '=', 'csi.vehicle_id')
-            ->whereBetween('cs.sale_date', [$startDate, $endDate])
-            ->where('c.id', $customerId)
-            ->when($vehicleId, fn ($query) => $query
-                ->where('csi.vehicle_id', $vehicleId))
-            ->orderBy('cs.sale_date')
-            ->orderBy('cs.id')
-            ->orderBy('csi.line_no')
-            ->select([
-                'csi.id',
-                'csi.vehicle_id',
-                'csi.product_id',
-                'c.id as customer_id',
-                'c.name as customer_name',
-                'c.mobile as customer_mobile',
-                'c.address as customer_address',
-                'cs.sale_date',
-                DB::raw(
-                    'COALESCE(csi.vehicle_number_snapshot, vehicle.vehicle_number) AS vehicle_number'
-                ),
-                'cs.invoice_no',
-                'cs.memo_no',
-                'cs.invoice_no as transaction_id',
-                'csi.product_name_snapshot as product_name',
-                'csi.unit_name_snapshot as unit_name',
-                'csi.unit_price as price',
-                'csi.quantity',
-                'csi.line_total as total_amount',
-            ])
-            ->get()
-            ->map(function (object $sale) use ($rates) {
-                $sale->memo_no = ! empty($sale->memo_no) ? (string) $sale->memo_no : 'N/A';
-                $rawPrice = (float) $sale->price;
-
-                if (! empty($sale->product_id)) {
-                    $matchedRate = $rates
-                        ->where('product_id', $sale->product_id)
-                        ->where('effective_date', '<=', $sale->sale_date)
-                        ->last();
-
-                    if ($matchedRate && abs($rawPrice - (float) $matchedRate->sales_price) < 0.15) {
-                        $rawPrice = (float) $matchedRate->sales_price;
-                    }
-                }
-
-                $sale->price = (float) round($rawPrice, 2);
-                $sale->quantity = (float) $sale->quantity;
-                $sale->total_amount = (float) $sale->total_amount;
-
-                return $sale;
-            });
     }
 }
