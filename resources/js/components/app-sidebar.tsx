@@ -302,9 +302,16 @@ export function AppSidebar() {
     };
 
     const isActive = (href: string) => {
-        if (href === '/' || href === '/dashboard')
-            return url === '/' || url === '/dashboard';
-        return url.startsWith(href);
+        if (!href || href === '#') return false;
+
+        const currentPath = (url.split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/';
+        const targetPath = (href.split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/';
+
+        if (targetPath === '/' || targetPath === '/dashboard') {
+            return currentPath === '/' || currentPath === '/dashboard';
+        }
+
+        return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
     };
 
     const isParentActive = (children: { href: string }[]) => {
