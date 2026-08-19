@@ -241,12 +241,46 @@ class CustomerReportService
     ): array {
         return $this->salesRows($startDate, $endDate, $customerId)
             ->groupBy('customer_id')
-            ->map(fn (Collection $items) => [
-                'customer_name' => $items->first()->customer_name,
-                'sales' => $items->values()->all(),
-                'total_quantity' => (float) $items->sum('quantity'),
-                'total_amount' => (float) $items->sum('total_amount'),
-            ])
+            ->map(function (Collection $customerItems) {
+                $groupedSales = $customerItems
+                    ->groupBy(function (object $item) {
+                        $vehicleKey = $item->vehicle_id ?? trim($item->vehicle_number ?? '');
+                        $productKey = $item->product_id ?? trim($item->product_name);
+                        $rateKey = number_format((float) $item->price, 2, '.', '');
+                        $unitKey = trim(strtolower($item->unit_name ?? ''));
+
+                        return "{$vehicleKey}_{$productKey}_{$rateKey}_{$unitKey}";
+                    })
+                    ->map(function (Collection $items) {
+                        $first = $items->first();
+                        $dates = $items->pluck('sale_date')->unique()->sort()->values();
+                        $dateStr = $dates->count() <= 2
+                            ? $dates->implode(', ')
+                            : ($dates->first() . ' to ' . $dates->last());
+
+                        $invoices = $items->pluck('invoice_no')->unique()->filter()->implode(', ');
+
+                        return (object) [
+                            'sale_date' => $dateStr,
+                            'vehicle_number' => $first->vehicle_number,
+                            'invoice_no' => $invoices ?: 'N/A',
+                            'product_name' => $first->product_name,
+                            'unit_name' => $first->unit_name,
+                            'price' => (float) round((float) $first->price, 2),
+                            'quantity' => (float) $items->sum('quantity'),
+                            'total_amount' => (float) $items->sum('total_amount'),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                return [
+                    'customer_name' => $customerItems->first()->customer_name,
+                    'sales' => $groupedSales,
+                    'total_quantity' => (float) $customerItems->sum('quantity'),
+                    'total_amount' => (float) $customerItems->sum('total_amount'),
+                ];
+            })
             ->values()
             ->all();
     }

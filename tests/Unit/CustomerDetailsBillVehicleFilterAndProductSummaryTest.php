@@ -569,3 +569,125 @@ test('Customer Summary Bill combines all customers items of same product with ac
     expect($products[0]['quantity'])->toBe(126.07);
     expect($products[0]['total_amount'])->toBe(12860.00);
 });
+
+test('Customer Summary Bill aggregates same vehicle sales of same product and rate into single row', function () {
+    $cust = Customer::create(['name' => 'ACI Logistic']);
+
+    $journalEntry = DB::table('journal_entries')->insertGetId([
+        'entry_no' => 'JE-005',
+        'business_date' => '2026-08-01',
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Sale 1: Vehicle 11-2233, Diesel @ 102.01, Qty 42.79, Amount 4365.00
+    $sale1 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0002',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $csCust1 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $sale1,
+        'customer_id' => $cust->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $csCust1,
+        'line_no' => 1,
+        'product_id' => 99,
+        'vehicle_number_snapshot' => '11-2233',
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.01,
+        'quantity' => 42.79,
+        'line_total' => 4365.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Sale 2: Vehicle 11-2233, Diesel @ 102.01, Qty 18.92, Amount 1930.00
+    $sale2 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0006',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $csCust2 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $sale2,
+        'customer_id' => $cust->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $csCust2,
+        'line_no' => 1,
+        'product_id' => 99,
+        'vehicle_number_snapshot' => '11-2233',
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.01,
+        'quantity' => 18.92,
+        'line_total' => 1930.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Sale 3: Vehicle 11-2233, Diesel @ 115.00 (Different Rate!), Qty 30.00, Amount 3450.00
+    $sale3 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0009',
+        'sale_date' => '2026-08-05',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $csCust3 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $sale3,
+        'customer_id' => $cust->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $csCust3,
+        'line_no' => 1,
+        'product_id' => 99,
+        'vehicle_number_snapshot' => '11-2233',
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 115.00,
+        'quantity' => 30.00,
+        'line_total' => 3450.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $service = app(CustomerReportService::class);
+    $bills = $service->summaryBills('2026-08-01', '2026-08-05', $cust->id);
+
+    expect($bills)->toHaveCount(1);
+    $sales = $bills[0]['sales'];
+
+    // Must have 2 sales rows:
+    // Row 1: Vehicle 11-2233, Diesel @ 102.01, Qty 61.71 (42.79 + 18.92), Amount 6295.00, Invoice: IN0002, IN0006
+    // Row 2: Vehicle 11-2233, Diesel @ 115.00, Qty 30.00, Amount 3450.00, Invoice: IN0009
+    expect($sales)->toHaveCount(2);
+
+    expect($sales[0]->vehicle_number)->toBe('11-2233');
+    expect($sales[0]->product_name)->toBe('Diesel');
+    expect($sales[0]->price)->toBe(102.01);
+    expect($sales[0]->quantity)->toBe(61.71);
+    expect($sales[0]->total_amount)->toBe(6295.00);
+    expect($sales[0]->invoice_no)->toContain('IN0002');
+    expect($sales[0]->invoice_no)->toContain('IN0006');
+
+    expect($sales[1]->vehicle_number)->toBe('11-2233');
+    expect($sales[1]->product_name)->toBe('Diesel');
+    expect($sales[1]->price)->toBe(115.00);
+    expect($sales[1]->quantity)->toBe(30.00);
+    expect($sales[1]->total_amount)->toBe(3450.00);
+    expect($sales[1]->invoice_no)->toBe('IN0009');
+});
