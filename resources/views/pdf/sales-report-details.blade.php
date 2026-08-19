@@ -2,168 +2,172 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Sales Report (Details)</title>
+    <title>Sales Report</title>
     <style>
-        @page {
-            size: A4 landscape;
-            margin: 12mm 10mm 12mm 10mm;
-        }
         body {
             font-family: Arial, sans-serif;
-            font-size: 11px;
+            font-size: 12px;
             margin: 0;
             padding: 0;
-            color: #222;
         }
         .header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
             width: 100%;
-            text-align: center;
-            margin-bottom: 15px;
             position: relative;
         }
+        .header .logo {
+            width: 120px;
+            flex-shrink: 0;
+        }
+        .header .logo img {
+            height: 80px;
+            width: auto;
+            display: block;
+        }
+        .header .company-info {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-60%);
+            text-align: center;
+            width: auto;
+            margin-top: -80px;
+        }
         .header .company-info h2 {
-            margin: 0 0 4px 0;
-            font-size: 18px;
+            margin: 0 0 8px 0;
+            font-size: 20px;
             font-weight: bold;
             color: #000;
         }
         .header .company-info p {
-            margin: 2px 0;
-            font-size: 11px;
-            color: #444;
+            margin: 4px 0;
+            font-size: 12px;
+            color: #333;
+            line-height: 1.4;
         }
         .title-section {
             text-align: center;
-            margin-bottom: 12px;
+            margin-bottom: 20px;
         }
         .title-box {
-            border: 1px solid #333;
+            border: 1px solid #000;
             display: inline-block;
-            padding: 6px 18px;
-            background-color: #f4f4f4;
+            padding: 8px 20px;
+            background-color: #f5f5f5;
             font-weight: bold;
+            font-size: 14px;
+        }
+        .customer-section {
+            margin-top: 20px;
+            margin-bottom: 5px;
+        }
+        .customer-title {
             font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .date-range {
-            margin-top: 4px;
-            font-size: 11px;
-            color: #555;
-            font-weight: normal;
-        }
-        .filter-meta {
-            font-size: 10px;
-            color: #666;
-            margin-top: 3px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 6px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 6px;
-            margin-bottom: 14px;
-        }
-        thead {
-            display: table-header-group;
-        }
-        tr {
-            page-break-inside: avoid;
+            margin-bottom: 15px;
         }
         th, td {
-            border: 1px solid #bbb;
-            padding: 5px 6px;
+            border: 1px solid #ccc;
+            padding: 8px 6px;
             text-align: left;
-            font-size: 10px;
         }
         th {
-            background-color: #e9ecef;
+            background-color: #f2f2f2;
             font-weight: bold;
-            color: #111;
-            text-transform: capitalize;
+            font-size: 11px;
+            color: #000;
+        }
+        td {
+            font-size: 10px;
+            color: #333;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .customer-header-row {
-            background-color: #dbeafe !important;
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .total-row {
+            background-color: #e0e0e0 !important;
             font-weight: bold;
-            font-size: 11px;
-            color: #1e3a8a;
         }
-        .customer-total-row {
-            background-color: #f1f5f9 !important;
+        .total-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        .total-section p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        .total-section .amount {
             font-weight: bold;
-            font-size: 10.5px;
-            color: #0f172a;
+            font-size: 14px;
         }
-        .grand-total-box {
-            margin-top: 15px;
-            padding: 10px 14px;
-            background-color: #f8fafc;
-            border: 1.5px solid #0f172a;
-            page-break-inside: avoid;
-        }
-        .grand-total-box table {
-            margin: 0;
-            border: none;
-        }
-        .grand-total-box td {
-            border: none;
-            padding: 4px 6px;
+        .total-section .words {
+            font-style: italic;
             font-size: 12px;
-            font-weight: bold;
         }
-        .badge {
-            display: inline-block;
-            padding: 2px 5px;
-            font-size: 9px;
-            font-weight: bold;
-            border-radius: 3px;
-        }
-        .badge-cash { background-color: #dcfce7; color: #166534; }
-        .badge-bank { background-color: #e0e7ff; color: #3730a3; }
-        .badge-credit { background-color: #fee2e2; color: #991b1b; }
-        .badge-mobile { background-color: #fef3c7; color: #92400e; }
         .footer {
-            margin-top: 25px;
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
             padding-top: 10px;
-            width: 100%;
-            font-size: 9px;
-            color: #777;
-            text-align: right;
-            page-break-inside: avoid;
-        }
-        .print-date {
-            float: left;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="company-info">
-            <h2>{{ $companySetting->name ?? config('app.name', 'ERP System') }}</h2>
-            @if(isset($companySetting->address) && $companySetting->address)
-                <p>{{ $companySetting->address }}</p>
+        <div class="logo">
+            @if($companySetting && $companySetting->company_logo)
+            <img src="{{ public_path('storage/' . $companySetting->company_logo) }}" alt="Company Logo">
             @endif
-            @if((isset($companySetting->phone) && $companySetting->phone) || (isset($companySetting->email) && $companySetting->email))
-                <p>
-                    @if(isset($companySetting->phone) && $companySetting->phone) Phone: {{ $companySetting->phone }} @endif
-                    @if(isset($companySetting->email) && $companySetting->email) | Email: {{ $companySetting->email }} @endif
-                </p>
+        </div>
+        <div class="company-info">
+            @if($companySetting)
+            <h2>{{ $companySetting->company_name ?? 'East West Filling Station' }}</h2>
+            @if($companySetting->company_address)
+            <p>{{ $companySetting->company_address }}</p>
+            @endif
+            @if($companySetting->company_mobile || $companySetting->company_email)
+            <p>
+                @if($companySetting->company_email)
+                {{ $companySetting->company_email }}
+                @endif
+                @if($companySetting->company_mobile && $companySetting->company_email) | @endif
+                @if($companySetting->company_mobile)
+                {{ $companySetting->company_mobile }}
+                @endif
+            </p>
+            @endif
+            @else
+            <h2>East West Filling Station</h2>
+            <p>Dhaka, Bangladesh</p>
+            <p>mehedihassan2992001@gmail.com | 01750542923</p>
             @endif
         </div>
     </div>
 
     <div class="title-section">
-        <div class="title-box">
-            Sales Report (Details)
-            <div class="date-range">
-                Date Between: {{ \Carbon\Carbon::parse($filters['start_date'])->format('d/m/Y') }} to {{ \Carbon\Carbon::parse($filters['end_date'])->format('d/m/Y') }}
-            </div>
-        </div>
+        <div class="title-box">Sales Report</div>
+        <p style="margin-top: 8px; font-size: 12px; color: #333;">
+            Date: {{ \Carbon\Carbon::parse($filters['start_date'])->format('d/m/Y') }} to {{ \Carbon\Carbon::parse($filters['end_date'])->format('d/m/Y') }}
+        </p>
         @if(!empty($filters['customer']))
-            <div class="filter-meta">
-                Filtered By: Customer: <strong>{{ $filters['customer'] }}</strong>
-            </div>
+            <p style="margin-top: 2px; font-size: 11px; color: #555;">
+                Customer: <strong>{{ $filters['customer'] }}</strong>
+            </p>
         @endif
     </div>
 
@@ -171,44 +175,42 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width: 75px;">Date</th>
-                    <th style="width: 110px;">Vehicle</th>
-                    <th style="width: 95px;">Invoice No</th>
-                    <th style="width: 85px;">Memo No</th>
+                    <th>Date</th>
+                    <th>Vehicle</th>
+                    <th>Invoice No</th>
+                    <th>Memo No</th>
                     <th>Product</th>
-                    <th style="width: 50px;">Unit</th>
-                    <th class="text-right" style="width: 70px;">Quantity</th>
-                    <th class="text-right" style="width: 75px;">Price</th>
-                    <th class="text-right" style="width: 90px;">Total</th>
-                    <th class="text-center" style="width: 75px;">Type</th>
+                    <th>Unit</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-center">Type</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td colspan="10" class="text-center" style="padding: 20px; color: #888;">No sales records found for the selected criteria.</td>
+                    <td colspan="10" class="text-center" style="padding: 20px; color: #888;">No records</td>
                 </tr>
             </tbody>
         </table>
     @else
         @foreach($report['customers'] as $customerGroup)
+            <div class="customer-section">
+                <div class="customer-title">Customer: {{ $customerGroup['customer_name'] }}</div>
+            </div>
             <table>
                 <thead>
-                    <tr class="customer-header-row">
-                        <td colspan="10" style="padding: 6px 8px; font-size: 11px; font-weight: bold;">
-                            Customer: {{ $customerGroup['customer_name'] }}
-                        </td>
-                    </tr>
                     <tr>
-                        <th style="width: 75px;">Date</th>
-                        <th style="width: 110px;">Vehicle</th>
-                        <th style="width: 95px;">Invoice No</th>
-                        <th style="width: 85px;">Memo No</th>
+                        <th>Date</th>
+                        <th>Vehicle</th>
+                        <th>Invoice No</th>
+                        <th>Memo No</th>
                         <th>Product</th>
-                        <th style="width: 50px;">Unit</th>
-                        <th class="text-right" style="width: 70px;">Quantity</th>
-                        <th class="text-right" style="width: 75px;">Price</th>
-                        <th class="text-right" style="width: 90px;">Total</th>
-                        <th class="text-center" style="width: 75px;">Type</th>
+                        <th>Unit</th>
+                        <th class="text-right">Quantity</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-center">Type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,55 +225,28 @@
                             <td class="text-right">{{ number_format($sale->quantity, 2) }}</td>
                             <td class="text-right">{{ number_format($sale->unit_price, 2) }}</td>
                             <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
-                            <td class="text-center">
-                                @if($sale->type === 'Cash')
-                                    <span class="badge badge-cash">Cash</span>
-                                @elseif($sale->type === 'Bank')
-                                    <span class="badge badge-bank">Bank</span>
-                                @elseif($sale->type === 'Mobile Bank')
-                                    <span class="badge badge-mobile">Mobile Bank</span>
-                                @else
-                                    <span class="badge badge-credit">Credit</span>
-                                @endif
-                            </td>
+                            <td class="text-center">{{ $sale->type }}</td>
                         </tr>
                     @endforeach
-                    <tr class="customer-total-row">
-                        <td colspan="6" class="text-right" style="font-weight: bold;">
-                            Total From {{ $customerGroup['customer_name'] }} :
-                        </td>
-                        <td class="text-right" style="font-weight: bold;">
-                            {{ number_format($customerGroup['total_quantity'], 2) }}
-                        </td>
+                    <tr class="total-row">
+                        <td colspan="6">Total From {{ $customerGroup['customer_name'] }} :</td>
+                        <td class="text-right">{{ number_format($customerGroup['total_quantity'], 2) }}</td>
                         <td></td>
-                        <td class="text-right" style="font-weight: bold;">
-                            {{ number_format($customerGroup['total_amount'], 2) }}
-                        </td>
+                        <td class="text-right">{{ number_format($customerGroup['total_amount'], 2) }}</td>
                         <td></td>
                     </tr>
                 </tbody>
             </table>
         @endforeach
 
-        <div class="grand-total-box">
-            <table>
-                <tr>
-                    <td style="width: 50%; color: #1e293b;">
-                        Total Customers: {{ $report['total_customers'] }} | Total Invoices: {{ $report['total_invoices'] }} | Total Items: {{ $report['total_rows'] }}
-                    </td>
-                    <td class="text-right" style="font-size: 13px; color: #0f172a;">
-                        Grand Total Quantity: <span style="font-weight: bold;">{{ number_format($report['grand_total_quantity'], 2) }}</span>
-                        &nbsp;&nbsp;|&nbsp;&nbsp;
-                        Grand Total Sales: <span style="font-weight: bold; color: #059669;">{{ number_format($report['grand_total_amount'], 2) }}</span>
-                    </td>
-                </tr>
-            </table>
+        <div class="total-section">
+            <p class="amount">Grand Total Sales: {{ number_format($report['grand_total_amount'], 2) }}</p>
+            <p class="words">In words: {{ \App\Helpers\NumberToWordsHelper::convert(floor($report['grand_total_amount'])) }}</p>
         </div>
     @endif
 
     <div class="footer">
-        <span class="print-date">Generated on: {{ now()->format('d/m/Y h:i A') }}</span>
-        <span>Page <span class="page-num"></span></span>
+        <p>Generated on {{ now()->format('d/m/Y H:i:s') }}</p>
     </div>
 </body>
 </html>

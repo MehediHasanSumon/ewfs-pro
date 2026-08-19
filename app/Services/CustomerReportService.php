@@ -315,6 +315,7 @@ class CustomerReportService
                     'COALESCE(csi.vehicle_number_snapshot, vehicle.vehicle_number) AS vehicle_number'
                 ),
                 'cs.invoice_no',
+                'cs.memo_no',
                 'cs.invoice_no as transaction_id',
                 'csi.product_name_snapshot as product_name',
                 'csi.unit_name_snapshot as unit_name',
@@ -324,6 +325,7 @@ class CustomerReportService
             ])
             ->get()
             ->map(function (object $sale) {
+                $sale->memo_no = ! empty($sale->memo_no) ? (string) $sale->memo_no : 'N/A';
                 $sale->price = (float) $sale->price;
                 $sale->quantity = (float) $sale->quantity;
                 $sale->total_amount = (float) $sale->total_amount;
