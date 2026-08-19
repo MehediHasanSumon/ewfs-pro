@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanySetting;
 use App\Models\Customer;
+use App\Models\Vehicle;
 use App\Services\CustomerReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -28,39 +29,48 @@ class CustomerDetailsBillController extends Controller implements HasMiddleware
 
     public function index(Request $request)
     {
-        [$startDate, $endDate, $customerId] = $this->filters($request);
+        [$startDate, $endDate, $customerId, $vehicleId] = $this->filters($request);
         $bills = $customerId
             ? $this->reports->detailBills(
                 $startDate,
                 $endDate,
-                $customerId
+                $customerId,
+                $vehicleId
             )
             : [];
+
+        $vehicles = Vehicle::query()
+            ->orderBy('vehicle_number')
+            ->get(['id', 'vehicle_number', 'customer_id']);
 
         return Inertia::render('CustomerDetailsBill/Index', [
             'bills' => $bills,
             'customers' => $this->customers(),
-            'filters' => $request->only([
-                'customer_id',
-                'start_date',
-                'end_date',
-            ]),
+            'vehicles' => $vehicles,
+            'filters' => [
+                'customer_id' => $customerId ? (string) $customerId : '',
+                'vehicle_id' => $vehicleId ? (string) $vehicleId : '',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ],
         ]);
     }
 
     public function downloadPdf(Request $request)
     {
-        [$startDate, $endDate, $customerId] = $this->filters($request);
+        [$startDate, $endDate, $customerId, $vehicleId] = $this->filters($request);
         $bills = $this->reports->detailBills(
             $startDate,
             $endDate,
-            $customerId
+            $customerId,
+            $vehicleId
         );
         $companySetting = CompanySetting::query()->first();
+        $selectedVehicle = $vehicleId ? Vehicle::find($vehicleId) : null;
 
         return Pdf::loadView(
             'pdf.customer-details-bill',
-            compact('bills', 'companySetting', 'startDate', 'endDate')
+            compact('bills', 'companySetting', 'startDate', 'endDate', 'selectedVehicle')
         )->setPaper('a4', 'portrait')->stream('customer-details-bill.pdf');
     }
 
@@ -68,6 +78,7 @@ class CustomerDetailsBillController extends Controller implements HasMiddleware
     {
         $validated = $request->validate([
             'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
@@ -75,8 +86,11 @@ class CustomerDetailsBillController extends Controller implements HasMiddleware
         return [
             $validated['start_date'] ?? today()->toDateString(),
             $validated['end_date'] ?? today()->toDateString(),
-            isset($validated['customer_id'])
+            isset($validated['customer_id']) && $validated['customer_id'] !== ''
                 ? (int) $validated['customer_id']
+                : null,
+            isset($validated['vehicle_id']) && $validated['vehicle_id'] !== ''
+                ? (int) $validated['vehicle_id']
                 : null,
         ];
     }

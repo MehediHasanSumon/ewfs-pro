@@ -25,6 +25,15 @@ interface Sale {
     total_amount: number;
 }
 
+interface ProductSummary {
+    product_id?: number | null;
+    product_name: string;
+    unit_name: string;
+    price: number;
+    quantity: number;
+    total_amount: number;
+}
+
 interface VehicleGroup {
     vehicle_number: string;
     sales: Sale[];
@@ -37,6 +46,7 @@ interface Bill {
     customer_mobile: string;
     customer_address: string;
     vehicle_groups: VehicleGroup[];
+    product_summary?: ProductSummary[];
     total_quantity: number;
     total_amount: number;
 }
@@ -44,6 +54,12 @@ interface Bill {
 interface Customer {
     id: number;
     name: string;
+}
+
+interface Vehicle {
+    id: number;
+    vehicle_number: string;
+    customer_id: number;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -54,21 +70,38 @@ const breadcrumbs: BreadcrumbItem[] = [
 interface CustomerDetailsBillProps {
     bills: Bill[];
     customers: Customer[];
+    vehicles?: Vehicle[];
     filters: {
         customer_id?: string;
+        vehicle_id?: string;
         start_date?: string;
         end_date?: string;
     };
 }
 
-export default function CustomerDetailsBill({ bills = [], customers = [], filters = {} }: CustomerDetailsBillProps) {
+export default function CustomerDetailsBill({
+    bills = [],
+    customers = [],
+    vehicles = [],
+    filters = {},
+}: CustomerDetailsBillProps) {
     const { can } = usePermission();
     const canFilter = can('can-customer-filter');
     const canDownload = can('can-customer-download');
 
     const [customerId, setCustomerId] = useState(filters.customer_id || '');
+    const [vehicleId, setVehicleId] = useState(filters.vehicle_id || '');
     const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
+
+    const availableVehicles = customerId
+        ? vehicles.filter((v) => v.customer_id.toString() === customerId.toString())
+        : [];
+
+    const handleCustomerChange = (value: string) => {
+        setCustomerId(value);
+        setVehicleId('');
+    };
 
     const applyFilters = () => {
         if (!customerId) return;
@@ -77,14 +110,19 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
             start_date: startDate,
             end_date: endDate,
         };
+        if (vehicleId) {
+            params.vehicle_id = vehicleId;
+        }
         router.get('/customer-details-bill', params, { preserveState: true });
     };
 
     const clearFilters = () => {
         const today = new Date().toISOString().split('T')[0];
         setCustomerId('');
+        setVehicleId('');
         setStartDate(today);
         setEndDate(today);
+        router.get('/customer-details-bill', {}, { preserveState: true });
     };
 
     return (
@@ -107,6 +145,9 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                 if (customerId) {
                                     params.append('customer_id', customerId);
                                 }
+                                if (vehicleId) {
+                                    params.append('vehicle_id', vehicleId);
+                                }
                                 openPdfViewer(`/customer-details-bill/download-pdf?${params.toString()}`);
                             }}
                         >
@@ -124,18 +165,37 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                                 <div>
                                     <Label className="dark:text-gray-200">Customer</Label>
-                                    <Select value={customerId} onValueChange={setCustomerId}>
+                                    <Select value={customerId} onValueChange={handleCustomerChange}>
                                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                             <SelectValue placeholder="Select customer" />
                                         </SelectTrigger>
                                         <SelectContent>
-
                                             {customers.map((customer) => (
                                                 <SelectItem key={customer.id} value={customer.id.toString()}>
                                                     {customer.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Vehicle</Label>
+                                    <Select
+                                        value={vehicleId}
+                                        onValueChange={setVehicleId}
+                                        disabled={!customerId}
+                                    >
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder={customerId ? "All Vehicles" : "Select customer first"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">All Vehicles</SelectItem>
+                                            {availableVehicles.map((vehicle) => (
+                                                <SelectItem key={vehicle.id} value={vehicle.id.toString()}>
+                                                    {vehicle.vehicle_number}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -159,8 +219,8 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
-                                <div className="flex items-end gap-2 md:col-span-2">
-                                    <Button onClick={applyFilters} className="px-4">Apply Filters</Button>
+                                <div className="flex items-end gap-2">
+                                    <Button onClick={applyFilters} className="px-4 flex-1">Apply</Button>
                                     <Button onClick={clearFilters} variant="secondary" className="px-4">
                                         <X className="mr-2 h-4 w-4" />Clear
                                     </Button>
@@ -182,7 +242,8 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                         <div><span className="font-semibold dark:text-gray-300">Address:</span> <span className="dark:text-white">{bill.customer_address || '-'}</span></div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-0 space-y-4">
+                                <CardContent className="p-0 space-y-6">
+                                    {/* Main Transaction / Details Table by Vehicle */}
                                     {bill.vehicle_groups.map((vehicleGroup, vgIndex) => (
                                         <div key={vgIndex} className="overflow-x-auto">
                                             <table className="w-full">
@@ -211,9 +272,9 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.memo_no || 'N/A'}</td>
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.product_name}</td>
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
-                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.price.toLocaleString()}</td>
-                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.quantity.toLocaleString()}</td>
-                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
+                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                         </tr>
                                                     ))}
                                                     <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
@@ -225,9 +286,52 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                             </table>
                                         </div>
                                     ))}
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-800">
-                                        <div className="font-bold text-[14px] dark:text-white mb-2">
-                                            Grand Total: {bill.total_amount.toFixed(2)}
+
+                                    {/* Separate Product-wise Sales Summary Table */}
+                                    {bill.product_summary && bill.product_summary.length > 0 && (
+                                        <div className="space-y-2 px-2">
+                                            <h4 className="text-[14px] font-bold dark:text-white">
+                                                Product-wise Sales Summary
+                                            </h4>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead>
+                                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                                            <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SL</th>
+                                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
+                                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
+                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
+                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
+                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {bill.product_summary.map((product, pIndex) => (
+                                                            <tr key={pIndex} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                                <td className="p-2 text-center text-[13px] dark:text-gray-300">{pIndex + 1}</td>
+                                                                <td className="p-2 text-[13px] dark:text-white font-medium">{product.product_name}</td>
+                                                                <td className="p-2 text-[13px] dark:text-gray-300">{product.unit_name}</td>
+                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            </tr>
+                                                        ))}
+                                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
+                                                            <td colSpan={5} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
+                                                            <td className="p-2 text-right text-[13px] dark:text-white">
+                                                                {bill.product_summary.reduce((sum, p) => sum + p.total_amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Grand Total and In Words */}
+                                    <div className="p-4">
+                                        <div className="font-bold text-[14px] dark:text-white mb-1">
+                                            Grand Total: {bill.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                         <div className="text-[13px] italic dark:text-gray-300">
                                             In words: {numberToWords(Math.floor(bill.total_amount))}

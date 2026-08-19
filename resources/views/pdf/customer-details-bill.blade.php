@@ -14,54 +14,6 @@
             margin: 0;
             padding: 0;
         }
-        .header {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            position: relative;
-        }
-        .header .logo {
-            width: 120px;
-            flex-shrink: 0;
-        }
-        .header .logo img {
-            height: 80px;
-            width: auto;
-            display: block;
-        }
-        .header .company-info {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-60%);
-            text-align: center;
-            width: auto;
-            margin-top: -80px;
-        }
-        .header .company-info h2 {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            font-weight: bold;
-            color: #000;
-        }
-        .header .company-info p {
-            margin: 4px 0;
-            font-size: 12px;
-            color: #333;
-            line-height: 1.4;
-        }
-        .title-section {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .title-box {
-            border: 1px solid #000;
-            display: inline-block;
-            padding: 8px 20px;
-            background-color: #f5f5f5;
-            font-weight: bold;
-            font-size: 14px;
-        }
         .customer-info {
             margin-bottom: 15px;
         }
@@ -81,12 +33,12 @@
         }
         th, td {
             border: 1px solid #000;
-            padding: 10px 8px;
+            padding: 8px 6px;
             text-align: left;
         }
         th {
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             color: #000;
         }
         td {
@@ -118,23 +70,23 @@
 </head>
 <body>
     @include('pdf.components.watermark')
-    @include('pdf.components.header')
-
-    <div class="title-section">
-        <div class="title-box">Customer Details Bill ({{ $startDate }} to {{ $endDate }})</div>
-    </div>
+    @include('pdf.components.header', ['title' => 'Customer Details Bill (' . $startDate . ' to ' . $endDate . ')'])
 
     @forelse($bills as $bill)
     <div class="customer-info">
         <table>
             <tr>
                 <td><strong>Customer:</strong> {{ $bill['customer_name'] }}</td>
+                @if(!empty($selectedVehicle))
+                    <td class="text-right"><strong>Vehicle:</strong> {{ $selectedVehicle->vehicle_number }}</td>
+                @endif
             </tr>
             <tr>
                 <td><strong>Mobile:</strong> {{ $bill['customer_mobile'] ?? '-' }}</td>
+                <td class="text-right"><strong>Period:</strong> {{ $startDate }} to {{ $endDate }}</td>
             </tr>
             <tr>
-                <td><strong>Address:</strong> {{ $bill['customer_address'] ?? '-' }}</td>
+                <td colspan="2"><strong>Address:</strong> {{ $bill['customer_address'] ?? '-' }}</td>
             </tr>
         </table>
     </div>
@@ -152,7 +104,7 @@
                 <th class="text-right">Quantity</th>
                 <th class="text-right">Total</th>
             </tr>
-            <tr >
+            <tr>
                 <th colspan="8" style="padding: 8px; text-align: left; font-size: 12px;">
                     Vehicle: {{ $vehicleGroup['vehicle_number'] }}
                 </th>
@@ -180,7 +132,40 @@
     </table>
     @endforeach
 
-    <div style="margin-bottom: 30px; padding: 10px;">
+    {{-- Product-wise Sales Summary Table --}}
+    @if(!empty($bill['product_summary']) && count($bill['product_summary']) > 0)
+    <div style="margin-top: 20px; margin-bottom: 5px; font-weight: bold; font-size: 13px;">Product-wise Sales Summary</div>
+    <table style="margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th style="width: 40px;" class="text-center">SL</th>
+                <th>Product</th>
+                <th>Unit</th>
+                <th class="text-right">Price</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($bill['product_summary'] as $index => $product)
+            <tr>
+                <td class="text-center">{{ $index + 1 }}</td>
+                <td>{{ $product['product_name'] }}</td>
+                <td>{{ $product['unit_name'] }}</td>
+                <td class="text-right">{{ number_format($product['price'], 2) }}</td>
+                <td class="text-right">{{ number_format($product['quantity'], 2) }}</td>
+                <td class="text-right">{{ number_format($product['total_amount'], 2) }}</td>
+            </tr>
+            @endforeach
+            <tr style="font-weight: bold;">
+                <td colspan="5" class="text-right">Total:</td>
+                <td class="text-right">{{ number_format($bill['total_amount'], 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    @endif
+
+    <div style="margin-bottom: 30px; padding: 10px 0;">
         <p style="margin: 0; font-weight: bold; font-size: 13px;">Grand Total: {{ number_format($bill['total_amount'], 2) }}</p>
         <p style="margin: 5px 0 0 0; font-style: italic; font-size: 12px;">In words: {{ numberToWords(floor($bill['total_amount'])) }}</p>
     </div>

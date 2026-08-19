@@ -254,9 +254,10 @@ class CustomerReportService
     public function detailBills(
         string $startDate,
         string $endDate,
-        ?int $customerId = null
+        ?int $customerId = null,
+        ?int $vehicleId = null
     ): array {
-        return $this->salesRows($startDate, $endDate, $customerId)
+        return $this->salesRows($startDate, $endDate, $customerId, $vehicleId)
             ->groupBy('customer_id')
             ->map(function (Collection $items) {
                 $vehicleGroups = $items
@@ -270,11 +271,29 @@ class CustomerReportService
                     ->values()
                     ->all();
 
+                $productSummary = $items
+                    ->groupBy(fn (object $item) => ($item->product_id ?? $item->product_name) . '_' . sprintf('%.4f', (float) $item->price) . '_' . ($item->unit_name ?? ''))
+                    ->map(function (Collection $productItems) {
+                        $firstItem = $productItems->first();
+
+                        return [
+                            'product_id' => $firstItem->product_id ?? null,
+                            'product_name' => $firstItem->product_name,
+                            'unit_name' => $firstItem->unit_name,
+                            'price' => (float) $firstItem->price,
+                            'quantity' => (float) $productItems->sum('quantity'),
+                            'total_amount' => (float) $productItems->sum('total_amount'),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
                 return [
                     'customer_name' => $items->first()->customer_name,
                     'customer_mobile' => $items->first()->customer_mobile,
                     'customer_address' => $items->first()->customer_address,
                     'vehicle_groups' => $vehicleGroups,
+                    'product_summary' => $productSummary,
                     'total_quantity' => (float) $items->sum('quantity'),
                     'total_amount' => (float) $items->sum('total_amount'),
                 ];
@@ -286,7 +305,8 @@ class CustomerReportService
     private function salesRows(
         string $startDate,
         string $endDate,
-        ?int $customerId
+        ?int $customerId,
+        ?int $vehicleId = null
     ): Collection {
         return DB::table('credit_sale_items as csi')
             ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
@@ -300,12 +320,16 @@ class CustomerReportService
             ->whereBetween('cs.sale_date', [$startDate, $endDate])
             ->when($customerId, fn ($query) => $query
                 ->where('c.id', $customerId))
+            ->when($vehicleId, fn ($query) => $query
+                ->where('csi.vehicle_id', $vehicleId))
             ->orderBy('c.name')
             ->orderBy('cs.sale_date')
             ->orderBy('cs.id')
             ->orderBy('csi.line_no')
             ->select([
                 'csi.id',
+                'csi.vehicle_id',
+                'csi.product_id',
                 'c.id as customer_id',
                 'c.name as customer_name',
                 'c.mobile as customer_mobile',
