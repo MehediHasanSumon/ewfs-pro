@@ -46,6 +46,7 @@ const initialData: CompanySettingFormData = {
     vat_rate: '',
     currency: '',
     company_logo: null,
+    pdf_watermark_image: null,
     is_registration: false,
     status: 1,
 };

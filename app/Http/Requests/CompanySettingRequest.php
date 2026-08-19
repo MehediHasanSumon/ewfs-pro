@@ -29,6 +29,8 @@ class CompanySettingRequest extends FormRequest
             'vat_rate' => ['nullable', 'numeric', 'between:0,100'],
             'currency' => ['nullable', 'string', 'size:3'],
             'company_logo' => ['nullable', 'image', 'max:5120'],
+            'pdf_watermark_image' => ['nullable', 'image', 'max:5120'],
+            'remove_pdf_watermark' => ['nullable', 'boolean'],
             'is_registration' => ['sometimes', 'boolean'],
             'status' => ['sometimes', 'boolean'],
         ];
@@ -36,7 +38,7 @@ class CompanySettingRequest extends FormRequest
 
     public function attributesForPersistence(): array
     {
-        $attributes = $this->safe()->except('company_logo');
+        $attributes = $this->safe()->except(['company_logo', 'pdf_watermark_image', 'remove_pdf_watermark']);
         $attributes['currency'] = strtoupper($attributes['currency'] ?? 'BDT');
 
         return $attributes;

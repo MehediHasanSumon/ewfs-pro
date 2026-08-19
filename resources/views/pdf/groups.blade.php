@@ -26,32 +26,8 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">
-            @if($companySetting && $companySetting->company_logo_one)
-            <img src="{{ public_path('storage/' . $companySetting->company_logo_one) }}" alt="Company Logo">
-            @endif
-        </div>
-        <div class="company-info">
-            @if($companySetting)
-                <h2>{{ $companySetting->company_name ?? 'Company Name' }}</h2>
-                @if($companySetting->company_address)
-                    <p>{{ $companySetting->company_address }}</p>
-                @endif
-                @if($companySetting->company_mobile || $companySetting->company_email)
-                    <p>
-                        @if($companySetting->company_email){{ $companySetting->company_email }}@endif
-                        @if($companySetting->company_mobile && $companySetting->company_email) | @endif
-                        @if($companySetting->company_mobile){{ $companySetting->company_mobile }}@endif
-                    </p>
-                @endif
-            @else
-                <h2>Company Name</h2>
-                <p>Company Address</p>
-                <p>email@company.com | +1234567890</p>
-            @endif
-        </div>
-    </div>
+    @include('pdf.components.watermark')
+    @include('pdf.components.header')
     <div class="title-section"><div class="title-box">Groups List</div></div>
     <table>
         <thead>

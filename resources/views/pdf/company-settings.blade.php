@@ -136,38 +136,8 @@
 </head>
 
 <body>
-    <div class="header">
-        <div class="logo">
-            @php
-                $headerCompany = $companySettings->first() ?? null;
-            @endphp
-            @if($headerCompany && $headerCompany->company_logo)
-            <img src="{{ public_path('storage/' . $headerCompany->company_logo) }}" alt="Company Logo">
-            @endif
-        </div>
-        <div class="company-info">
-            @if($headerCompany)
-            <h2>{{ $headerCompany->company_name ?? 'Company Management System' }}</h2>
-            @if($headerCompany->company_address)
-            <p>{{ $headerCompany->company_address }}</p>
-            @endif
-            @if($headerCompany->company_mobile || $headerCompany->company_email)
-            <p>
-                @if($headerCompany->company_email)
-                {{ $headerCompany->company_email }}
-                @endif
-                @if($headerCompany->company_mobile && $headerCompany->company_email) | @endif
-                @if($headerCompany->company_mobile)
-                {{ $headerCompany->company_mobile }}
-                @endif
-            </p>
-            @endif
-            @else
-            <h2>Company Management System</h2>
-            <p>System Generated Report</p>
-            @endif
-        </div>
-    </div>
+    @include('pdf.components.watermark')
+    @include('pdf.components.header')
 
     <div class="title-section">
         <div class="title-box">Company Settings List</div>

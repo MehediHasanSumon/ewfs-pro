@@ -17,6 +17,7 @@
     </style>
 </head>
 <body>
+    @include('pdf.components.watermark')
     <div class="header">
         <h2>{{ $companySetting?->company_name ?? 'Voucher Categories' }}</h2>
         @if($companySetting?->company_address)

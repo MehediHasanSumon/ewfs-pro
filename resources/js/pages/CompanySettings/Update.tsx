@@ -32,6 +32,7 @@ interface CompanySetting {
     vat_rate?: number;
     currency?: string;
     company_logo?: string;
+    pdf_watermark_image?: string;
     is_registration?: boolean;
     status: number;
 }
@@ -81,6 +82,8 @@ export default function Update({ companySetting }: UpdateProps) {
         vat_rate: companySetting.vat_rate?.toString() || '',
         currency: companySetting.currency || '',
         company_logo: null,
+        pdf_watermark_image: null,
+        remove_pdf_watermark: false,
         is_registration: companySetting.is_registration || false,
         status: companySetting.status,
     });
@@ -128,6 +131,7 @@ export default function Update({ companySetting }: UpdateProps) {
                             processing={processing}
                             submitLabel="Update"
                             currentLogo={companySetting.company_logo}
+                            currentWatermark={companySetting.pdf_watermark_image}
                             onSubmit={handleSubmit}
                             setData={setData}
                             setError={setError}

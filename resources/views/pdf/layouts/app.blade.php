@@ -1,38 +1,36 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="utf-8">
-    <title>Accounts List</title>
+    <title>@yield('title', 'Report')</title>
     <style>
+        @page {
+            size: @yield('pageSize', 'A4 portrait');
+            margin: @yield('pageMargin', '15mm 10mm 15mm 10mm');
+        }
         body {
             font-family: Arial, sans-serif;
             font-size: 12px;
             margin: 0;
-            padding-bottom: 60px;
-            position: relative;
-            min-height: 100vh;
+            padding: 0;
+            color: #222;
         }
-
         .header {
-            padding: 20px;
+            padding: 10px 20px 20px 20px;
             display: flex;
             align-items: center;
             width: 100%;
             position: relative;
         }
-
         .header .logo {
             width: 120px;
             flex-shrink: 0;
         }
-
         .header .logo img {
             height: 80px;
             width: auto;
             display: block;
         }
-
         .header .company-info {
             position: absolute;
             left: 50%;
@@ -41,26 +39,22 @@
             width: auto;
             margin-top: -80px;
         }
-
         .header .company-info h2 {
             margin: 0 0 8px 0;
             font-size: 20px;
             font-weight: bold;
             color: #000;
         }
-
         .header .company-info p {
             margin: 4px 0;
             font-size: 12px;
             color: #333;
             line-height: 1.4;
         }
-
         .title-section {
             text-align: center;
             margin-bottom: 20px;
         }
-
         .title-box {
             border: 1px solid #000;
             display: inline-block;
@@ -69,46 +63,57 @@
             font-weight: bold;
             font-size: 14px;
         }
-
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
         }
-
-        th,
-        td {
+        th, td {
             border: 1px solid #ccc;
-            padding: 10px 8px;
+            padding: 8px 6px;
             text-align: left;
         }
-
         th {
             background-color: #f2f2f2;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             color: #000;
         }
-
         td {
             font-size: 11px;
             color: #333;
         }
-
-        .text-center {
-            text-align: center;
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .total-row {
+            background-color: #e0e0e0 !important;
+            font-weight: bold;
         }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
+        .total-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
         }
-
+        .total-section p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        .total-section .amount {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .total-section .words {
+            font-style: italic;
+            font-size: 12px;
+        }
         .footer {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            padding: 15px 20px;
+            padding: 10px 20px;
             border-top: 1px solid #ccc;
             background-color: #fff;
             display: flex;
@@ -117,63 +122,38 @@
             font-size: 10px;
             color: #666;
         }
-
-        .footer-left {
-            text-align: left;
-        }
-
-        .footer-right {
-            text-align: right;
-        }
-
+        .footer-left { text-align: left; }
+        .footer-right { text-align: right; }
         @media print {
-            .footer {
-                position: fixed;
-                bottom: 0;
-            }
+            .footer { position: fixed; bottom: 0; }
         }
+        @yield('extraCss')
     </style>
 </head>
 <body>
     @include('pdf.components.watermark')
-    @include('pdf.components.header')
 
-    <div class="title-section">
-        <div class="title-box">Chart of Accounts</div>
+    @sectionMissing('customHeader')
+        @include('pdf.components.header', [
+            'title' => $__env->yieldContent('reportTitle', $title ?? null),
+            'subtitle' => $__env->yieldContent('reportSubtitle', $subtitle ?? null),
+        ])
+    @else
+        @yield('customHeader')
+    @endif
+
+    <div class="pdf-content">
+        @yield('content')
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th class="text-center" style="width: 50px;">SL</th>
-                <th>Account Name</th>
-                <th>Account Number</th>
-                <th>Group</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($accounts as $index => $account)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ $account->name }}</td>
-                <td>{{ $account->ac_number }}</td>
-                <td>{{ $account->group ? $account->group->name : 'N/A' }}</td>
-            </tr>
-            @empty
-            <tr>
-                <td colspan="4" class="text-center" style="padding: 20px; color: #999;">No accounts found</td>
-            </tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    <div class="footer">
-        <div class="footer-left">
-            Generated on: {{ date('Y-m-d H:i:s') }}
-        </div>
-        <div class="footer-right">
-            Total Records: {{ count($accounts) }}
-        </div>
-    </div>
+    @sectionMissing('customFooter')
+        @include('pdf.components.footer', [
+            'totalRecords' => $totalRecords ?? null,
+            'leftText' => $leftText ?? null,
+            'rightText' => $rightText ?? null,
+        ])
+    @else
+        @yield('customFooter')
+    @endif
 </body>
 </html>

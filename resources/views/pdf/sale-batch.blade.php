@@ -96,6 +96,7 @@
 </head>
 
 <body>
+    @include('pdf.components.watermark')
     <div class="header">
         <div class="company-name">{{ $companySetting->company_name ?? 'Company Name' }}</div>
         <div class="company-details">{{ $companySetting->company_address ?? 'Company Address' }}</div>

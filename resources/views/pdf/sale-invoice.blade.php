@@ -24,6 +24,7 @@
     </style>
 </head>
 <body>
+    @include('pdf.components.watermark')
     <div class="header">
         @if($companySetting?->company_logo)
             <img src="{{ public_path('storage/'.$companySetting->company_logo) }}" alt="Company Logo">

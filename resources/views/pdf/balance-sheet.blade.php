@@ -122,16 +122,8 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">
-            <!-- Logo placeholder -->
-        </div>
-        <div class="company-info">
-            <h2>East West Filling Station</h2>
-            <p>Dhaka, Bangladesh</p>
-            <p>mehedihassan2992001@gmail.com | 01750542923</p>
-        </div>
-    </div>
+    @include('pdf.components.watermark')
+    @include('pdf.components.header')
 
     <div class="title-section">
         <div class="title-box">Balance Sheet & Financial Notes</div>

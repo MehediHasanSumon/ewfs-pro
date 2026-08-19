@@ -23,6 +23,7 @@ class CompanySetting extends Model
         'vat_rate',
         'currency',
         'company_logo',
+        'pdf_watermark_image',
         'is_registration',
         'status',
     ];

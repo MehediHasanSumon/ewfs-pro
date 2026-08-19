@@ -24,6 +24,7 @@ interface CompanySetting {
     vat_rate?: number;
     currency?: string;
     company_logo?: string;
+    pdf_watermark_image?: string;
     is_registration?: boolean;
     status: number;
     created_at: string;
@@ -291,6 +292,34 @@ export default function Show({ companySetting }: ShowProps) {
                                 ) : (
                                     <p className="py-8 text-center text-gray-500 dark:text-gray-400">
                                         No logo uploaded
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="mt-6 dark:border-gray-700 dark:bg-gray-800">
+                            <CardHeader>
+                                <CardTitle className="dark:text-white">
+                                    PDF Watermark
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {companySetting.pdf_watermark_image ? (
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Watermark Image
+                                        </label>
+                                        <div className="mt-2 rounded-lg border p-4 dark:border-gray-600">
+                                            <img
+                                                src={`/storage/${companySetting.pdf_watermark_image}`}
+                                                alt="PDF Watermark"
+                                                className="mx-auto h-auto max-w-[200px] opacity-50"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="py-8 text-center text-gray-500 dark:text-gray-400">
+                                        No watermark uploaded
                                     </p>
                                 )}
                             </CardContent>

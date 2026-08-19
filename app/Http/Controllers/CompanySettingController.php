@@ -43,7 +43,8 @@ class CompanySettingController extends Controller implements HasMiddleware
     {
         $this->companySettingService->create(
             $request->attributesForPersistence(),
-            $request->file('company_logo')
+            $request->file('company_logo'),
+            $request->file('pdf_watermark_image')
         );
 
         return redirect()
@@ -70,7 +71,9 @@ class CompanySettingController extends Controller implements HasMiddleware
         $this->companySettingService->update(
             $companySetting,
             $request->attributesForPersistence(),
-            $request->file('company_logo')
+            $request->file('company_logo'),
+            $request->file('pdf_watermark_image'),
+            $request->boolean('remove_pdf_watermark')
         );
 
         return redirect()

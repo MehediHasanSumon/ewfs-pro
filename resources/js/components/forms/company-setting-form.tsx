@@ -23,6 +23,8 @@ export interface CompanySettingFormData {
     vat_rate: string;
     currency: string;
     company_logo: File | null;
+    pdf_watermark_image?: File | null;
+    remove_pdf_watermark?: boolean;
     is_registration: boolean;
     status: number;
 }
@@ -33,6 +35,7 @@ interface CompanySettingFormProps {
     processing: boolean;
     submitLabel: string;
     currentLogo?: string;
+    currentWatermark?: string;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
     setData: <Key extends keyof CompanySettingFormData>(
         key: Key,
@@ -50,6 +53,7 @@ export function CompanySettingForm({
     processing,
     submitLabel,
     currentLogo,
+    currentWatermark,
     onSubmit,
     setData,
     setError,
@@ -84,6 +88,32 @@ export function CompanySettingForm({
         }
 
         setData('company_logo', file);
+    };
+
+    const handleWatermarkChange = (file: File | null) => {
+        clearErrors('pdf_watermark_image');
+        if (data.remove_pdf_watermark) {
+            setData('remove_pdf_watermark', false);
+        }
+
+        if (!file) {
+            setData('pdf_watermark_image', null);
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            setData('pdf_watermark_image', null);
+            setError('pdf_watermark_image', 'Please select a valid image file.');
+            return;
+        }
+
+        if (file.size > MAX_LOGO_SIZE) {
+            setData('pdf_watermark_image', null);
+            setError('pdf_watermark_image', 'The watermark image must not exceed 5 MB.');
+            return;
+        }
+
+        setData('pdf_watermark_image', file);
     };
 
     return (
@@ -482,6 +512,49 @@ export function CompanySettingForm({
                     <InputError
                         id="company_logo-error"
                         message={errors.company_logo}
+                    />
+                </div>
+
+                <div>
+                    <Label
+                        htmlFor="pdf_watermark_image"
+                        className="dark:text-gray-200"
+                    >
+                        PDF Watermark Image
+                    </Label>
+                    <Input
+                        id="pdf_watermark_image"
+                        name="pdf_watermark_image"
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) =>
+                            handleWatermarkChange(event.target.files?.[0] || null)
+                        }
+                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        {...errorProps('pdf_watermark_image')}
+                    />
+                    {currentWatermark && !data.remove_pdf_watermark && (
+                        <div className="mt-1 flex items-center justify-between">
+                            <p className="text-sm text-gray-500">
+                                Current: {currentWatermark.split('/').pop()}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setData('remove_pdf_watermark', true)}
+                                className="text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400"
+                            >
+                                Remove Watermark
+                            </button>
+                        </div>
+                    )}
+                    {data.remove_pdf_watermark && (
+                        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            Watermark will be removed upon saving.
+                        </p>
+                    )}
+                    <InputError
+                        id="pdf_watermark_image-error"
+                        message={errors.pdf_watermark_image}
                     />
                 </div>
             </div>

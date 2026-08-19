@@ -16,6 +16,7 @@
     </style>
 </head>
 <body>
+    @include('pdf.components.watermark')
     <div class="header">
         <h2>Loan Statement</h2>
         <h3>{{ $loanAccount['name'] }}</h3>
