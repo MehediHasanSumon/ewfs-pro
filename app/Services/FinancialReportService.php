@@ -94,10 +94,14 @@ class FinancialReportService
 
         $capitalBalance = $this->capitalBalance($endDate);
         $loanBalance = $this->loanBalance($endDate);
-        $hasCustomBalance = ($capitalBalance > 0 || $loanBalance > 0);
+        $hasVouchers = DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->where('v.status', 'posted')
+            ->whereIn('vtt.code', ['1072', '1073', '1074', '1075', '1076'])
+            ->exists();
 
-        $capitalAmount = $hasCustomBalance ? $capitalBalance : 12174977.00;
-        $loanAmount = $hasCustomBalance ? $loanBalance : 0.00;
+        $capitalAmount = $hasVouchers ? $capitalBalance : 12174977.00;
+        $loanAmount = $hasVouchers ? $loanBalance : 0.00;
         $totalBalanceAmount = $capitalAmount + $loanAmount;
 
         $investAmount = $totalBalanceAmount;
@@ -136,7 +140,7 @@ class FinancialReportService
 
     public function capitalBalance(?string $endDate = null): float
     {
-        $query = DB::table('vouchers as v')
+        $receiptQuery = DB::table('vouchers as v')
             ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
             ->join('voucher_lines as vl', function ($join) {
                 $join->on('vl.voucher_id', '=', 'v.id')
@@ -150,15 +154,36 @@ class FinancialReportService
             });
 
         if ($endDate) {
-            $query->whereDate('v.voucher_date', '<=', $endDate);
+            $receiptQuery->whereDate('v.voucher_date', '<=', $endDate);
         }
 
-        return (float) ($query->sum('vl.amount') ?? 0);
+        $receiptAmount = (float) ($receiptQuery->sum('vl.amount') ?? 0);
+
+        $withdrawQuery = DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'payment')
+            ->where(function ($q) {
+                $q->whereIn('vtt.code', ['1074'])
+                    ->orWhereIn('vtt.name', ['Capital Withdraw']);
+            });
+
+        if ($endDate) {
+            $withdrawQuery->whereDate('v.voucher_date', '<=', $endDate);
+        }
+
+        $withdrawAmount = (float) ($withdrawQuery->sum('vl.amount') ?? 0);
+
+        return $receiptAmount - $withdrawAmount;
     }
 
     public function loanBalance(?string $endDate = null): float
     {
-        $query = DB::table('vouchers as v')
+        $receivedQuery = DB::table('vouchers as v')
             ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
             ->join('voucher_lines as vl', function ($join) {
                 $join->on('vl.voucher_id', '=', 'v.id')
@@ -172,10 +197,31 @@ class FinancialReportService
             });
 
         if ($endDate) {
-            $query->whereDate('v.voucher_date', '<=', $endDate);
+            $receivedQuery->whereDate('v.voucher_date', '<=', $endDate);
         }
 
-        return (float) ($query->sum('vl.amount') ?? 0);
+        $receivedAmount = (float) ($receivedQuery->sum('vl.amount') ?? 0);
+
+        $paymentQuery = DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'payment')
+            ->where(function ($q) {
+                $q->whereIn('vtt.code', ['1076'])
+                    ->orWhereIn('vtt.name', ['Loan Payment']);
+            });
+
+        if ($endDate) {
+            $paymentQuery->whereDate('v.voucher_date', '<=', $endDate);
+        }
+
+        $paymentAmount = (float) ($paymentQuery->sum('vl.amount') ?? 0);
+
+        return $receivedAmount - $paymentAmount;
     }
 
     public function financeOpeningBalance(?string $endDate = null): float
