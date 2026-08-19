@@ -197,6 +197,8 @@ $voucherTransactionTypes = [
         'opening_balance' => ['code' => '1072', 'name' => 'Opening Balance', 'voucher_type' => 'receipt'],
         'investment' => ['code' => '1073', 'name' => 'Investment', 'voucher_type' => 'receipt'],
         'capital_withdraw' => ['code' => '1074', 'name' => 'Capital Withdraw', 'voucher_type' => 'payment'],
+        'loan_received' => ['code' => '1075', 'name' => 'Loan Received', 'voucher_type' => 'receipt'],
+        'loan_payment' => ['code' => '1076', 'name' => 'Loan Payment', 'voucher_type' => 'payment'],
     ],
 ];
 
