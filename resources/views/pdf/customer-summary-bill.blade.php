@@ -14,6 +14,18 @@
             margin: 0;
             padding: 0;
         }
+        .title-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .title-box {
+            border: 1px solid #000;
+            display: inline-block;
+            padding: 8px 20px;
+            background-color: #f5f5f5;
+            font-weight: bold;
+            font-size: 14px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -39,7 +51,11 @@
 </head>
 <body>
     @include('pdf.components.watermark')
-    @include('pdf.components.header', ['title' => 'Customer Summary Bill (' . $startDate . ' to ' . $endDate . ')'])
+    @include('pdf.components.header')
+
+    <div class="title-section">
+        <div class="title-box">Customer Summary Bill ({{ $startDate }} to {{ $endDate }})</div>
+    </div>
 
     @forelse($bills as $bill)
     <table style="margin-bottom: 20px;">
