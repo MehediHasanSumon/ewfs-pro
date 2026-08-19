@@ -72,7 +72,7 @@ export default function CustomerSummaryBill({
     const canFilter = can('can-customer-filter');
     const canDownload = can('can-customer-download');
 
-    const [customerId, setCustomerId] = useState(filters.customer_id || 'all');
+    const [customerId, setCustomerId] = useState(filters.customer_id || '');
     const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
 
@@ -81,7 +81,7 @@ export default function CustomerSummaryBill({
             start_date: startDate,
             end_date: endDate,
         };
-        if (customerId !== 'all') {
+        if (customerId) {
             params.customer_id = customerId;
         }
         router.get('/customer-summary-bill', params, { preserveState: true });
@@ -89,13 +89,10 @@ export default function CustomerSummaryBill({
 
     const clearFilters = () => {
         const today = new Date().toISOString().split('T')[0];
-        setCustomerId('all');
+        setCustomerId('');
         setStartDate(today);
         setEndDate(today);
-        router.get('/customer-summary-bill', {
-            start_date: today,
-            end_date: today,
-        }, { preserveState: true });
+        router.get('/customer-summary-bill', {}, { preserveState: true });
     };
 
     return (
@@ -106,7 +103,7 @@ export default function CustomerSummaryBill({
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold dark:text-white">Customer Summary Bill</h1>
-                        <p className="text-gray-600 dark:text-gray-400">View customer wise credit sales summary</p>
+                        <p className="text-gray-600 dark:text-gray-400">View customer credit sales summary</p>
                     </div>
                     {canDownload && (
                         <Button
@@ -115,7 +112,7 @@ export default function CustomerSummaryBill({
                                 const params = new URLSearchParams();
                                 params.append('start_date', startDate);
                                 params.append('end_date', endDate);
-                                if (customerId !== 'all') {
+                                if (customerId) {
                                     params.append('customer_id', customerId);
                                 }
                                 openPdfViewer(`/customer-summary-bill/download-pdf?${params.toString()}`);
@@ -143,7 +140,6 @@ export default function CustomerSummaryBill({
                                             <SelectValue placeholder="Select customer" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Customers</SelectItem>
                                             {customers.map((customer) => (
                                                 <SelectItem key={customer.id} value={customer.id.toString()}>
                                                     {customer.name}
@@ -232,12 +228,14 @@ export default function CustomerSummaryBill({
                     ) : (
                         <Card className="dark:border-gray-700 dark:bg-gray-800">
                             <CardContent>
-                                <p className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">No records</p>
+                                <p className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
+                                    {customerId ? 'No records' : 'Please select a customer to view summary bill'}
+                                </p>
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* Overall Product-wise Sales Summary Table across all customers */}
+                    {/* Product-wise Sales Summary Table for Selected Customer */}
                     {product_summary && product_summary.length > 0 && (
                         <Card className="dark:border-gray-700 dark:bg-gray-800">
                             <CardHeader className="py-3 px-4 border-b dark:border-gray-700">

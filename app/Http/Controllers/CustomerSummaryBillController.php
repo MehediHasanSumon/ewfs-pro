@@ -29,46 +29,56 @@ class CustomerSummaryBillController extends Controller implements HasMiddleware
     public function index(Request $request)
     {
         [$startDate, $endDate, $customerId] = $this->filters($request);
+        $bills = $customerId
+            ? $this->reports->summaryBills(
+                $startDate,
+                $endDate,
+                $customerId
+            )
+            : [];
+        $productSummary = $customerId
+            ? $this->reports->summaryProductSummary(
+                $startDate,
+                $endDate,
+                $customerId
+            )
+            : [];
 
         return Inertia::render('CustomerSummaryBill/Index', [
-            'bills' => $this->reports->summaryBills(
-                $startDate,
-                $endDate,
-                $customerId
-            ),
-            'product_summary' => $this->reports->summaryProductSummary(
-                $startDate,
-                $endDate,
-                $customerId
-            ),
+            'bills' => $bills,
+            'product_summary' => $productSummary,
             'customers' => $this->customers(),
-            'filters' => $request->only([
-                'customer_id',
-                'start_date',
-                'end_date',
-            ]),
+            'filters' => [
+                'customer_id' => $customerId ? (string) $customerId : '',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ],
         ]);
     }
 
     public function downloadPdf(Request $request)
     {
         [$startDate, $endDate, $customerId] = $this->filters($request);
-        $bills = $this->reports->summaryBills(
-            $startDate,
-            $endDate,
-            $customerId
-        );
-        $productSummary = $this->reports->summaryProductSummary(
-            $startDate,
-            $endDate,
-            $customerId
-        );
+        $bills = $customerId
+            ? $this->reports->summaryBills(
+                $startDate,
+                $endDate,
+                $customerId
+            )
+            : [];
+        $productSummary = $customerId
+            ? $this->reports->summaryProductSummary(
+                $startDate,
+                $endDate,
+                $customerId
+            )
+            : [];
         $companySetting = CompanySetting::query()->first();
 
         return Pdf::loadView(
             'pdf.customer-summary-bill',
             compact('bills', 'productSummary', 'companySetting', 'startDate', 'endDate')
-        )->stream('customer-summary-bill.pdf');
+        )->setPaper('a4', 'portrait')->stream('customer-summary-bill.pdf');
     }
 
     private function filters(Request $request): array
@@ -82,7 +92,7 @@ class CustomerSummaryBillController extends Controller implements HasMiddleware
         return [
             $validated['start_date'] ?? today()->toDateString(),
             $validated['end_date'] ?? today()->toDateString(),
-            isset($validated['customer_id'])
+            isset($validated['customer_id']) && $validated['customer_id'] !== ''
                 ? (int) $validated['customer_id']
                 : null,
         ];
