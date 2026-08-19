@@ -6,7 +6,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 15mm 12mm 15mm 12mm;
+            margin: 15mm 10mm 15mm 10mm;
         }
         body {
             font-family: Arial, sans-serif;
@@ -48,40 +48,35 @@
             vertical-align: top;
         }
         .intro-text {
-            margin: 8px 0 12px 0;
+            margin: 8px 0 10px 0;
             font-size: 11px;
             line-height: 1.35;
         }
         table.report-table {
             width: 100%;
             border-collapse: collapse;
-            border: 1.5px solid #000;
-            margin-top: 5px;
+            margin-top: 8px;
+            margin-bottom: 12px;
+        }
+        table.report-table th, table.report-table td {
+            border: 1px solid #000;
+            padding: 8px 6px;
+            text-align: left;
         }
         table.report-table th {
-            padding: 6px 8px;
             font-weight: bold;
             font-size: 11px;
             color: #000;
-            border: none;
-            text-align: left;
         }
         table.report-table td {
-            padding: 4px 8px;
             font-size: 11px;
-            color: #000;
-            border: none;
+            color: #333;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .dotted-top-row td {
-            border-top: 1px dotted #000 !important;
-            padding-top: 5px !important;
-            padding-bottom: 5px !important;
-        }
         .bottom-section {
             width: 100%;
-            margin-top: 12px;
+            margin-top: 10px;
         }
         .bottom-table {
             width: 100%;
@@ -133,21 +128,21 @@
         </div>
     </div>
 
-    <!-- Main Table with Outer Border -->
+    <!-- Standard ERP Table -->
     <table class="report-table">
         <thead>
             <tr>
-                <th style="width: 40px;">SN</th>
-                <th>ProductName</th>
-                <th style="width: 100px;" class="text-right">SalesPrice</th>
-                <th style="width: 110px;" class="text-right">Quantity</th>
-                <th style="width: 120px;" class="text-right">Amount</th>
+                <th style="width: 40px;" class="text-center">SN</th>
+                <th>Product Name</th>
+                <th style="width: 95px;" class="text-right">Sales Price</th>
+                <th style="width: 95px;" class="text-right">Quantity</th>
+                <th style="width: 110px;" class="text-right">Amount</th>
             </tr>
         </thead>
         <tbody>
             @forelse($report['product_summary'] as $item)
             <tr>
-                <td>{{ $item['sn'] }}</td>
+                <td class="text-center">{{ $item['sn'] }}</td>
                 <td>{{ $item['product_name'] }}</td>
                 <td class="text-right">{{ number_format($item['price'], 2) }}</td>
                 <td class="text-right">{{ number_format($item['quantity'], 2) }}</td>
@@ -155,17 +150,13 @@
             </tr>
             @empty
             <tr>
-                <td colspan="5" class="text-center" style="padding: 15px; color: #777;">No records found</td>
+                <td colspan="5" class="text-center" style="padding: 15px; color: #999;">No records found</td>
             </tr>
             @endforelse
-            <!-- Dotted line with Total Slip Quantity and Table Amount Total -->
-            <tr class="dotted-top-row">
-                <td colspan="4" style="font-weight: bold;">
-                    Total Slip Quantity : {{ $report['total_slip_quantity'] }}
-                </td>
-                <td class="text-right" style="font-weight: bold;">
-                    {{ number_format($report['total'], 2) }}
-                </td>
+            <tr style="font-weight: bold;">
+                <td colspan="3">Total Slip Quantity : {{ $report['total_slip_quantity'] }}</td>
+                <td class="text-right">{{ number_format($report['total_quantity'], 2) }}</td>
+                <td class="text-right">{{ number_format($report['total'], 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -180,7 +171,7 @@
                         <span>In Words : </span> {{ $report['amount_in_words'] }}
                     </div>
 
-                    <div style="margin-top: 35px; font-size: 10px; line-height: 1.3;">
+                    <div style="margin-top: 30px; font-size: 10px; line-height: 1.3;">
                         <span style="font-weight: bold;">Note :</span> Supply on Credit will be stopped without notice if the bill is not paid within 15 days from date issue.
                     </div>
                 </td>
@@ -208,7 +199,7 @@
                     </table>
 
                     <!-- Signature Box -->
-                    <div style="margin-top: 35px; text-align: center;">
+                    <div style="margin-top: 30px; text-align: center;">
                         <div style="border-top: 1.5px solid #000; width: 85%; margin: 0 auto; padding-top: 4px; font-size: 11px; font-weight: bold;">
                             Signature
                         </div>
