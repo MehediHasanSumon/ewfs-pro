@@ -15,6 +15,7 @@ export interface CompanySettingFormData {
     factory_address: string;
     company_mobile: string;
     company_phone: string;
+    fax?: string;
     company_email: string;
     trade_license: string;
     tin_no: string;
@@ -123,7 +124,7 @@ export function CompanySettingForm({
             className="space-y-6"
             aria-busy={processing}
         >
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div>
                     <Label htmlFor="company_name" className="dark:text-gray-200">
                         Company Name *
@@ -290,6 +291,27 @@ export function CompanySettingForm({
                         id="company_phone-error"
                         message={errors.company_phone}
                     />
+                </div>
+
+                <div>
+                    <Label htmlFor="fax" className="dark:text-gray-200">
+                        Fax
+                    </Label>
+                    <Input
+                        id="fax"
+                        name="fax"
+                        type="tel"
+                        value={data.fax || ''}
+                        onChange={(event) =>
+                            setData('fax', event.target.value)
+                        }
+                        placeholder="Enter fax number"
+                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        maxLength={255}
+                        autoComplete="tel"
+                        {...errorProps('fax')}
+                    />
+                    <InputError id="fax-error" message={errors.fax} />
                 </div>
 
                 <div>

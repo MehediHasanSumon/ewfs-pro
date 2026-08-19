@@ -40,7 +40,7 @@ class CompanySettingService
     public function update(
         CompanySetting $companySetting,
         array $attributes,
-        ?UploadedFile $logo,
+        ?UploadedFile $logo = null,
         ?UploadedFile $watermark = null,
         bool $removeWatermark = false
     ): CompanySetting {

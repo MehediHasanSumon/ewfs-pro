@@ -24,6 +24,7 @@ interface CompanySetting {
     factory_address?: string;
     company_mobile?: string;
     company_phone?: string;
+    fax?: string;
     company_email?: string;
     trade_license?: string;
     tin_no?: string;
@@ -74,6 +75,7 @@ export default function Update({ companySetting }: UpdateProps) {
         factory_address: companySetting.factory_address || '',
         company_mobile: companySetting.company_mobile || '',
         company_phone: companySetting.company_phone || '',
+        fax: companySetting.fax || '',
         company_email: companySetting.company_email || '',
         trade_license: companySetting.trade_license || '',
         tin_no: companySetting.tin_no || '',

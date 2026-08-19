@@ -19,6 +19,8 @@ beforeEach(function () {
         $table->string('company_name');
         $table->string('company_address')->nullable();
         $table->string('company_mobile')->nullable();
+        $table->string('company_phone')->nullable();
+        $table->string('fax')->nullable();
         $table->string('company_email')->nullable();
         $table->string('currency', 3)->default('BDT');
         $table->string('company_logo')->nullable();
@@ -131,14 +133,28 @@ test('it renders PDF with reusable watermark and header components', function ()
         'company_name' => 'East West Test Station',
         'company_address' => 'Dhaka, Bangladesh',
         'company_mobile' => '01700000000',
+        'company_phone' => '029876543',
+        'fax' => '029876544',
         'company_email' => 'test@station.com',
         'currency' => 'BDT',
         'status' => true,
     ], null, $watermark);
 
+    expect($setting->fax)->toBe('029876544');
+
+    // Update fax
+    $updated = $service->update($setting, [
+        'company_name' => 'East West Test Station',
+        'fax' => '029876599',
+        'currency' => 'BDT',
+        'status' => true,
+    ]);
+
+    expect($updated->fax)->toBe('029876599');
+
     $pdf = Pdf::loadView('pdf.accounts', [
         'accounts' => [],
-        'companySetting' => $setting,
+        'companySetting' => $updated,
     ]);
     $output = $pdf->output();
 

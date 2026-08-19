@@ -4,8 +4,8 @@ import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Building, Edit, FolderOpen } from 'lucide-react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft, Building, Edit, FolderOpen, Trash2 } from 'lucide-react';
 
 interface CompanySetting {
     id: number;
@@ -16,6 +16,7 @@ interface CompanySetting {
     factory_address?: string;
     company_mobile?: string;
     company_phone?: string;
+    fax?: string;
     company_email?: string;
     trade_license?: string;
     tin_no?: string;
@@ -50,23 +51,30 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Show({ companySetting }: ShowProps) {
+    const { delete: destroy, processing } = useForm();
     const { can } = usePermission();
+
+    const handleDelete = () => {
+        if (confirm('Are you sure you want to delete this company setting?')) {
+            destroy(`/company-settings/${companySetting.id}`);
+        }
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Company Setting" />
 
-            <div className="space-y-6 p-6">
-                <div className="flex items-center justify-between">
+            <div className="space-y-6 p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold dark:text-white">
+                        <h1 className="text-2xl font-bold dark:text-white">
                             Company Setting Details
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            View company information
+                            View complete company information
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {can('company-document-view') && (
                             <Link
                                 href={`/company-settings/${companySetting.id}/documents`}
@@ -77,20 +85,29 @@ export default function Show({ companySetting }: ShowProps) {
                                 </Button>
                             </Link>
                         )}
-                        <Link
-                            href={`/company-settings/${companySetting.id}/edit`}
-                        >
-                            <Button>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                            </Button>
-                        </Link>
                         <Link href="/company-settings">
                             <Button variant="secondary">
-                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                <ArrowLeft
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                                 Back to List
                             </Button>
                         </Link>
+                        <Link href={`/company-settings/${companySetting.id}/edit`}>
+                            <Button variant="default">
+                                <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
+                                Edit
+                            </Button>
+                        </Link>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={processing}
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete
+                        </Button>
                     </div>
                 </div>
 
@@ -189,6 +206,14 @@ export default function Show({ companySetting }: ShowProps) {
                                         <p className="text-gray-900 dark:text-white">
                                             {companySetting.company_phone ||
                                                 '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Fax
+                                        </label>
+                                        <p className="text-gray-900 dark:text-white">
+                                            {companySetting.fax || '-'}
                                         </p>
                                     </div>
                                     <div>

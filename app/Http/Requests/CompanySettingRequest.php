@@ -21,6 +21,7 @@ class CompanySettingRequest extends FormRequest
             'factory_address' => ['nullable', 'string'],
             'company_mobile' => ['nullable', 'string', 'max:255'],
             'company_phone' => ['nullable', 'string', 'max:255'],
+            'fax' => ['nullable', 'string', 'max:255'],
             'company_email' => ['nullable', 'email', 'max:255'],
             'trade_license' => ['nullable', 'string', 'max:255'],
             'tin_no' => ['nullable', 'string', 'max:255'],

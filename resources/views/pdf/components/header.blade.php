@@ -25,12 +25,20 @@
             @if($companySetting->company_address)
                 <p>{{ $companySetting->company_address }}</p>
             @endif
-            @if($companySetting->company_mobile || $companySetting->company_email)
-                <p>
-                    @if($companySetting->company_email){{ $companySetting->company_email }}@endif
-                    @if($companySetting->company_mobile && $companySetting->company_email) | @endif
-                    @if($companySetting->company_mobile){{ $companySetting->company_mobile }}@endif
-                </p>
+            @php
+                $contacts = [];
+                if (!empty($companySetting->company_email)) {
+                    $contacts[] = $companySetting->company_email;
+                }
+                if (!empty($companySetting->company_mobile)) {
+                    $contacts[] = $companySetting->company_mobile;
+                }
+                if (!empty($companySetting->company_phone)) {
+                    $contacts[] = 'Phone: ' . $companySetting->company_phone;
+                }
+            @endphp
+            @if(count($contacts) > 0)
+                <p>{{ implode(' | ', $contacts) }}</p>
             @endif
         @else
             <h2>East West Filling Station</h2>

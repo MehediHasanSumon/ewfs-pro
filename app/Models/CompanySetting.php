@@ -15,6 +15,7 @@ class CompanySetting extends Model
         'factory_address',
         'company_mobile',
         'company_phone',
+        'fax',
         'company_email',
         'trade_license',
         'tin_no',
