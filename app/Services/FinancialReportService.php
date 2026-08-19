@@ -92,10 +92,17 @@ class FinancialReportService
             ],
         ];
 
+        $openingBalance = $this->financeOpeningBalance($endDate);
+        $investAmount = $openingBalance > 0 ? $openingBalance : 12174977.00;
+        $totalInvestProfit = $investAmount + $totalProfit;
+        $totalAmount = $totalInvestProfit;
+        $recentDue = 11551984.00;
+        $cash = $totalAmount - $recentDue;
+
         return [
             'close_month_year' => [
                 'label' => "Total Balance -- 31-12- {$prevYear}",
-                'amount' => 12174977.00,
+                'amount' => $investAmount,
             ],
             'top_sheet' => [
                 'title' => 'Top Sheet',
@@ -106,15 +113,37 @@ class FinancialReportService
             ],
             'cash_history' => $cashHistory,
             'bottom_summary' => [
-                'invest_amount' => 12174977.00,
-                'profit' => 6372710.99,
-                'total_invest_profit' => 18547687.99,
-                'total_amount' => 18547687.99,
-                'recent_due' => 11551984.00,
-                'cash' => 6995703.99,
+                'invest_amount' => $investAmount,
+                'profit' => $totalProfit,
+                'total_invest_profit' => $totalInvestProfit,
+                'total_amount' => $totalAmount,
+                'recent_due' => $recentDue,
+                'cash' => $cash,
                 'extra' => 192721.01,
             ],
         ];
+    }
+
+    public function financeOpeningBalance(?string $endDate = null): float
+    {
+        $query = DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'receipt')
+            ->where(function ($q) {
+                $q->whereIn('vtt.code', ['1072', '1073'])
+                    ->orWhereIn('vtt.system_key', ['opening_balance', 'investment']);
+            });
+
+        if ($endDate) {
+            $query->whereDate('v.voucher_date', '<=', $endDate);
+        }
+
+        return (float) ($query->sum('vl.amount') ?? 0);
     }
 
     public function positionSummary(string $asOfDate): array
