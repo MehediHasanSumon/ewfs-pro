@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { FileText, Filter, X } from 'lucide-react';
+import { Calendar, FileText, Filter, X } from 'lucide-react';
 import { useState } from 'react';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -224,24 +224,31 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     </Card>
                 )}
 
-                {/* 1. Top Section: Close Month And Year Summary */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                        <th className="p-3 text-center text-[14px] font-bold dark:text-gray-200">Close Month And Year</th>
-                                        <th className="p-3 text-right text-[14px] font-bold dark:text-gray-200 w-64">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 font-semibold text-[14px]">
-                                        <td className="p-3 text-center dark:text-white">{topSheetData.close_month_year.label}</td>
-                                        <td className="p-3 text-right dark:text-white">{formatCurrency(topSheetData.close_month_year.amount)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                {/* 1. Top Section: Close Month And Year Summary Card */}
+                <Card className="dark:border-gray-700 dark:bg-gray-800 shadow-sm">
+                    <CardContent className="p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+                                    <Calendar className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                        Close Month And Year
+                                    </p>
+                                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-white">
+                                        {topSheetData.close_month_year.label}
+                                    </h2>
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:items-end">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                    Closing Amount
+                                </span>
+                                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                                    {formatCurrency(topSheetData.close_month_year.amount)}
+                                </div>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
