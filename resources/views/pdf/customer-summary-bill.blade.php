@@ -63,7 +63,6 @@
             <tr>
                 <th>Date</th>
                 <th>Vehicle</th>
-                <th>Invoice No</th>
                 <th>Product</th>
                 <th>Unit</th>
                 <th class="text-right">Price</th>
@@ -71,7 +70,7 @@
                 <th class="text-right">Amount</th>
             </tr>
             <tr>
-                <th colspan="8" style="padding: 8px; text-align: left; font-size: 13px;">
+                <th colspan="7" style="padding: 8px; text-align: left; font-size: 13px;">
                     {{ $bill['customer_name'] }}
                 </th>
             </tr>
@@ -81,7 +80,6 @@
             <tr>
                 <td>{{ $sale->sale_date }}</td>
                 <td>{{ $sale->vehicle_number }}</td>
-                <td>{{ $sale->invoice_no }}</td>
                 <td>{{ $sale->product_name }}</td>
                 <td>{{ $sale->unit_name }}</td>
                 <td class="text-right">{{ number_format($sale->price, 2) }}</td>
@@ -90,7 +88,7 @@
             </tr>
             @endforeach
             <tr style="font-weight: bold;">
-                <td colspan="6">Total:</td>
+                <td colspan="5">Total:</td>
                 <td class="text-right">{{ number_format($bill['total_quantity'], 2) }}</td>
                 <td class="text-right">{{ number_format($bill['total_amount'], 2) }}</td>
             </tr>

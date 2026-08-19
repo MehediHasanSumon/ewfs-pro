@@ -16,8 +16,6 @@ import { usePermission } from '@/hooks/usePermission';
 interface Sale {
     sale_date: string;
     vehicle_number: string;
-    invoice_no: string;
-    transaction_id: string;
     product_name: string;
     unit_name: string;
     price: number;
@@ -188,7 +186,6 @@ export default function CustomerSummaryBill({
                                                 <tr className="border-b dark:border-gray-700">
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Vehicle</th>
-                                                    <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Invoice No</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
@@ -196,7 +193,7 @@ export default function CustomerSummaryBill({
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                                 </tr>
                                                 <tr className="bg-gray-100 dark:bg-gray-700">
-                                                    <th colSpan={8} className="p-3 text-left text-[14px] font-bold dark:text-white">
+                                                    <th colSpan={7} className="p-3 text-left text-[14px] font-bold dark:text-white">
                                                         {bill.customer_name}
                                                     </th>
                                                 </tr>
@@ -206,7 +203,6 @@ export default function CustomerSummaryBill({
                                                     <tr key={saleIndex} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                         <td className="p-2 text-[13px] dark:text-white">{sale.sale_date}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.vehicle_number}</td>
-                                                        <td className="p-2 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.product_name}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -215,7 +211,7 @@ export default function CustomerSummaryBill({
                                                     </tr>
                                                 ))}
                                                 <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                    <td colSpan={6} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                    <td colSpan={5} className="p-2 text-[13px] dark:text-white">Total:</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{bill.total_quantity.toFixed(2)}</td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">{bill.total_amount.toFixed(2)}</td>
                                                 </tr>
@@ -289,12 +285,12 @@ export default function CustomerSummaryBill({
                                         <table className="w-full">
                                             <tbody>
                                                 <tr className="border-b font-bold bg-indigo-100 dark:bg-indigo-900 dark:border-gray-700">
-                                                    <td colSpan={6} className="p-3 text-[14px] dark:text-white">Grand Total:</td>
+                                                    <td colSpan={5} className="p-3 text-[14px] dark:text-white">Grand Total:</td>
                                                     <td className="p-3 text-right text-[14px] dark:text-white">{bills.reduce((sum, bill) => sum + Number(bill.total_quantity), 0).toFixed(2)}</td>
                                                     <td className="p-3 text-right text-[14px] dark:text-white">{grandTotal.toFixed(2)}</td>
                                                 </tr>
                                                 <tr className="bg-gray-50 dark:bg-gray-800">
-                                                    <td colSpan={8} className="p-3 text-[13px] italic dark:text-gray-300">
+                                                    <td colSpan={7} className="p-3 text-[13px] italic dark:text-gray-300">
                                                         In words: {numberToWords(Math.floor(grandTotal))}
                                                     </td>
                                                 </tr>

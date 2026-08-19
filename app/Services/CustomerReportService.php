@@ -258,12 +258,9 @@ class CustomerReportService
                             ? $dates->implode(', ')
                             : ($dates->first() . ' to ' . $dates->last());
 
-                        $invoices = $items->pluck('invoice_no')->unique()->filter()->implode(', ');
-
                         return (object) [
                             'sale_date' => $dateStr,
                             'vehicle_number' => $first->vehicle_number,
-                            'invoice_no' => $invoices ?: 'N/A',
                             'product_name' => $first->product_name,
                             'unit_name' => $first->unit_name,
                             'price' => (float) round((float) $first->price, 2),

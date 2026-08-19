@@ -672,8 +672,8 @@ test('Customer Summary Bill aggregates same vehicle sales of same product and ra
     $sales = $bills[0]['sales'];
 
     // Must have 2 sales rows:
-    // Row 1: Vehicle 11-2233, Diesel @ 102.01, Qty 61.71 (42.79 + 18.92), Amount 6295.00, Invoice: IN0002, IN0006
-    // Row 2: Vehicle 11-2233, Diesel @ 115.00, Qty 30.00, Amount 3450.00, Invoice: IN0009
+    // Row 1: Vehicle 11-2233, Diesel @ 102.01, Qty 61.71 (42.79 + 18.92), Amount 6295.00
+    // Row 2: Vehicle 11-2233, Diesel @ 115.00, Qty 30.00, Amount 3450.00
     expect($sales)->toHaveCount(2);
 
     expect($sales[0]->vehicle_number)->toBe('11-2233');
@@ -681,13 +681,10 @@ test('Customer Summary Bill aggregates same vehicle sales of same product and ra
     expect($sales[0]->price)->toBe(102.01);
     expect($sales[0]->quantity)->toBe(61.71);
     expect($sales[0]->total_amount)->toBe(6295.00);
-    expect($sales[0]->invoice_no)->toContain('IN0002');
-    expect($sales[0]->invoice_no)->toContain('IN0006');
 
     expect($sales[1]->vehicle_number)->toBe('11-2233');
     expect($sales[1]->product_name)->toBe('Diesel');
     expect($sales[1]->price)->toBe(115.00);
     expect($sales[1]->quantity)->toBe(30.00);
     expect($sales[1]->total_amount)->toBe(3450.00);
-    expect($sales[1]->invoice_no)->toBe('IN0009');
 });
