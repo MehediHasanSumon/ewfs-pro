@@ -13,11 +13,11 @@
         .info { width: 100%; margin-bottom: 16px; border-collapse: collapse; }
         .info td { width: 50%; padding: 3px 0; vertical-align: top; }
         .items { width: 100%; border-collapse: collapse; }
-        .items th, .items td { border: 1px solid #bbb; padding: 7px; }
-        .items th { background: #f0f0f0; text-align: left; }
+        .items th, .items td { border: 1px solid #000; padding: 7px; }
+        .items th { text-align: left; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
-        .total-row { font-weight: bold; background: #f5f5f5; }
+        .total-row { font-weight: bold; }
         .words { margin-top: 12px; font-style: italic; }
         .signatures { width: 100%; margin-top: 55px; }
         .signatures td { width: 50%; text-align: center; }

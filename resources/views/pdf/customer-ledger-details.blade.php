@@ -74,12 +74,11 @@
             margin-bottom: 30px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -89,7 +88,6 @@
             color: #333;
         }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .signature-section {
             margin-top: 60px;
             padding: 20px 0;
@@ -155,7 +153,7 @@
                 <td>{{ $transaction->remarks ?? 'N/A' }}</td>
             </tr>
             @endforeach
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="6">Total:</td>
                 <td class="text-right">{{ number_format($ledger['total_debit'], 2) }}</td>
                 <td class="text-right">{{ number_format($ledger['total_credit'], 2) }}</td>

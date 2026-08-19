@@ -88,13 +88,12 @@
 
         th,
         td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
 
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -107,10 +106,6 @@
 
         .text-right {
             text-align: right;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
         }
 
         .signature-section {
@@ -181,7 +176,7 @@
             </tr>
             @endforelse
             @if(count($closedShifts) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="2" class="text-right">Total:</td>
                 <td class="text-right">{{ number_format($totalPayment, 2) }}</td>
                 <td class="text-right">{{ number_format($totalReceived, 2) }}</td>

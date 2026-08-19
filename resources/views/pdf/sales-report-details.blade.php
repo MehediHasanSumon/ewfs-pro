@@ -79,12 +79,11 @@
             margin-bottom: 15px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 8px 6px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 11px;
             color: #000;
@@ -95,16 +94,14 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .total-row {
-            background-color: #e0e0e0 !important;
             font-weight: bold;
         }
         .total-section {
             margin-top: 20px;
             padding: 15px;
             background-color: #f5f5f5;
-            border: 1px solid #ddd;
+            border: 1px solid #000;
         }
         .total-section p {
             margin: 5px 0;

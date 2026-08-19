@@ -66,12 +66,11 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -82,7 +81,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .footer {
             position: fixed;
             bottom: 0;
@@ -125,7 +123,7 @@
                 <th class="text-right">Quantity</th>
                 <th class="text-right">Total</th>
             </tr>
-            <tr style="background-color: #e0e0e0;">
+            <tr >
                 <th colspan="8" style="padding: 10px; text-align: left; font-size: 13px;">
                     {{ $bill['customer_name'] }}
                 </th>
@@ -144,7 +142,7 @@
                 <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
             </tr>
             @endforeach
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="6">Total:</td>
                 <td class="text-right">{{ number_format($bill['total_quantity'], 2) }}</td>
                 <td class="text-right">{{ number_format($bill['total_amount'], 2) }}</td>
@@ -190,12 +188,12 @@
     @endphp
     <table style="margin-top: 20px;">
         <tbody>
-            <tr style="font-weight: bold; background-color: #d0d0d0; font-size: 14px;">
+            <tr style="font-weight: bold; font-size: 14px;">
                 <td colspan="6" style="padding: 12px;">Grand Total:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format(collect($bills)->sum('total_quantity'), 2) }}</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($grandTotal, 2) }}</td>
             </tr>
-            <tr style="background-color: #f5f5f5;">
+            <tr >
                 <td colspan="8" style="padding: 12px; font-style: italic; font-size: 12px;">
                     In words: {{ numberToWords(floor($grandTotal)) }}
                 </td>

@@ -64,12 +64,11 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -79,7 +78,6 @@
             color: #333;
         }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .signature-section {
             margin-top: 60px;
             padding: 20px 0;
@@ -136,7 +134,7 @@
             </tr>
             @endforelse
             @if(count($ledgers) > 0)
-            <tr style="font-weight: bold; background-color: #d0d0d0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($ledgers->sum('debit'), 2) }}</td>
                 <td class="text-right">{{ number_format($ledgers->sum('credit'), 2) }}</td>

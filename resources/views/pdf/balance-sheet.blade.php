@@ -72,12 +72,11 @@
             margin-top: 10px; 
         }
         th, td { 
-            border: 1px solid #ccc; 
+            border: 1px solid #000; 
             padding: 8px; 
             text-align: left; 
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 11px;
             color: #000;
@@ -88,16 +87,14 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .total-row {
             font-weight: bold;
-            background-color: #ffebee;
-        }
+            }
         .summary-box {
             margin: 10px 0;
             padding: 8px;
             background-color: #f9f9f9;
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             font-size: 11px;
         }
         .footer {
@@ -233,7 +230,7 @@
                 <td>Total Purchase</td>
                 <td class="text-right">({{ number_format($data['totals']['total_purchases'], 2) }})</td>
             </tr>
-            <tr style="font-weight: bold; background-color: #e8f5e8;">
+            <tr style="font-weight: bold;">
                 <td><strong>Gross Profit</strong></td>
                 <td class="text-right"><strong>{{ number_format($data['totals']['total_sales'] - $data['totals']['total_purchases'], 2) }}</strong></td>
             </tr>
@@ -241,7 +238,7 @@
                 <td>Total Admin Expenses</td>
                 <td class="text-right">({{ number_format($data['totals']['total_admin_expenses'], 2) }})</td>
             </tr>
-            <tr style="font-weight: bold; background-color: #d4edda;">
+            <tr style="font-weight: bold;">
                 <td><strong>Net Profit</strong></td>
                 <td class="text-right"><strong>{{ number_format(($data['totals']['total_sales'] - $data['totals']['total_purchases']) - $data['totals']['total_admin_expenses'], 2) }}</strong></td>
             </tr>

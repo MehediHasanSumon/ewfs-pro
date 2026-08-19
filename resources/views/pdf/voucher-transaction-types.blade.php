@@ -10,8 +10,8 @@
         .header p { margin: 2px 0; color: #555; }
         .title { text-align: center; font-size: 14px; font-weight: bold; margin: 16px 0; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #cfcfcf; padding: 6px; text-align: left; vertical-align: top; }
-        th { background: #f3f4f6; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: left; vertical-align: top; }
+        th { }
         .center { text-align: center; }
         .footer { margin-top: 16px; color: #666; font-size: 9px; }
     </style>

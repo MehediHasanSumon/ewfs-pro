@@ -66,12 +66,11 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 8px 6px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 10px;
             color: #000;
@@ -85,9 +84,6 @@
         }
         .text-right {
             text-align: right;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
         }
         .footer {
             position: fixed;
@@ -105,8 +101,7 @@
         }
         .total-row {
             font-weight: bold;
-            background-color: #e8e8e8 !important;
-        }
+            }
     </style>
 </head>
 <body>

@@ -78,13 +78,12 @@
 
         th,
         td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 8px 6px;
             text-align: left;
         }
 
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 11px;
             color: #000;
@@ -101,10 +100,6 @@
 
         .text-right {
             text-align: right;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
         }
 
         .footer {
@@ -188,7 +183,7 @@
         </tbody>
         @if(count($transfers) > 0)
         <tfoot>
-            <tr style="background-color: #e9ecef; font-weight: bold;">
+            <tr style="font-weight: bold;">
                 <td colspan="5" class="text-right">Total:</td>
                 <td class="text-right">{{ number_format($transfers->sum('amount'), 2) }}</td>
                 <td class="text-right">{{ number_format($transfers->sum('transfer_fee'), 2) }}</td>

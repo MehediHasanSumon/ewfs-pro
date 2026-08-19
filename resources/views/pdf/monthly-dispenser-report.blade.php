@@ -70,13 +70,12 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 3px 2px;
             text-align: center;
             font-size: 8px;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             color: #000;
         }
@@ -86,7 +85,6 @@
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .text-left { text-align: left; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .footer {
             position: fixed;
             bottom: 0;

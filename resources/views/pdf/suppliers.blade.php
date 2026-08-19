@@ -61,9 +61,8 @@
             font-size: 14px;
         }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 10px 8px; text-align: left; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -74,7 +73,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .status-active { color: green; font-weight: bold; }
         .status-inactive { color: red; font-weight: bold; }
         .footer {

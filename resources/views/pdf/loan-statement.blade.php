@@ -7,10 +7,10 @@
         body { font-family: Arial, sans-serif; font-size: 12px; }
         .header { text-align: center; margin-bottom: 20px; }
         .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .info-table td { padding: 5px; border: 1px solid #ddd; }
+        .info-table td { padding: 5px; border: 1px solid #000; }
         .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .data-table th, .data-table td { padding: 8px; border: 1px solid #ddd; text-align: left; }
-        .data-table th { background-color: #f5f5f5; }
+        .data-table th, .data-table td { padding: 8px; border: 1px solid #000; text-align: left; }
+        .data-table th { }
         .section-title { font-size: 14px; font-weight: bold; margin: 20px 0 10px 0; }
         .text-right { text-align: right; }
     </style>

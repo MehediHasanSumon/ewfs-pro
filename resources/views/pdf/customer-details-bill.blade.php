@@ -80,12 +80,11 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -96,7 +95,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .signature-section {
             margin-top: 60px;
             padding: 20px 0;
@@ -154,7 +152,7 @@
                 <th class="text-right">Quantity</th>
                 <th class="text-right">Total</th>
             </tr>
-            <tr style="background-color: #e0e0e0;">
+            <tr >
                 <th colspan="8" style="padding: 8px; text-align: left; font-size: 12px;">
                     Vehicle: {{ $vehicleGroup['vehicle_number'] }}
                 </th>
@@ -173,7 +171,7 @@
                 <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
             </tr>
             @endforeach
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="6">Total:</td>
                 <td class="text-right">{{ number_format($vehicleGroup['total_quantity'], 2) }}</td>
                 <td class="text-right">{{ number_format($vehicleGroup['total_amount'], 2) }}</td>

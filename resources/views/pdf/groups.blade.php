@@ -14,11 +14,10 @@
         .title-section { text-align: center; margin-bottom: 20px; }
         .title-box { border: 1px solid #000; display: inline-block; padding: 8px 20px; background-color: #f5f5f5; font-weight: bold; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 10px 8px; text-align: left; }
-        th { background-color: #f2f2f2; font-weight: bold; font-size: 12px; color: #000; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; }
+        th { font-weight: bold; font-size: 12px; color: #000; }
         td { font-size: 11px; color: #333; }
         .text-center { text-align: center; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 15px 20px; border-top: 1px solid #ccc; background-color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666; }
         .footer-left { text-align: left; }
         .footer-right { text-align: right; }

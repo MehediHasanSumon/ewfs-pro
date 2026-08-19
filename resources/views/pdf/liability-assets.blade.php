@@ -61,9 +61,8 @@
             font-size: 14px;
         }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 10px 8px; text-align: left; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -74,7 +73,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .section-title {
             font-size: 14px;
             font-weight: bold;
@@ -132,7 +130,7 @@
             <tr><td colspan="4" class="text-center" style="padding: 20px; color: #999;">No liability accounts found</td></tr>
             @endforelse
             @if(count($liabilities) > 0)
-            <tr style="font-weight: bold; background-color: #ffebee;">
+            <tr style="font-weight: bold;">
                 <td colspan="3" style="padding: 12px;">Total Liabilities:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($totalLiabilities, 2) }}</td>
             </tr>
@@ -162,7 +160,7 @@
             <tr><td colspan="4" class="text-center" style="padding: 20px; color: #999;">No asset accounts found</td></tr>
             @endforelse
             @if(count($assets) > 0)
-            <tr style="font-weight: bold; background-color: #e8f5e8;">
+            <tr style="font-weight: bold;">
                 <td colspan="3" style="padding: 12px;">Total Assets:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($totalAssets, 2) }}</td>
             </tr>
@@ -205,19 +203,19 @@
     @endphp
     <table style="margin-top: 20px;">
         <tbody>
-            <tr style="font-weight: bold; background-color: #e3f2fd; font-size: 14px;">
+            <tr style="font-weight: bold; font-size: 14px;">
                 <td style="padding: 12px;">Total Liabilities:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($totalLiabilities, 2) }}</td>
             </tr>
-            <tr style="font-weight: bold; background-color: #e3f2fd; font-size: 14px;">
+            <tr style="font-weight: bold; font-size: 14px;">
                 <td style="padding: 12px;">Total Assets:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($totalAssets, 2) }}</td>
             </tr>
-            <tr style="font-weight: bold; background-color: #d0d0d0; font-size: 14px;">
+            <tr style="font-weight: bold; font-size: 14px;">
                 <td style="padding: 12px;">Net Worth (Assets - Liabilities):</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($netWorth, 2) }}</td>
             </tr>
-            <tr style="background-color: #f5f5f5;">
+            <tr >
                 <td colspan="2" style="padding: 12px; font-style: italic; font-size: 12px;">
                     Net Worth in words: {{ numberToWords(floor($netWorth)) }}
                 </td>

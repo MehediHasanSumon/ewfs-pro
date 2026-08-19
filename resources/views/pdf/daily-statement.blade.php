@@ -66,12 +66,11 @@
             margin-top: 10px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -82,7 +81,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .footer {
             position: fixed;
             bottom: 0;
@@ -136,7 +134,7 @@
             <tr><td colspan="5" class="text-center">No records</td></tr>
             @endforelse
             @if(count($allProductSales) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format(collect($allProductSales)->sum('total_quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format(collect($allProductSales)->sum('total_amount'), 2) }}</td>
@@ -169,7 +167,7 @@
             <tr><td colspan="5" class="text-center">No records</td></tr>
             @endforelse
             @if(count($cashSales) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($cashSales->sum('total_quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format($cashSales->sum('total_amount'), 2) }}</td>
@@ -202,7 +200,7 @@
             <tr><td colspan="5" class="text-center">No records</td></tr>
             @endforelse
             @if(count($bankSales) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($bankSales->sum('total_quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format($bankSales->sum('total_amount'), 2) }}</td>
@@ -235,7 +233,7 @@
             <tr><td colspan="5" class="text-center">No records</td></tr>
             @endforelse
             @if(count($creditSales) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($creditSales->sum('total_quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format($creditSales->sum('total_amount'), 2) }}</td>
@@ -272,7 +270,7 @@
             <tr><td colspan="7" class="text-center">No records</td></tr>
             @endforelse
             @if(count($customerWiseSales) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="5">Total:</td>
                 <td class="text-right">{{ number_format($customerWiseSales->sum('quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format($customerWiseSales->sum('total_amount'), 2) }}</td>
@@ -303,7 +301,7 @@
             <tr><td colspan="4" class="text-center">No records</td></tr>
             @endforelse
             @if(count($cashReceived) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($cashReceived->sum('amount'), 2) }}</td>
             </tr>
@@ -333,7 +331,7 @@
             <tr><td colspan="4" class="text-center">No records</td></tr>
             @endforelse
             @if(count($cashPayment) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($cashPayment->sum('amount'), 2) }}</td>
             </tr>
@@ -363,7 +361,7 @@
             <tr><td colspan="4" class="text-center">No records</td></tr>
             @endforelse
             @if(count($officePayment) > 0)
-            <tr style="font-weight: bold; background-color: #e0e0e0;">
+            <tr style="font-weight: bold;">
                 <td colspan="3">Total:</td>
                 <td class="text-right">{{ number_format($officePayment->sum('amount'), 2) }}</td>
             </tr>

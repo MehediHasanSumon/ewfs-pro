@@ -63,13 +63,12 @@
 
         .sales-table th,
         .sales-table td {
-            border: 1px solid #333;
+            border: 1px solid #000;
             padding: 8px;
             text-align: left;
         }
 
         .sales-table th {
-            background: #f8f9fa;
             font-weight: bold;
         }
 
@@ -154,7 +153,7 @@
             @endforeach
         </tbody>
         <tfoot>
-            <tr style="background: #f8f9fa; font-weight: bold;">
+            <tr style="font-weight: bold;">
                 <td colspan="6">Grand Total:</td>
                 <td class="text-right">{{ number_format($sales->sum('quantity'), 2) }}</td>
                 <td class="text-right">{{ number_format($sales->sum('total_amount'), 2) }}</td>

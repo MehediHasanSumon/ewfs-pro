@@ -73,9 +73,8 @@
             font-size: 12px;
         }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 10px 8px; text-align: left; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; }
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -86,7 +85,6 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
         .footer {
             position: fixed;
             bottom: 0;
@@ -189,11 +187,11 @@
     @endphp
     <table style="margin-top: 20px;">
         <tbody>
-            <tr style="font-weight: bold; background-color: #d0d0d0; font-size: 14px;">
+            <tr style="font-weight: bold; font-size: 14px;">
                 <td colspan="4" style="padding: 12px;">Grand Total:</td>
                 <td class="text-right" style="padding: 12px;">{{ number_format($grandTotal, 2) }}</td>
             </tr>
-            <tr style="background-color: #f5f5f5;">
+            <tr >
                 <td colspan="5" style="padding: 12px; font-style: italic; font-size: 12px;">
                     In words: {{ numberToWords(floor($grandTotal)) }}
                 </td>

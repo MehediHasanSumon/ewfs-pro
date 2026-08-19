@@ -78,13 +78,12 @@
 
         th,
         td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 10px 8px;
             text-align: left;
         }
 
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 12px;
             color: #000;
@@ -97,10 +96,6 @@
 
         .text-center {
             text-align: center;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
         }
 
         .footer {

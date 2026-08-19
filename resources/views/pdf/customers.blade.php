@@ -78,13 +78,12 @@
 
         th,
         td {
-            border: 1px solid #ccc;
+            border: 1px solid #000;
             padding: 6px 4px;
             text-align: left;
         }
 
         th {
-            background-color: #f2f2f2;
             font-weight: bold;
             font-size: 10px;
             color: #000;
@@ -99,10 +98,6 @@
 
         .text-center {
             text-align: center;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
         }
 
         .footer {
@@ -212,7 +207,7 @@
                     return trim($result);
                 }
             @endphp
-            <tr style="font-weight: bold; background-color: #e0e0e0; border-top: 2px solid #000;">
+            <tr style="font-weight: bold; border-top: 2px solid #000;">
                 <td colspan="5" style="text-align: center; font-size: 10px;">Grand Total:</td>
                 <td style="text-align: right; font-size: 10px;">{{ number_format($grandTotalSales, 2) }}</td>
                 <td style="text-align: right; font-size: 10px;">{{ number_format($grandTotalPaid, 2) }}</td>
@@ -220,7 +215,7 @@
                     {{ $grandTotalDue < 0 ? '-' : '' }}{{ number_format(abs($grandTotalDue), 2) }}
                 </td>
             </tr>
-            <tr style="background-color: #f5f5f5;">
+            <tr >
                 <td colspan="8" style="padding: 8px; font-style: italic; font-size: 9px;">
                     Total Due/Advanced in words: {{ numberToWords(floor(abs($grandTotalDue))) }} Taka Only
                 </td>
