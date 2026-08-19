@@ -331,6 +331,15 @@ class CustomerReportService
         ?int $customerId,
         ?int $vehicleId = null
     ): Collection {
+        $rates = Schema::hasTable('product_rates')
+            ? DB::table('product_rates')
+                ->where('status', true)
+                ->where('effective_date', '<=', $endDate)
+                ->orderBy('effective_date')
+                ->orderBy('id')
+                ->get()
+            : collect();
+
         return DB::table('credit_sale_items as csi')
             ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
             ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
@@ -371,9 +380,22 @@ class CustomerReportService
                 'csi.line_total as total_amount',
             ])
             ->get()
-            ->map(function (object $sale) {
+            ->map(function (object $sale) use ($rates) {
                 $sale->memo_no = ! empty($sale->memo_no) ? (string) $sale->memo_no : 'N/A';
-                $sale->price = (float) $sale->price;
+                $rawPrice = (float) $sale->price;
+
+                if (! empty($sale->product_id)) {
+                    $matchedRate = $rates
+                        ->where('product_id', $sale->product_id)
+                        ->where('effective_date', '<=', $sale->sale_date)
+                        ->last();
+
+                    if ($matchedRate && abs($rawPrice - (float) $matchedRate->sales_price) < 0.15) {
+                        $rawPrice = (float) $matchedRate->sales_price;
+                    }
+                }
+
+                $sale->price = (float) round($rawPrice, 2);
                 $sale->quantity = (float) $sale->quantity;
                 $sale->total_amount = (float) $sale->total_amount;
 

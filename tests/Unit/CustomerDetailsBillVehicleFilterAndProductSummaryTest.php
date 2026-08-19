@@ -83,6 +83,16 @@ beforeEach(function () {
         $table->decimal('line_total', 15, 2)->default(0);
         $table->timestamps();
     });
+
+    Schema::create('product_rates', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('product_id');
+        $table->decimal('purchase_price', 15, 2)->nullable();
+        $table->decimal('sales_price', 15, 2)->nullable();
+        $table->date('effective_date');
+        $table->boolean('status')->default(true);
+        $table->timestamps();
+    });
 });
 
 test('Customer Details Bill aggregates product-wise summary and filters by vehicle correctly', function () {
@@ -472,4 +482,90 @@ test('Customer Details Bill groups items with same 2-decimal unit price into sin
         'endDate' => '2026-08-01',
     ]);
     expect(strlen($pdf->output()))->toBeGreaterThan(1000);
+});
+
+test('Customer Summary Bill combines all customers items of same product with active rate into single summary row', function () {
+    DB::table('product_rates')->insert([
+        'product_id' => 4,
+        'sales_price' => 102.00,
+        'effective_date' => '2026-08-01',
+        'status' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $cust1 = Customer::create(['name' => 'ACI Logistic']);
+    $cust2 = Customer::create(['name' => 'City Transport']);
+
+    $journalEntry = DB::table('journal_entries')->insertGetId([
+        'entry_no' => 'JE-004',
+        'business_date' => '2026-08-01',
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Customer 1 sale: 6295.00 / 61.71 = 102.009398...
+    $sale1 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0001',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $csCust1 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $sale1,
+        'customer_id' => $cust1->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $csCust1,
+        'line_no' => 1,
+        'product_id' => 4,
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.0094,
+        'quantity' => 61.71,
+        'line_total' => 6295.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Customer 2 sale: 6565.00 / 64.36 = 102.00435...
+    $sale2 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0002',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $csCust2 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $sale2,
+        'customer_id' => $cust2->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $csCust2,
+        'line_no' => 1,
+        'product_id' => 4,
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.00435,
+        'quantity' => 64.36,
+        'line_total' => 6565.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $service = app(CustomerReportService::class);
+    $products = $service->summaryProductSummary('2026-08-01', '2026-08-01');
+
+    // Must be EXACTLY 1 summary row for Diesel @ 102.00 with sum of quantities 126.07 and amount 12860.00
+    expect($products)->toHaveCount(1);
+    expect($products[0]['product_name'])->toBe('Diesel');
+    expect($products[0]['price'])->toBe(102.00);
+    expect($products[0]['quantity'])->toBe(126.07);
+    expect($products[0]['total_amount'])->toBe(12860.00);
 });
