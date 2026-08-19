@@ -99,8 +99,7 @@
         }
         .total-section {
             margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #000;
+            padding: 5px 0;
         }
         .total-section p {
             margin: 5px 0;

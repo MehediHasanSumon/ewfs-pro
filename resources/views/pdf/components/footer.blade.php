@@ -17,15 +17,15 @@
     }
     $contactLine = implode(', ', $footerContacts);
 @endphp
-<div class="footer" style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; border-top: 1px solid #000; padding-top: 6px; text-align: center; font-size: 9px; color: #333; line-height: 1.3;">
+<div class="footer" style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; border-top: 1px solid #000; padding-top: 5px; text-align: center; font-size: 9px; color: #333; line-height: 1.3;">
     @if(!empty($contactLine))
-        <div class="footer-contact-info" style="text-align: center; margin-bottom: 2px;">
+        <div style="text-align: center; margin-bottom: 2px; font-size: 9px; color: #222;">
             {{ $contactLine }}
         </div>
     @endif
     @if(isset($leftText) || isset($rightText) || isset($totalRecords) || ($showGeneratedAt ?? true))
         <div style="font-size: 8px; color: #666; margin-top: 2px;">
-            <table style="width: 100%; border: none; margin: 0; padding: 0;">
+            <table style="width: 100%; border: none; margin: 0; padding: 0; background: none;">
                 <tr style="background: none !important;">
                     <td style="border: none !important; text-align: left; padding: 0; font-size: 8px; color: #666;">
                         @if(isset($leftText))

@@ -178,5 +178,6 @@
         </table>
     </div>
     @endif
+    @include('pdf.components.footer')
 </body>
 </html>

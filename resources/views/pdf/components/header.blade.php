@@ -13,45 +13,56 @@
         }
     }
 @endphp
-<div class="header">
-    <div class="logo">
-        @if($logoPath)
-            <img src="{{ $logoPath }}" alt="Company Logo">
-        @endif
-    </div>
-    <div class="company-info">
-        @if($companySetting)
-            <h2 style="font-size: 22px; margin: 0 0 6px 0; font-weight: bold; color: #000;">{{ $companySetting->company_name ?? 'East West Filling Station' }}</h2>
-            @if($companySetting->company_address)
-                <p style="margin: 3px 0; font-size: 11px; color: #333;">{{ $companySetting->company_address }}</p>
-            @endif
-            @php
-                $contacts = [];
-                if (!empty($companySetting->company_email)) {
-                    $contacts[] = $companySetting->company_email;
-                }
-                if (!empty($companySetting->company_mobile)) {
-                    $contacts[] = $companySetting->company_mobile;
-                }
-                if (!empty($companySetting->company_phone)) {
-                    $contacts[] = 'Phone: ' . $companySetting->company_phone;
-                }
-                if (!empty($companySetting->fax)) {
-                    $contacts[] = 'Fax: ' . $companySetting->fax;
-                }
-            @endphp
-            @if(count($contacts) > 0)
-                <p style="margin: 3px 0; font-size: 11px; color: #333;">{{ implode(' | ', $contacts) }}</p>
-            @endif
-        @else
-            <h2 style="font-size: 22px; margin: 0 0 6px 0; font-weight: bold; color: #000;">East West Filling Station</h2>
-            <p style="margin: 3px 0; font-size: 11px; color: #333;">Dhaka, Bangladesh</p>
-            <p style="margin: 3px 0; font-size: 11px; color: #333;">mehedihassan2992001@gmail.com | 01750542923</p>
-        @endif
-    </div>
+<div class="header" style="position: relative; width: 100%; padding: 0; margin-bottom: 0;">
+    <table style="width: 100%; border: none; margin: 0; padding: 0; background: none;">
+        <tr style="background: none !important;">
+            <td style="width: 100px; border: none !important; vertical-align: middle; padding: 0; text-align: left;">
+                @if($logoPath)
+                    <img src="{{ $logoPath }}" alt="Company Logo" style="max-height: 70px; max-width: 100px; display: block;">
+                @endif
+            </td>
+            <td style="border: none !important; text-align: center; vertical-align: middle; padding: 0;">
+                @if($companySetting)
+                    <h2 style="font-size: 24px; font-weight: bold; color: #000; margin: 0 0 2px 0; line-height: 1.15;">
+                        {{ $companySetting->company_name ?? 'East West Filling Station' }}
+                    </h2>
+                    <div style="margin-top: -3px;">
+                        @if($companySetting->company_address)
+                            <p style="margin: 1px 0; font-size: 11px; color: #333; line-height: 1.3;">{{ $companySetting->company_address }}</p>
+                        @endif
+                        @php
+                            $headerContacts = [];
+                            if (!empty($companySetting->company_email)) {
+                                $headerContacts[] = $companySetting->company_email;
+                            }
+                            if (!empty($companySetting->company_mobile)) {
+                                $headerContacts[] = $companySetting->company_mobile;
+                            }
+                            if (!empty($companySetting->company_phone)) {
+                                $headerContacts[] = 'Phone: ' . $companySetting->company_phone;
+                            }
+                            if (!empty($companySetting->fax)) {
+                                $headerContacts[] = 'Fax: ' . $companySetting->fax;
+                            }
+                        @endphp
+                        @if(count($headerContacts) > 0)
+                            <p style="margin: 1px 0; font-size: 11px; color: #333; line-height: 1.3;">{{ implode(' | ', $headerContacts) }}</p>
+                        @endif
+                    </div>
+                @else
+                    <h2 style="font-size: 24px; font-weight: bold; color: #000; margin: 0 0 2px 0; line-height: 1.15;">East West Filling Station</h2>
+                    <div style="margin-top: -3px;">
+                        <p style="margin: 1px 0; font-size: 11px; color: #333; line-height: 1.3;">Dhaka, Bangladesh</p>
+                        <p style="margin: 1px 0; font-size: 11px; color: #333; line-height: 1.3;">mehedihassan2992001@gmail.com | 01750542923</p>
+                    </div>
+                @endif
+            </td>
+            <td style="width: 100px; border: none !important; padding: 0;"></td>
+        </tr>
+    </table>
 </div>
 
-<div class="header-divider" style="border-bottom: 3px double #000; margin: 10px 0 16px 0; width: 100%; clear: both;"></div>
+<div class="header-divider" style="border-bottom: 3px double #000; margin: 6px 0 14px 0; width: 100%; clear: both;"></div>
 
 @if(!empty($title) || !empty($titleSlot) || !empty($subtitle))
 <div class="title-section">
@@ -61,7 +72,7 @@
         <div class="title-box">{{ $title }}</div>
     @endif
     @if(!empty($subtitle))
-        <p style="margin-top: 8px; font-size: 12px; color: #333;">{!! $subtitle !!}</p>
+        <p style="margin-top: 6px; font-size: 12px; color: #333;">{!! $subtitle !!}</p>
     @endif
 </div>
 @endif

@@ -96,14 +96,7 @@
 
 <body>
     @include('pdf.components.watermark')
-    <div class="header">
-        <div class="company-name">{{ $companySetting->company_name ?? 'Company Name' }}</div>
-        <div class="company-details">{{ $companySetting->company_address ?? 'Company Address' }}</div>
-        <div class="company-details">Mobile: {{ $companySetting->company_mobile ?? 'N/A' }} | Email: {{ $companySetting->company_email ?? 'N/A' }}</div>
-    </div>
-
-    <div class="title-box">
-        <div class="title">SALE BATCH INVOICE</div>
+    @include('pdf.components.header', ['title' => 'SALE BATCH INVOICE'])
     </div>
 
     <div class="batch-info">

@@ -17,11 +17,7 @@
 </head>
 <body>
     @include('pdf.components.watermark')
-    <div class="header">
-        <h2>Loan Statement</h2>
-        <h3>{{ $loanAccount['name'] }}</h3>
-        <p>Generated on: {{ date('d/m/Y H:i:s') }}</p>
-    </div>
+    @include('pdf.components.header', ['title' => 'Loan Statement - ' . $loanAccount['name']])
 
     <table class="info-table">
         <tr>
@@ -97,5 +93,6 @@
             @endforelse
         </tbody>
     </table>
+    @include('pdf.components.footer')
 </body>
 </html>

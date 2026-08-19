@@ -18,14 +18,7 @@
 </head>
 <body>
     @include('pdf.components.watermark')
-    <div class="header">
-        <h2>{{ $companySetting?->company_name ?? 'Voucher Transaction Types' }}</h2>
-        @if($companySetting?->company_address)
-            <p>{{ $companySetting->company_address }}</p>
-        @endif
-    </div>
-
-    <div class="title">Voucher Transaction Types</div>
+    @include('pdf.components.header', ['title' => 'Voucher Transaction Types'])
 
     <table>
         <thead>

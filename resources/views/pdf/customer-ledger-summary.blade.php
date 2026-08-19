@@ -144,5 +144,6 @@
         </tbody>
     </table>
 
+    @include('pdf.components.footer')
 </body>
 </html>

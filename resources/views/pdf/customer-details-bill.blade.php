@@ -233,5 +233,6 @@
         </table>
     </div>
     @endif
+    @include('pdf.components.footer', ['totalRecords' => count($bills)])
 </body>
 </html>

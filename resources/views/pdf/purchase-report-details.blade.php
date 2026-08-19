@@ -80,7 +80,6 @@
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .date-row {
-            background-color: #e0e0e0 !important;
             font-weight: bold;
         }
         .total-row {
@@ -88,9 +87,7 @@
         }
         .grand-total-section {
             margin-top: 20px;
-            padding: 15px;
-            background-color: #f5f5f5;
-            border: 1px solid #000;
+            padding: 5px 0;
         }
         .grand-total-section p {
             margin: 5px 0;

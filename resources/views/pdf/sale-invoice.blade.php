@@ -25,20 +25,7 @@
 </head>
 <body>
     @include('pdf.components.watermark')
-    <div class="header">
-        @if($companySetting?->company_logo)
-            <img src="{{ public_path('storage/'.$companySetting->company_logo) }}" alt="Company Logo">
-        @endif
-        <h2>{{ $companySetting?->company_name ?? 'East West Filling Station' }}</h2>
-        @if($companySetting?->company_address)
-            <p>{{ $companySetting->company_address }}</p>
-        @endif
-        @if($companySetting?->company_mobile)
-            <p>{{ $companySetting->company_mobile }}</p>
-        @endif
-    </div>
-
-    <div class="title">Sale Invoice</div>
+    @include('pdf.components.header', ['title' => 'Sale Invoice'])
 
     <table class="info">
         <tr>
@@ -102,5 +89,6 @@
             <td>Authorized Signature</td>
         </tr>
     </table>
+    @include('pdf.components.footer')
 </body>
 </html>
