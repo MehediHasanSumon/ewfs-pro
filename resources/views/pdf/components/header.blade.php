@@ -15,7 +15,7 @@
 @endphp
 <style>
     @page {
-        margin-top: 15px !important;
+        margin-top: 7px !important;
     }
     body {
         margin-top: 0 !important;
@@ -76,7 +76,7 @@
     </table>
 </div>
 
-<div class="header-divider" style="border-bottom: 3px double #000; margin: 6px 0 14px 0; width: 100%; clear: both;"></div>
+<div class="header-divider" style="border-bottom: 3px double #008000; margin: 6px 0 20px 0; width: 100%; clear: both;"></div>
 
 @if(!empty($title) || !empty($titleSlot) || !empty($subtitle))
 <div class="title-section">
