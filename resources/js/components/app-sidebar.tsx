@@ -85,6 +85,12 @@ const mainNavItems = [
                 permission: 'view-customer',
             },
             {
+                title: 'Customer Details Bill (Short Summary)',
+                href: '/customer-details-bill-short-summary',
+                icon: FileText,
+                permission: 'view-customer',
+            },
+            {
                 title: 'Customer Summary Bill',
                 href: '/customer-summary-bill',
                 icon: FileText,

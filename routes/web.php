@@ -10,6 +10,7 @@ use App\Http\Controllers\CompanySettingController;
 use App\Http\Controllers\CreditSaleController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerDetailsBillController;
+use App\Http\Controllers\CustomerDetailsBillShortSummaryController;
 use App\Http\Controllers\CustomerLedgerDetailsController;
 use App\Http\Controllers\CustomerLedgerSummaryController;
 use App\Http\Controllers\CustomerSalesReportController;
@@ -382,6 +383,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Customer Details Bill routes
     Route::get('customer-details-bill', [CustomerDetailsBillController::class, 'index'])->name('customer-details-bill.index');
     Route::get('customer-details-bill/download-pdf', [CustomerDetailsBillController::class, 'downloadPdf'])->name('customer-details-bill.download.pdf');
+
+    // Customer Details Bill (Short Summary) routes
+    Route::get('customer-details-bill-short-summary', [CustomerDetailsBillShortSummaryController::class, 'index'])->name('customer-details-bill-short-summary.index');
+    Route::get('customer-details-bill-short-summary/download-pdf', [CustomerDetailsBillShortSummaryController::class, 'downloadPdf'])->name('customer-details-bill-short-summary.download.pdf');
 
     // Customer Ledger Summary routes
     Route::get('customer-ledger-summary', [CustomerLedgerSummaryController::class, 'index'])->name('customer-ledger-summary.index');
