@@ -190,6 +190,7 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                                     <tr className="border-b dark:border-gray-700">
                                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Invoice No</th>
+                                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Memo No</th>
                                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
                                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
                                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
@@ -197,7 +198,7 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total</th>
                                                     </tr>
                                                     <tr className="bg-gray-100 dark:bg-gray-700">
-                                                        <th colSpan={7} className="p-2 text-left text-[13px] font-semibold dark:text-white">
+                                                        <th colSpan={8} className="p-2 text-left text-[13px] font-semibold dark:text-white">
                                                             Vehicle: {vehicleGroup.vehicle_number}
                                                         </th>
                                                     </tr>
@@ -207,6 +208,7 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                                         <tr key={saleIndex} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
                                                             <td className="p-2 text-[13px] dark:text-white">{sale.sale_date}</td>
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
+                                                            <td className="p-2 text-[13px] dark:text-gray-300">{sale.memo_no || 'N/A'}</td>
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.product_name}</td>
                                                             <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
                                                             <td className="p-2 text-right text-[13px] dark:text-gray-300">{sale.price.toLocaleString()}</td>
@@ -215,7 +217,7 @@ export default function CustomerDetailsBill({ bills = [], customers = [], filter
                                                         </tr>
                                                     ))}
                                                     <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                        <td colSpan={5} className="p-2 text-[13px] dark:text-white">Total:</td>
+                                                        <td colSpan={6} className="p-2 text-[13px] dark:text-white">Total:</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-white">{vehicleGroup.total_quantity.toFixed(2)}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-white">{vehicleGroup.total_amount.toFixed(2)}</td>
                                                     </tr>

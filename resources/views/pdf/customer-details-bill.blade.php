@@ -171,6 +171,7 @@
             <tr>
                 <th>Date</th>
                 <th>Invoice No</th>
+                <th>Memo No</th>
                 <th>Product</th>
                 <th>Unit</th>
                 <th class="text-right">Price</th>
@@ -178,7 +179,7 @@
                 <th class="text-right">Total</th>
             </tr>
             <tr style="background-color: #e0e0e0;">
-                <th colspan="7" style="padding: 8px; text-align: left; font-size: 12px;">
+                <th colspan="8" style="padding: 8px; text-align: left; font-size: 12px;">
                     Vehicle: {{ $vehicleGroup['vehicle_number'] }}
                 </th>
             </tr>
@@ -188,6 +189,7 @@
             <tr>
                 <td>{{ $sale->sale_date }}</td>
                 <td>{{ $sale->invoice_no }}</td>
+                <td>{{ $sale->memo_no ?? 'N/A' }}</td>
                 <td>{{ $sale->product_name }}</td>
                 <td>{{ $sale->unit_name }}</td>
                 <td class="text-right">{{ number_format($sale->price, 2) }}</td>
@@ -196,7 +198,7 @@
             </tr>
             @endforeach
             <tr style="font-weight: bold; background-color: #e0e0e0;">
-                <td colspan="5">Total:</td>
+                <td colspan="6">Total:</td>
                 <td class="text-right">{{ number_format($vehicleGroup['total_quantity'], 2) }}</td>
                 <td class="text-right">{{ number_format($vehicleGroup['total_amount'], 2) }}</td>
             </tr>
