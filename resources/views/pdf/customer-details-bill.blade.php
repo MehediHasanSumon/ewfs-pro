@@ -102,7 +102,7 @@
                 <th>Unit</th>
                 <th class="text-right">Price</th>
                 <th class="text-right">Quantity</th>
-                <th class="text-right">Total</th>
+                <th class="text-right">Amount</th>
             </tr>
             <tr>
                 <th colspan="8" style="padding: 8px; text-align: left; font-size: 12px;">
@@ -143,7 +143,7 @@
                 <th>Unit</th>
                 <th class="text-right">Price</th>
                 <th class="text-right">Quantity</th>
-                <th class="text-right">Total</th>
+                <th class="text-right">Amount</th>
             </tr>
         </thead>
         <tbody>

@@ -272,7 +272,7 @@ class CustomerReportService
                     ->all();
 
                 $productSummary = $items
-                    ->groupBy(fn (object $item) => ($item->product_id ?? $item->product_name) . '_' . sprintf('%.4f', (float) $item->price) . '_' . ($item->unit_name ?? ''))
+                    ->groupBy(fn (object $item) => ($item->product_id ?? trim($item->product_name)) . '_' . number_format((float) $item->price, 2, '.', '') . '_' . trim(strtolower($item->unit_name ?? '')))
                     ->map(function (Collection $productItems) {
                         $firstItem = $productItems->first();
 
@@ -280,7 +280,7 @@ class CustomerReportService
                             'product_id' => $firstItem->product_id ?? null,
                             'product_name' => $firstItem->product_name,
                             'unit_name' => $firstItem->unit_name,
-                            'price' => (float) $firstItem->price,
+                            'price' => (float) round((float) $firstItem->price, 2),
                             'quantity' => (float) $productItems->sum('quantity'),
                             'total_amount' => (float) $productItems->sum('total_amount'),
                         ];

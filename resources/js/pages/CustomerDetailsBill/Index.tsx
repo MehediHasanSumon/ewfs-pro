@@ -256,7 +256,7 @@ export default function CustomerDetailsBill({
                                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
                                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
                                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
-                                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total</th>
+                                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                                     </tr>
                                                     <tr className="bg-gray-100 dark:bg-gray-700">
                                                         <th colSpan={8} className="p-2 text-left text-[13px] font-semibold dark:text-white">
@@ -302,7 +302,7 @@ export default function CustomerDetailsBill({
                                                             <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
                                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
                                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
-                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total</th>
+                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>

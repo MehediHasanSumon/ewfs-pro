@@ -357,3 +357,93 @@ test('Customer Details Bill separates same product sold at different rates into 
     expect(collect($summary)->sum('total_amount'))->toBe(11650.0);
     expect($bills[0]['total_amount'])->toBe(11650.0);
 });
+
+test('Customer Details Bill groups items with same 2-decimal unit price into single summary row', function () {
+    $customer = Customer::create([
+        'name' => 'ACI Logistic',
+        'mobile' => '43243546',
+        'address' => 'sasdfgh',
+    ]);
+
+    $journalEntry = DB::table('journal_entries')->insertGetId([
+        'entry_no' => 'JE-003',
+        'business_date' => '2026-08-01',
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $creditSale1 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0002',
+        'memo_no' => '453',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $creditSaleCustomer1 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $creditSale1,
+        'customer_id' => $customer->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Item 1: 4365.00 / 42.79 = 102.009815377
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $creditSaleCustomer1,
+        'line_no' => 1,
+        'product_id' => 1,
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.0098,
+        'quantity' => 42.79,
+        'line_total' => 4365.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $creditSale2 = DB::table('credit_sales')->insertGetId([
+        'invoice_no' => 'IN0006',
+        'memo_no' => '12',
+        'sale_date' => '2026-08-01',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $creditSaleCustomer2 = DB::table('credit_sale_customers')->insertGetId([
+        'credit_sale_id' => $creditSale2,
+        'customer_id' => $customer->id,
+        'journal_entry_id' => $journalEntry,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Item 2: 1930.00 / 18.92 = 102.0084566
+    DB::table('credit_sale_items')->insert([
+        'credit_sale_customer_id' => $creditSaleCustomer2,
+        'line_no' => 1,
+        'product_id' => 1,
+        'product_name_snapshot' => 'Diesel',
+        'unit_name_snapshot' => 'litter',
+        'unit_price' => 102.0085,
+        'quantity' => 18.92,
+        'line_total' => 1930.00,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $service = app(CustomerReportService::class);
+    $bills = $service->detailBills('2026-08-01', '2026-08-01', $customer->id);
+
+    expect($bills)->toHaveCount(1);
+    $summary = $bills[0]['product_summary'];
+
+    // Both items must be grouped into EXACTLY 1 summary row for Diesel @ 102.01
+    expect($summary)->toHaveCount(1);
+    expect($summary[0]['product_name'])->toBe('Diesel');
+    expect($summary[0]['unit_name'])->toBe('litter');
+    expect($summary[0]['price'])->toBe(102.01);
+    expect($summary[0]['quantity'])->toBe(61.71);
+    expect($summary[0]['total_amount'])->toBe(6295.00);
+});
