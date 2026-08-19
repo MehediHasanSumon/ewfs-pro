@@ -104,13 +104,19 @@ export function CompanySettingForm({
 
         if (!file.type.startsWith('image/')) {
             setData('pdf_watermark_image', null);
-            setError('pdf_watermark_image', 'Please select a valid image file.');
+            setError(
+                'pdf_watermark_image',
+                'Please select a valid image file.',
+            );
             return;
         }
 
         if (file.size > MAX_LOGO_SIZE) {
             setData('pdf_watermark_image', null);
-            setError('pdf_watermark_image', 'The watermark image must not exceed 5 MB.');
+            setError(
+                'pdf_watermark_image',
+                'The watermark image must not exceed 5 MB.',
+            );
             return;
         }
 
@@ -126,7 +132,10 @@ export function CompanySettingForm({
         >
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div>
-                    <Label htmlFor="company_name" className="dark:text-gray-200">
+                    <Label
+                        htmlFor="company_name"
+                        className="dark:text-gray-200"
+                    >
                         Company Name *
                     </Label>
                     <Input
@@ -302,9 +311,7 @@ export function CompanySettingForm({
                         name="fax"
                         type="tel"
                         value={data.fax || ''}
-                        onChange={(event) =>
-                            setData('fax', event.target.value)
-                        }
+                        onChange={(event) => setData('fax', event.target.value)}
                         placeholder="Enter fax number"
                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         maxLength={255}
@@ -449,7 +456,10 @@ export function CompanySettingForm({
                         name="currency"
                         value={data.currency}
                         onChange={(event) =>
-                            setData('currency', event.target.value.toUpperCase())
+                            setData(
+                                'currency',
+                                event.target.value.toUpperCase(),
+                            )
                         }
                         className="uppercase dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         minLength={3}
@@ -526,11 +536,6 @@ export function CompanySettingForm({
                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         {...errorProps('company_logo')}
                     />
-                    {currentLogo && (
-                        <p className="mt-1 text-sm text-gray-500">
-                            Current: {currentLogo.split('/').pop()}
-                        </p>
-                    )}
                     <InputError
                         id="company_logo-error"
                         message={errors.company_logo}
@@ -550,19 +555,20 @@ export function CompanySettingForm({
                         type="file"
                         accept="image/*"
                         onChange={(event) =>
-                            handleWatermarkChange(event.target.files?.[0] || null)
+                            handleWatermarkChange(
+                                event.target.files?.[0] || null,
+                            )
                         }
                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         {...errorProps('pdf_watermark_image')}
                     />
                     {currentWatermark && !data.remove_pdf_watermark && (
                         <div className="mt-1 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">
-                                Current: {currentWatermark.split('/').pop()}
-                            </p>
                             <button
                                 type="button"
-                                onClick={() => setData('remove_pdf_watermark', true)}
+                                onClick={() =>
+                                    setData('remove_pdf_watermark', true)
+                                }
                                 className="text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400"
                             >
                                 Remove Watermark
