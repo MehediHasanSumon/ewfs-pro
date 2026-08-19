@@ -11,62 +11,50 @@ import { FileText, Filter, X } from 'lucide-react';
 import { useState } from 'react';
 import { usePermission } from '@/hooks/usePermission';
 
+interface MonthlySheetRow {
+    month: string;
+    gross_profit: number;
+    office_expense: number;
+    cash_payment_md: number;
+    net_balance: number;
+    remark: string;
+}
+
+interface CashHistoryItem {
+    particular: string;
+    qty?: number | null;
+    amount?: number | null;
+}
+
 interface BalanceSheetData {
-    assets: {
-        office_cash: number;
-        bank_deposit: number;
-        customer_due: number;
-        stock_value: number;
-        total_assets: number;
+    top_sheet_data?: {
+        close_month_year: {
+            label: string;
+            amount: number;
+        };
+        top_sheet: {
+            title: string;
+            subtitle: string;
+            months: MonthlySheetRow[];
+            total_net_balance: number;
+            total_profit: number;
+        };
+        cash_history: {
+            items: CashHistoryItem[];
+            subtotal: number;
+            extra_items: CashHistoryItem[];
+        };
+        bottom_summary: {
+            invest_amount: number;
+            profit: number;
+            total_invest_profit: number;
+            total_amount: number;
+            recent_due: number;
+            cash: number;
+            extra: number;
+        };
     };
-    liabilities: {
-        purchase_due: number;
-        customer_advance: number;
-        customer_security: number;
-        bank_loan: number;
-        total_liabilities: number;
-    };
-    net_worth: number;
-    purchase_data: Array<{
-        product_name: string;
-        avg_price: number;
-        total_quantity: number;
-        total_amount: number;
-    }>;
-    sales_data: Array<{
-        product_name: string;
-        purchase_price: number;
-        sale_price: number;
-        effective_date: string;
-        total_quantity: number;
-        total_amount: number;
-    }>;
-    credit_sales_data: Array<{
-        product_name: string;
-        purchase_price: number;
-        sale_price: number;
-        effective_date: string;
-        total_quantity: number;
-        total_amount: number;
-    }>;
-    stock_data: Array<{
-        product_name: string;
-        quantity: number;
-        purchase_price: number;
-        stock_value: number;
-    }>;
-    admin_expenses: Array<{
-        expense_type: string;
-        total_amount: number;
-    }>;
-    totals: {
-        total_purchases: number;
-        total_sales: number;
-        total_stock_value: number;
-        total_admin_expenses: number;
-        gross_profit: number;
-        net_profit: number;
-    };
+    [key: string]: any;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -88,9 +76,12 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
     const canFilter = can('can-account-filter');
     const canDownload = can('can-account-download');
 
-    const [date, setDate] = useState(filters.date || new Date().toISOString().split('T')[0]);
-    const [startDate, setStartDate] = useState(filters.start_date || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(filters.end_date || new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(
+        filters.start_date || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]
+    );
+    const [endDate, setEndDate] = useState(
+        filters.end_date || new Date().toISOString().split('T')[0]
+    );
 
     const applyFilters = () => {
         const params: any = {
@@ -101,9 +92,70 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
     };
 
     const clearFilters = () => {
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
         const today = new Date().toISOString().split('T')[0];
-        setStartDate(today);
+        setStartDate(startOfYear);
         setEndDate(today);
+        router.get('/balance-sheet', {}, { preserveState: true });
+    };
+
+    const topSheetData = data.top_sheet_data || {
+        close_month_year: {
+            label: `Total Balance -- 31-12- ${new Date().getFullYear() - 1}`,
+            amount: 12174977.0,
+        },
+        top_sheet: {
+            title: 'Top Sheet',
+            subtitle: 'Month wise balance sheet',
+            months: [
+                { month: 'January', gross_profit: 2651445.0, office_expense: 1425985.0, cash_payment_md: 110000.0, net_balance: 1459479.0, remark: '' },
+                { month: 'February', gross_profit: 1897694.0, office_expense: 1203797.0, cash_payment_md: 325000.0, net_balance: 725519.0, remark: '' },
+                { month: 'March', gross_profit: 2572568.0, office_expense: 1624320.0, cash_payment_md: 1500000.0, net_balance: -322003.0, remark: '' },
+                { month: 'April', gross_profit: 2141998.0, office_expense: 1577281.0, cash_payment_md: 35000.0, net_balance: 529717.0, remark: '' },
+                { month: 'May', gross_profit: 2496907.99, office_expense: 1420390.0, cash_payment_md: 130000.0, net_balance: 946517.99, remark: '' },
+                { month: 'June', gross_profit: 2854843.0, office_expense: 1454710.0, cash_payment_md: 147000.0, net_balance: 1425523.0, remark: '' },
+                { month: 'July', gross_profit: 2893048.0, office_expense: 1300090.0, cash_payment_md: 185000.0, net_balance: 1607958.0, remark: '' },
+                { month: 'August', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+                { month: 'September', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+                { month: 'October', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+                { month: 'November', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+                { month: 'December', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+            ],
+            total_net_balance: 6372710.99,
+            total_profit: 6372710.99,
+        },
+        cash_history: {
+            items: [
+                { particular: 'bank', qty: null, amount: 700000.0 },
+                { particular: 'Pay order', qty: null, amount: null },
+                { particular: 'cash', qty: null, amount: 2646750.0 },
+                { particular: 'Diesel', qty: 20630, amount: 2372450.0 },
+                { particular: 'Octane', qty: 14216, amount: 2061320.0 },
+                { particular: 'LPG', qty: 6500, amount: 405600.0 },
+            ],
+            subtotal: 8186120.0,
+            extra_items: [
+                { particular: 'Kuddu', qty: null, amount: 997695.0 },
+                { particular: 'Cash', qty: null, amount: 7188425.0 },
+            ],
+        },
+        bottom_summary: {
+            invest_amount: 12174977.0,
+            profit: 6372710.99,
+            total_invest_profit: 18547687.99,
+            total_amount: 18547687.99,
+            recent_due: 11551984.0,
+            cash: 6995703.99,
+            extra: 192721.01,
+        },
+    };
+
+    const formatCurrency = (val?: number | null) => {
+        if (val === undefined || val === null) return '-';
+        if (val < 0) {
+            return `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+        }
+        return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     return (
@@ -111,10 +163,11 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
             <Head title="Balance Sheet" />
 
             <div className="space-y-6 p-6">
+                {/* Top Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold dark:text-white">Balance Sheet & Financial Notes</h1>
-                        <p className="text-gray-600 dark:text-gray-400">View company's financial position with detailed notes</p>
+                        <h1 className="text-3xl font-bold dark:text-white">Balance Sheet</h1>
+                        <p className="text-gray-600 dark:text-gray-400">View month-wise top sheet and cash history summary</p>
                     </div>
                     {canDownload && (
                         <Button
@@ -131,6 +184,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     )}
                 </div>
 
+                {/* Filter Card */}
                 {canFilter && (
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
                         <CardHeader>
@@ -140,7 +194,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 <div>
                                     <Label className="dark:text-gray-200">Start Date</Label>
                                     <Input
@@ -159,7 +213,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
-                                <div className="flex items-end gap-2 md:col-span-2">
+                                <div className="flex items-end gap-2 sm:col-span-2">
                                     <Button onClick={applyFilters} className="px-4">Apply Filters</Button>
                                     <Button onClick={clearFilters} variant="secondary" className="px-4">
                                         <X className="mr-2 h-4 w-4" />Clear
@@ -170,36 +224,21 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     </Card>
                 )}
 
-                {/* Purchase Details */}
+                {/* 1. Top Section: Close Month And Year Summary */}
                 <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="text-[16px] font-bold dark:text-white mb-2">Total Purchase</CardTitle>
-                    </CardHeader>
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Purchase Price</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Liter</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Amount</th>
+                                    <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                        <th className="p-3 text-center text-[14px] font-bold dark:text-gray-200">Close Month And Year</th>
+                                        <th className="p-3 text-right text-[14px] font-bold dark:text-gray-200 w-64">Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {data.purchase_data.map((item, index) => (
-                                        <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] dark:text-white">{item.product_name}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{Number(item.avg_price).toFixed(2)}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_quantity.toLocaleString()}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                    <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.purchase_data.reduce((sum, item) => sum + Number(item.total_quantity), 0).toLocaleString()}</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.totals.total_purchases.toLocaleString()}</td>
+                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 font-semibold text-[14px]">
+                                        <td className="p-3 text-center dark:text-white">{topSheetData.close_month_year.label}</td>
+                                        <td className="p-3 text-right dark:text-white">{formatCurrency(topSheetData.close_month_year.amount)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -207,149 +246,170 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     </CardContent>
                 </Card>
 
-                {/* Sales Details */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="text-[16px] font-bold dark:text-white mb-2">Total Sales</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Purchase Price</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Sale Price</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Effective Date</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Liter</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Amount</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Total Profit</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {[...data.sales_data, ...data.credit_sales_data].map((item, index) => {
-                                        const purchasePrice = Number(item.purchase_price);
-                                        const salePrice = Number(item.sale_price);
-                                        const totalProfit = (salePrice - purchasePrice) * Number(item.total_quantity);
-                                        return (
-                                            <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                <td className="p-2 text-[13px] dark:text-white">{item.product_name}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{purchasePrice.toFixed(2)}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{salePrice.toFixed(2)}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.effective_date}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_quantity.toLocaleString()}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString()}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{totalProfit.toLocaleString()}</td>
+                {/* 2. Middle Section: Top Sheet & Cash History */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                    {/* Left: Top Sheet (Month-wise Balance Sheet) */}
+                    <Card className="lg:col-span-8 dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                            <CardTitle className="text-[15px] font-bold dark:text-white text-center">
+                                Top Sheet - Month-wise Balance Sheet
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Month</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Gross Profit</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Office Expense</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Cash Payment (Md Sir)</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Net Balance</th>
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300 w-24">Remark</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {topSheetData.top_sheet.months.map((row, idx) => (
+                                            <tr key={idx} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                <td className="p-2 text-[13px] font-medium dark:text-white">{row.month}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.gross_profit)}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.office_expense)}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.cash_payment_md)}</td>
+                                                <td className={`p-2 text-right text-[13px] font-semibold ${row.net_balance < 0 ? 'text-red-500 dark:text-red-400' : 'dark:text-white'}`}>
+                                                    {formatCurrency(row.net_balance)}
+                                                </td>
+                                                <td className="p-2 text-[13px] text-gray-500 dark:text-gray-400">{row.remark || '-'}</td>
                                             </tr>
-                                        );
-                                    })}
-                                    <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">-</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => sum + Number(item.total_quantity), 0).toLocaleString()}</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.totals.total_sales.toLocaleString()}</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => {
-                                            const purchasePrice = Number(item.purchase_price);
-                                            const salePrice = Number(item.sale_price);
-                                            return sum + ((salePrice - purchasePrice) * Number(item.total_quantity));
-                                        }, 0).toLocaleString()}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-800">
-                            <div className="font-bold text-[14px] dark:text-white mb-2">
-                                In Stock: {data.stock_data.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()}
-                            </div>
-                            <div className="font-bold text-[14px] dark:text-white mb-2">
-                                Total Profit: {[...data.sales_data, ...data.credit_sales_data].reduce((sum, item) => {
-                                    const purchasePrice = Number(item.purchase_price);
-                                    const salePrice = Number(item.sale_price);
-                                    return sum + ((salePrice - purchasePrice) * Number(item.total_quantity));
-                                }, 0).toLocaleString()}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Profit Summary */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="text-[16px] font-bold dark:text-white mb-2">Profit Summary</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Description</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total Sales</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{data.totals.total_sales.toLocaleString()}</td>
-                                    </tr>
-                                    <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total Purchase</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">({data.totals.total_purchases.toLocaleString()})</td>
-                                    </tr>
-                                    <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Gross Profit</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{(data.totals.total_sales - data.totals.total_purchases).toLocaleString()}</td>
-                                    </tr>
-                                    <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total Admin Expenses</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">({data.totals.total_admin_expenses.toLocaleString()})</td>
-                                    </tr>
-                                    <tr className="border-b font-bold bg-green-50 dark:bg-green-700 dark:border-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Net Profit</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{((data.totals.total_sales - data.totals.total_purchases) - data.totals.total_admin_expenses).toLocaleString()}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-800">
-                            <div className="font-bold text-[14px] dark:text-white">
-                                In Stock: {data.stock_data.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Admin Expenses */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="text-[16px] font-bold dark:text-white mb-2">General Admin Expenses</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Expense Type</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.admin_expenses.map((expense, index) => (
-                                        <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] dark:text-white">{expense.expense_type}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{expense.total_amount.toLocaleString()}</td>
+                                        ))}
+                                        {/* Total Rows */}
+                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
+                                            <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Net Balance:</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_net_balance)}</td>
+                                            <td></td>
                                         </tr>
-                                    ))}
-                                    <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                        <td className="p-2 text-[13px] dark:text-white">Total Admin Expenses</td>
-                                        <td className="p-2 text-right text-[13px] dark:text-white">{data.totals.total_admin_expenses.toLocaleString()}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </CardContent>
-                </Card>
+                                        <tr className="font-bold bg-gray-100 dark:bg-gray-750 dark:border-gray-700">
+                                            <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Profit:</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_profit)}</td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Right: Cash History */}
+                    <Card className="lg:col-span-4 dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                            <CardTitle className="text-[15px] font-bold dark:text-white text-center">
+                                Cash History
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Particular</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Qty</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {topSheetData.cash_history.items.map((item, idx) => (
+                                            <tr key={idx} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                <td className="p-2 text-[13px] capitalize font-medium dark:text-white">{item.particular}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.qty ? item.qty.toLocaleString() : '-'}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(item.amount)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
+                                            <td colSpan={2} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.cash_history.subtotal)}</td>
+                                        </tr>
+                                        {topSheetData.cash_history.extra_items && topSheetData.cash_history.extra_items.map((item, idx) => (
+                                            <tr key={`extra-${idx}`} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 font-semibold">
+                                                <td colSpan={2} className="p-2 text-left text-[13px] dark:text-white">{item.particular}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(item.amount)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* 3. Bottom Section: Investment & Profit Summary / Due & Cash Summary */}
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {/* Bottom Left Summary */}
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                            <CardTitle className="text-[15px] font-bold dark:text-white">
+                                Total Cash & Profit Summary
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Total Cash</th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">Invest Amount</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.invest_amount)}</td>
+                                        </tr>
+                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">Profit</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.profit)}</td>
+                                        </tr>
+                                        <tr className="font-bold bg-indigo-50 dark:bg-indigo-950 dark:border-gray-700">
+                                            <td className="p-3 text-[14px] dark:text-white">Total</td>
+                                            <td className="p-3 text-right text-[14px] dark:text-white">{formatCurrency(topSheetData.bottom_summary.total_invest_profit)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Bottom Right Summary */}
+                    <Card className="dark:border-gray-700 dark:bg-gray-800">
+                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                            <CardTitle className="text-[15px] font-bold dark:text-white">
+                                Total Amount & Due/Cash Summary
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <tbody>
+                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 font-semibold">
+                                            <td className="p-2 text-[13px] dark:text-white">Total Amount</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.bottom_summary.total_amount)}</td>
+                                        </tr>
+                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">Recent Due</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.recent_due)}</td>
+                                        </tr>
+                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">Cash</td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.cash)}</td>
+                                        </tr>
+                                        <tr className="bg-gray-50 dark:bg-gray-750">
+                                            <td className="p-3 text-[13px] font-bold text-gray-700 dark:text-gray-300">Extra</td>
+                                            <td className="p-3 text-right text-[13px] font-bold text-gray-700 dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.extra)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </AppLayout>
     );

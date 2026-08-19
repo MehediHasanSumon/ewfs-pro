@@ -45,8 +45,9 @@ class BalanceSheetController extends Controller implements HasMiddleware
             'start_date' => $startDate,
             'end_date' => $endDate,
         ];
+        $companySetting = \App\Models\CompanySetting::query()->first();
 
-        return Pdf::loadView('pdf.balance-sheet', compact('data'))
+        return Pdf::loadView('pdf.balance-sheet', compact('data', 'companySetting', 'startDate', 'endDate'))
             ->stream('balance-sheet-'.$startDate.'-to-'.$endDate.'.pdf');
     }
 

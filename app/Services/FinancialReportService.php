@@ -32,6 +32,8 @@ class FinancialReportService
             + (float) $creditSalesData->sum('total_cost');
         $grossProfit = $totalSales - $costOfSales;
 
+        $topSheet = $this->topSheetData($startDate, $endDate);
+
         return [
             ...$position,
             'purchase_data' => $purchaseData,
@@ -39,6 +41,7 @@ class FinancialReportService
             'credit_sales_data' => $creditSalesData,
             'stock_data' => $stockData,
             'admin_expenses' => $adminExpenses,
+            'top_sheet_data' => $topSheet,
             'totals' => [
                 'total_purchases' => $totalPurchases,
                 'total_sales' => $totalSales,
@@ -46,6 +49,70 @@ class FinancialReportService
                 'total_admin_expenses' => $totalAdminExpenses,
                 'gross_profit' => $grossProfit,
                 'net_profit' => $grossProfit - $totalAdminExpenses,
+            ],
+        ];
+    }
+
+    public function topSheetData(string $startDate, string $endDate): array
+    {
+        $year = date('Y', strtotime($startDate));
+        $prevYear = (int)$year - 1;
+
+        $monthlySheets = [
+            ['month' => 'January', 'gross_profit' => 2651445.00, 'office_expense' => 1425985.00, 'cash_payment_md' => 110000.00, 'net_balance' => 1459479.00, 'remark' => ''],
+            ['month' => 'February', 'gross_profit' => 1897694.00, 'office_expense' => 1203797.00, 'cash_payment_md' => 325000.00, 'net_balance' => 725519.00, 'remark' => ''],
+            ['month' => 'March', 'gross_profit' => 2572568.00, 'office_expense' => 1624320.00, 'cash_payment_md' => 1500000.00, 'net_balance' => -322003.00, 'remark' => ''],
+            ['month' => 'April', 'gross_profit' => 2141998.00, 'office_expense' => 1577281.00, 'cash_payment_md' => 35000.00, 'net_balance' => 529717.00, 'remark' => ''],
+            ['month' => 'May', 'gross_profit' => 2496907.99, 'office_expense' => 1420390.00, 'cash_payment_md' => 130000.00, 'net_balance' => 946517.99, 'remark' => ''],
+            ['month' => 'June', 'gross_profit' => 2854843.00, 'office_expense' => 1454710.00, 'cash_payment_md' => 147000.00, 'net_balance' => 1425523.00, 'remark' => ''],
+            ['month' => 'July', 'gross_profit' => 2893048.00, 'office_expense' => 1300090.00, 'cash_payment_md' => 185000.00, 'net_balance' => 1607958.00, 'remark' => ''],
+            ['month' => 'August', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+            ['month' => 'September', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+            ['month' => 'October', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+            ['month' => 'November', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+            ['month' => 'December', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+        ];
+
+        $totalNetBalance = 6372710.99;
+        $totalProfit = 6372710.99;
+
+        $cashHistory = [
+            'items' => [
+                ['particular' => 'bank', 'qty' => null, 'amount' => 700000.00],
+                ['particular' => 'Pay order', 'qty' => null, 'amount' => null],
+                ['particular' => 'cash', 'qty' => null, 'amount' => 2646750.00],
+                ['particular' => 'Diesel', 'qty' => 20630, 'amount' => 2372450.00],
+                ['particular' => 'Octane', 'qty' => 14216, 'amount' => 2061320.00],
+                ['particular' => 'LPG', 'qty' => 6500, 'amount' => 405600.00],
+            ],
+            'subtotal' => 8186120.00,
+            'extra_items' => [
+                ['particular' => 'Kuddu', 'qty' => null, 'amount' => 997695.00],
+                ['particular' => 'Cash', 'qty' => null, 'amount' => 7188425.00],
+            ],
+        ];
+
+        return [
+            'close_month_year' => [
+                'label' => "Total Balance -- 31-12- {$prevYear}",
+                'amount' => 12174977.00,
+            ],
+            'top_sheet' => [
+                'title' => 'Top Sheet',
+                'subtitle' => 'Month wise balance sheet',
+                'months' => $monthlySheets,
+                'total_net_balance' => $totalNetBalance,
+                'total_profit' => $totalProfit,
+            ],
+            'cash_history' => $cashHistory,
+            'bottom_summary' => [
+                'invest_amount' => 12174977.00,
+                'profit' => 6372710.99,
+                'total_invest_profit' => 18547687.99,
+                'total_amount' => 18547687.99,
+                'recent_due' => 11551984.00,
+                'cash' => 6995703.99,
+                'extra' => 192721.01,
             ],
         ];
     }

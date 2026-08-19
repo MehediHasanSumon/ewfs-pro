@@ -2,282 +2,275 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Balance Sheet & Financial Notes</title>
+    <title>Balance Sheet</title>
     <style>
+        @page {
+            size: A4 portrait;
+            margin: 12mm 10mm 15mm 10mm;
+        }
         body {
             font-family: Arial, sans-serif;
-            font-size: 12px;
-            margin: 0;
-            padding-bottom: 60px;
-            position: relative;
-            min-height: 100vh;
-        }
-        .header {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            position: relative;
-        }
-        .header .logo {
-            width: 120px;
-            flex-shrink: 0;
-        }
-        .header .logo img {
-            height: 80px;
-            width: auto;
-            display: block;
-        }
-        .header .company-info {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-60%);
-            text-align: center;
-            width: auto;
-            margin-top: -80px;
-        }
-        .header .company-info h2 {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            font-weight: bold;
+            font-size: 10px;
             color: #000;
-        }
-        .header .company-info p {
-            margin: 4px 0;
-            font-size: 12px;
-            color: #333;
-            line-height: 1.4;
+            margin: 0;
+            padding: 0;
         }
         .title-section {
             text-align: center;
-            margin-bottom: 20px;
+            margin: 10px 0 12px 0;
         }
         .title-box {
             border: 1px solid #000;
             display: inline-block;
-            padding: 8px 20px;
+            padding: 5px 20px;
             background-color: #f5f5f5;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
         }
-        .section-title {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            color: #000;
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
         }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 10px; 
-        }
-        th, td { 
-            border: 1px solid #000; 
-            padding: 8px; 
-            text-align: left; 
+        th, td {
+            border: 1px solid #000;
+            padding: 5px 6px;
+            text-align: left;
+            font-size: 10px;
         }
         th {
             font-weight: bold;
-            font-size: 11px;
+            background-color: #f9f9f9;
             color: #000;
-        }
-        td {
-            font-size: 10px;
-            color: #333;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .total-row {
-            font-weight: bold;
-            }
-        .summary-box {
-            margin: 10px 0;
-            padding: 8px;
-            background-color: #f9f9f9;
-            border: 1px solid #000;
-            font-size: 11px;
-        }
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 15px 20px;
-            border-top: 1px solid #ccc;
-            background-color: #fff;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 10px;
-            color: #666;
-        }
-        .footer-left { text-align: left; }
-        .footer-right { text-align: right; }
-        @media print {
-            .footer { position: fixed; bottom: 0; }
-        }
+        .font-bold { font-weight: bold; }
     </style>
 </head>
 <body>
     @include('pdf.components.watermark')
     @include('pdf.components.header')
 
+    @php
+        $topSheetData = $data['top_sheet_data'] ?? [
+            'close_month_year' => ['label' => 'Total Balance -- 31-12- 2025', 'amount' => 12174977.00],
+            'top_sheet' => [
+                'title' => 'Top Sheet',
+                'subtitle' => 'Month wise balance sheet',
+                'months' => [
+                    ['month' => 'January', 'gross_profit' => 2651445.00, 'office_expense' => 1425985.00, 'cash_payment_md' => 110000.00, 'net_balance' => 1459479.00, 'remark' => ''],
+                    ['month' => 'February', 'gross_profit' => 1897694.00, 'office_expense' => 1203797.00, 'cash_payment_md' => 325000.00, 'net_balance' => 725519.00, 'remark' => ''],
+                    ['month' => 'March', 'gross_profit' => 2572568.00, 'office_expense' => 1624320.00, 'cash_payment_md' => 1500000.00, 'net_balance' => -322003.00, 'remark' => ''],
+                    ['month' => 'April', 'gross_profit' => 2141998.00, 'office_expense' => 1577281.00, 'cash_payment_md' => 35000.00, 'net_balance' => 529717.00, 'remark' => ''],
+                    ['month' => 'May', 'gross_profit' => 2496907.99, 'office_expense' => 1420390.00, 'cash_payment_md' => 130000.00, 'net_balance' => 946517.99, 'remark' => ''],
+                    ['month' => 'June', 'gross_profit' => 2854843.00, 'office_expense' => 1454710.00, 'cash_payment_md' => 147000.00, 'net_balance' => 1425523.00, 'remark' => ''],
+                    ['month' => 'July', 'gross_profit' => 2893048.00, 'office_expense' => 1300090.00, 'cash_payment_md' => 185000.00, 'net_balance' => 1607958.00, 'remark' => ''],
+                    ['month' => 'August', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+                    ['month' => 'September', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+                    ['month' => 'October', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+                    ['month' => 'November', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+                    ['month' => 'December', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+                ],
+                'total_net_balance' => 6372710.99,
+                'total_profit' => 6372710.99,
+            ],
+            'cash_history' => [
+                'items' => [
+                    ['particular' => 'bank', 'qty' => null, 'amount' => 700000.00],
+                    ['particular' => 'Pay order', 'qty' => null, 'amount' => null],
+                    ['particular' => 'cash', 'qty' => null, 'amount' => 2646750.00],
+                    ['particular' => 'Diesel', 'qty' => 20630, 'amount' => 2372450.00],
+                    ['particular' => 'Octane', 'qty' => 14216, 'amount' => 2061320.00],
+                    ['particular' => 'LPG', 'qty' => 6500, 'amount' => 405600.00],
+                ],
+                'subtotal' => 8186120.00,
+                'extra_items' => [
+                    ['particular' => 'Kuddu', 'qty' => null, 'amount' => 997695.00],
+                    ['particular' => 'Cash', 'qty' => null, 'amount' => 7188425.00],
+                ],
+            ],
+            'bottom_summary' => [
+                'invest_amount' => 12174977.00,
+                'profit' => 6372710.99,
+                'total_invest_profit' => 18547687.99,
+                'total_amount' => 18547687.99,
+                'recent_due' => 11551984.00,
+                'cash' => 6995703.99,
+                'extra' => 192721.01,
+            ],
+        ];
+    @endphp
+
     <div class="title-section">
-        <div class="title-box">Balance Sheet & Financial Notes</div>
+        <div class="title-box">Balance Sheet</div>
     </div>
 
-    <div style="text-align: center; margin-bottom: 15px; font-size: 11px;">
-        Period: {{ \Carbon\Carbon::parse($data['start_date'])->format('F j, Y') }} to {{ \Carbon\Carbon::parse($data['end_date'])->format('F j, Y') }}
-    </div>
-
-    <!-- Total Purchase Section -->
-    <div class="section-title">Total Purchase</div>
-    <table>
+    <!-- 1. Top Section: Close Month And Year -->
+    <table style="margin-bottom: 12px;">
         <thead>
             <tr>
-                <th class="text-center">SL</th>
-                <th>Product</th>
-                <th class="text-right">Purchase Price</th>
-                <th class="text-right">Total Liter</th>
-                <th class="text-right">Total Amount</th>
+                <th class="text-center" style="font-size: 11px;">Close Month And Year</th>
+                <th class="text-right" style="font-size: 11px; width: 180px;">Amount</th>
             </tr>
         </thead>
         <tbody>
-            @forelse($data['purchase_data'] as $index => $item)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ $item['product_name'] }}</td>
-                <td class="text-right">{{ number_format($item['avg_price'], 2) }}</td>
-                <td class="text-right">{{ number_format($item['total_quantity'], 2) }}</td>
-                <td class="text-right">{{ number_format($item['total_amount'], 2) }}</td>
-            </tr>
-            @empty
-            <tr><td colspan="5" class="text-center" style="padding: 20px; color: #999;">No purchase data found</td></tr>
-            @endforelse
-            @if(count($data['purchase_data']) > 0)
-            <tr class="total-row">
-                <td colspan="3" style="padding: 10px;"><strong>Total</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format(collect($data['purchase_data'])->sum('total_quantity'), 2) }}</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format($data['totals']['total_purchases'], 2) }}</strong></td>
-            </tr>
-            @endif
-        </tbody>
-    </table>
-
-    <!-- Total Sales Section -->
-    <div class="section-title">Total Sales</div>
-    <table>
-        <thead>
-            <tr>
-                <th class="text-center">SL</th>
-                <th>Product</th>
-                <th class="text-right">Purchase Price</th>
-                <th class="text-right">Sale Price</th>
-                <th class="text-right">Total Liter</th>
-                <th class="text-right">Total Amount</th>
-                <th class="text-right">Total Profit</th>
-            </tr>
-        </thead>
-        <tbody>
-            @php $salesIndex = 0; @endphp
-            @forelse(array_merge($data['sales_data']->toArray(), $data['credit_sales_data']->toArray()) as $item)
-            @php
-                $totalProfit = ($item['sale_price'] - $item['purchase_price']) * $item['total_quantity'];
-                $salesIndex++;
-            @endphp
-            <tr>
-                <td class="text-center">{{ $salesIndex }}</td>
-                <td>{{ $item['product_name'] }}</td>
-                <td class="text-right">{{ number_format($item['purchase_price'], 2) }}</td>
-                <td class="text-right">{{ number_format($item['sale_price'], 2) }}</td>
-                <td class="text-right">{{ number_format($item['total_quantity'], 2) }}</td>
-                <td class="text-right">{{ number_format($item['total_amount'], 2) }}</td>
-                <td class="text-right">{{ number_format($totalProfit, 2) }}</td>
-            </tr>
-            @empty
-            <tr><td colspan="7" class="text-center" style="padding: 20px; color: #999;">No sales data found</td></tr>
-            @endforelse
-            @if($salesIndex > 0)
-            <tr class="total-row">
-                <td colspan="4" style="padding: 10px;"><strong>Total</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format($data['sales_data']->sum('total_quantity') + $data['credit_sales_data']->sum('total_quantity'), 2) }}</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format($data['totals']['total_sales'], 2) }}</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format($data['sales_data']->sum(function($item) { return ($item['sale_price'] - $item['purchase_price']) * $item['total_quantity']; }) + $data['credit_sales_data']->sum(function($item) { return ($item['sale_price'] - $item['purchase_price']) * $item['total_quantity']; }), 2) }}</strong></td>
-            </tr>
-            @endif
-        </tbody>
-    </table>
-
-    <div class="summary-box">
-        <strong>In Stock: {{ number_format(collect($data['stock_data'])->sum('quantity'), 2) }}</strong>
-    </div>
-
-    <!-- Profit Summary Section -->
-    <div class="section-title">Profit Summary</div>
-    <table>
-        <thead>
-            <tr>
-                <th>Description</th>
-                <th class="text-right">Amount (৳)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Total Sales</td>
-                <td class="text-right">{{ number_format($data['totals']['total_sales'], 2) }}</td>
-            </tr>
-            <tr>
-                <td>Total Purchase</td>
-                <td class="text-right">({{ number_format($data['totals']['total_purchases'], 2) }})</td>
-            </tr>
-            <tr style="font-weight: bold;">
-                <td><strong>Gross Profit</strong></td>
-                <td class="text-right"><strong>{{ number_format($data['totals']['total_sales'] - $data['totals']['total_purchases'], 2) }}</strong></td>
-            </tr>
-            <tr>
-                <td>Total Admin Expenses</td>
-                <td class="text-right">({{ number_format($data['totals']['total_admin_expenses'], 2) }})</td>
-            </tr>
-            <tr style="font-weight: bold;">
-                <td><strong>Net Profit</strong></td>
-                <td class="text-right"><strong>{{ number_format(($data['totals']['total_sales'] - $data['totals']['total_purchases']) - $data['totals']['total_admin_expenses'], 2) }}</strong></td>
+            <tr class="font-bold">
+                <td class="text-center">{{ $topSheetData['close_month_year']['label'] }}</td>
+                <td class="text-right">{{ number_format($topSheetData['close_month_year']['amount'], 2) }}</td>
             </tr>
         </tbody>
     </table>
 
-    <!-- General Admin Expenses Section -->
-    <div class="section-title">General Admin Expenses</div>
-    <table>
-        <thead>
-            <tr>
-                <th class="text-center">SL</th>
-                <th>Expense Type</th>
-                <th class="text-right">Amount (৳)</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($data['admin_expenses'] as $index => $expense)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ $expense['expense_type'] }}</td>
-                <td class="text-right">{{ number_format($expense['total_amount'], 2) }}</td>
-            </tr>
-            @empty
-            <tr><td colspan="3" class="text-center" style="padding: 20px; color: #999;">No admin expenses found</td></tr>
-            @endforelse
-            @if(count($data['admin_expenses']) > 0)
-            <tr class="total-row">
-                <td colspan="2" style="padding: 10px;"><strong>Total Admin Expenses</strong></td>
-                <td class="text-right" style="padding: 10px;"><strong>{{ number_format($data['totals']['total_admin_expenses'], 2) }}</strong></td>
-            </tr>
-            @endif
-        </tbody>
+    <!-- 2. Middle Section: Top Sheet & Cash History Side by Side -->
+    <table style="border: none; margin: 0; padding: 0;">
+        <tr style="background: none !important;">
+            <!-- Left: Top Sheet Table -->
+            <td style="border: none !important; width: 68%; vertical-align: top; padding: 0 8px 0 0;">
+                <table style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th colspan="6" class="text-center" style="font-size: 11px;">Top Sheet</th>
+                        </tr>
+                        <tr>
+                            <th colspan="6" class="text-center" style="font-weight: normal; font-size: 10px;">Month wise balance sheet</th>
+                        </tr>
+                        <tr>
+                            <th>Month</th>
+                            <th class="text-right">Gross Profit</th>
+                            <th class="text-right">Office Expence</th>
+                            <th class="text-right">Cash Pement (Md Sir)</th>
+                            <th class="text-right">Net Balance</th>
+                            <th>Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($topSheetData['top_sheet']['months'] as $row)
+                        <tr>
+                            <td class="font-bold">{{ $row['month'] }}</td>
+                            <td class="text-right">{{ $row['gross_profit'] ? number_format($row['gross_profit'], 2) : '-' }}</td>
+                            <td class="text-right">{{ $row['office_expense'] ? number_format($row['office_expense'], 2) : '-' }}</td>
+                            <td class="text-right">{{ $row['cash_payment_md'] ? number_format($row['cash_payment_md'], 2) : '-' }}</td>
+                            <td class="text-right {{ $row['net_balance'] < 0 ? 'font-bold' : '' }}">
+                                @if($row['net_balance'] < 0)
+                                    ({{ number_format(abs($row['net_balance']), 2) }})
+                                @elseif($row['net_balance'] > 0)
+                                    {{ number_format($row['net_balance'], 2) }}
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td>{{ $row['remark'] ?? '' }}</td>
+                        </tr>
+                        @endforeach
+                        <tr class="font-bold" style="background-color: #f9f9f9;">
+                            <td colspan="4" class="text-right">Total Net Balance</td>
+                            <td class="text-right">{{ number_format($topSheetData['top_sheet']['total_net_balance'], 2) }}</td>
+                            <td></td>
+                        </tr>
+                        <tr class="font-bold" style="background-color: #f5f5f5;">
+                            <td colspan="4" class="text-right">Total Profit</td>
+                            <td class="text-right">{{ number_format($topSheetData['top_sheet']['total_profit'], 2) }}</td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+
+            <!-- Right: Cash History Table -->
+            <td style="border: none !important; width: 32%; vertical-align: top; padding: 0;">
+                <table style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th colspan="3" class="text-center" style="font-size: 11px;">Cash History</th>
+                        </tr>
+                        <tr>
+                            <th>Particular</th>
+                            <th class="text-right">Qty</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($topSheetData['cash_history']['items'] as $item)
+                        <tr>
+                            <td>{{ $item['particular'] }}</td>
+                            <td class="text-right">{{ $item['qty'] ? number_format($item['qty']) : '' }}</td>
+                            <td class="text-right">{{ $item['amount'] !== null ? number_format($item['amount'], 2) : '' }}</td>
+                        </tr>
+                        @endforeach
+                        <tr class="font-bold" style="background-color: #f9f9f9;">
+                            <td colspan="2" class="text-right">total</td>
+                            <td class="text-right">{{ number_format($topSheetData['cash_history']['subtotal'], 2) }}</td>
+                        </tr>
+                        @if(!empty($topSheetData['cash_history']['extra_items']))
+                            @foreach($topSheetData['cash_history']['extra_items'] as $extra)
+                            <tr>
+                                <td colspan="2">{{ $extra['particular'] }}</td>
+                                <td class="text-right font-bold">{{ number_format($extra['amount'], 2) }}</td>
+                            </tr>
+                            @endforeach
+                        @endif
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <!-- 3. Bottom Section: Investment/Profit & Due/Cash Summaries -->
+    <table style="border: none; margin-top: 15px; padding: 0;">
+        <tr style="background: none !important;">
+            <!-- Bottom Left: Total Cash / Investment & Profit -->
+            <td style="border: none !important; width: 45%; vertical-align: top; padding: 0 10px 0 0;">
+                <table style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th>Total Cash</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Invest Amount</td>
+                            <td class="text-right">{{ number_format($topSheetData['bottom_summary']['invest_amount'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Profit</td>
+                            <td class="text-right">{{ number_format($topSheetData['bottom_summary']['profit'], 2) }}</td>
+                        </tr>
+                        <tr class="font-bold" style="background-color: #f5f5f5;">
+                            <td>Total</td>
+                            <td class="text-right">{{ number_format($topSheetData['bottom_summary']['total_invest_profit'], 2) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+
+            <!-- Bottom Right: Total Amount & Receivables -->
+            <td style="border: none !important; width: 55%; vertical-align: top; padding: 0;">
+                <table style="margin: 0;">
+                    <tbody>
+                        <tr class="font-bold">
+                            <td>Total Amount</td>
+                            <td class="text-right" style="width: 140px;">{{ number_format($topSheetData['bottom_summary']['total_amount'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Recent Due</td>
+                            <td class="text-right">{{ number_format($topSheetData['bottom_summary']['recent_due'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Cash</td>
+                            <td class="text-right">{{ number_format($topSheetData['bottom_summary']['cash'], 2) }}</td>
+                        </tr>
+                        <tr style="background-color: #f9f9f9;">
+                            <td class="font-bold">Exta</td>
+                            <td class="text-right font-bold">{{ number_format($topSheetData['bottom_summary']['extra'], 2) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+        </tr>
     </table>
 
     @include('pdf.components.footer')
-        <div class="footer-right">
-            Purchases: {{ count($data['purchase_data']) }} | Sales: {{ count($data['sales_data']) + count($data['credit_sales_data']) }} | Expenses: {{ count($data['admin_expenses']) }}
-        </div>
-    </div>
 </body>
 </html>
