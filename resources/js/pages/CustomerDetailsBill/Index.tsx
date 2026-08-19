@@ -90,7 +90,7 @@ export default function CustomerDetailsBill({
     const canDownload = can('can-customer-download');
 
     const [customerId, setCustomerId] = useState(filters.customer_id || '');
-    const [vehicleId, setVehicleId] = useState(filters.vehicle_id || '');
+    const [vehicleId, setVehicleId] = useState(filters.vehicle_id || 'all');
     const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
 
@@ -100,7 +100,7 @@ export default function CustomerDetailsBill({
 
     const handleCustomerChange = (value: string) => {
         setCustomerId(value);
-        setVehicleId('');
+        setVehicleId('all');
     };
 
     const applyFilters = () => {
@@ -110,7 +110,7 @@ export default function CustomerDetailsBill({
             start_date: startDate,
             end_date: endDate,
         };
-        if (vehicleId) {
+        if (vehicleId && vehicleId !== 'all') {
             params.vehicle_id = vehicleId;
         }
         router.get('/customer-details-bill', params, { preserveState: true });
@@ -119,7 +119,7 @@ export default function CustomerDetailsBill({
     const clearFilters = () => {
         const today = new Date().toISOString().split('T')[0];
         setCustomerId('');
-        setVehicleId('');
+        setVehicleId('all');
         setStartDate(today);
         setEndDate(today);
         router.get('/customer-details-bill', {}, { preserveState: true });
@@ -145,7 +145,7 @@ export default function CustomerDetailsBill({
                                 if (customerId) {
                                     params.append('customer_id', customerId);
                                 }
-                                if (vehicleId) {
+                                if (vehicleId && vehicleId !== 'all') {
                                     params.append('vehicle_id', vehicleId);
                                 }
                                 openPdfViewer(`/customer-details-bill/download-pdf?${params.toString()}`);
@@ -192,7 +192,7 @@ export default function CustomerDetailsBill({
                                             <SelectValue placeholder={customerId ? "All Vehicles" : "Select customer first"} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All Vehicles</SelectItem>
+                                            <SelectItem value="all">All Vehicles</SelectItem>
                                             {availableVehicles.map((vehicle) => (
                                                 <SelectItem key={vehicle.id} value={vehicle.id.toString()}>
                                                     {vehicle.vehicle_number}
