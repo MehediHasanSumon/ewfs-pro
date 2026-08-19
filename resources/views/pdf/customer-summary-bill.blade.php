@@ -75,7 +75,7 @@
     @endphp
 
     @forelse($bills as $bill)
-    <table style="margin-bottom: 15px;">
+    <table style="margin-bottom: 20px;">
         <thead>
             <tr>
                 <th>Date</th>
@@ -113,10 +113,13 @@
             </tr>
         </tbody>
     </table>
+    @empty
+    <p style="text-align: center; padding: 20px; color: #999;">No records found</p>
+    @endforelse
 
-    {{-- Product-wise Sales Summary Table --}}
-    @if(!empty($bill['product_summary']) && count($bill['product_summary']) > 0)
-    <div style="margin-top: 15px; margin-bottom: 5px; font-weight: bold; font-size: 13px;">Product-wise Sales Summary</div>
+    {{-- Overall Product-wise Sales Summary Table across all customers --}}
+    @if(!empty($productSummary) && count($productSummary) > 0)
+    <div style="margin-top: 20px; margin-bottom: 5px; font-weight: bold; font-size: 13px;">Product-wise Sales Summary</div>
     <table style="margin-bottom: 25px;">
         <thead>
             <tr>
@@ -129,7 +132,7 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($bill['product_summary'] as $index => $product)
+            @foreach($productSummary as $index => $product)
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td>{{ $product['product_name'] }}</td>
@@ -141,14 +144,11 @@
             @endforeach
             <tr style="font-weight: bold;">
                 <td colspan="5" class="text-right">Total:</td>
-                <td class="text-right">{{ number_format($bill['total_amount'], 2) }}</td>
+                <td class="text-right">{{ number_format(collect($productSummary)->sum('total_amount'), 2) }}</td>
             </tr>
         </tbody>
     </table>
     @endif
-    @empty
-    <p style="text-align: center; padding: 20px; color: #999;">No records found</p>
-    @endforelse
 
     @if(count($bills) > 0)
     @php

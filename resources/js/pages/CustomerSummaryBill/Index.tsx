@@ -37,7 +37,6 @@ interface ProductSummary {
 interface Bill {
     customer_name: string;
     sales: Sale[];
-    product_summary?: ProductSummary[];
     total_quantity: number;
     total_amount: number;
 }
@@ -54,6 +53,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface CustomerSummaryBillProps {
     bills: Bill[];
+    product_summary?: ProductSummary[];
     customers: Customer[];
     filters: {
         customer_id?: string;
@@ -62,7 +62,12 @@ interface CustomerSummaryBillProps {
     };
 }
 
-export default function CustomerSummaryBill({ bills = [], customers = [], filters = {} }: CustomerSummaryBillProps) {
+export default function CustomerSummaryBill({
+    bills = [],
+    product_summary = [],
+    customers = [],
+    filters = {},
+}: CustomerSummaryBillProps) {
     const { can } = usePermission();
     const canFilter = can('can-customer-filter');
     const canDownload = can('can-customer-download');
@@ -180,7 +185,7 @@ export default function CustomerSummaryBill({ bills = [], customers = [], filter
                     {bills.length > 0 ? (
                         bills.map((bill, billIndex) => (
                             <Card key={billIndex} className="dark:border-gray-700 dark:bg-gray-800">
-                                <CardContent className="p-0 space-y-4">
+                                <CardContent className="p-0">
                                     <div className="overflow-x-auto">
                                         <table className="w-full">
                                             <thead>
@@ -221,47 +226,6 @@ export default function CustomerSummaryBill({ bills = [], customers = [], filter
                                             </tbody>
                                         </table>
                                     </div>
-
-                                    {/* Separate Product-wise Sales Summary Table */}
-                                    {bill.product_summary && bill.product_summary.length > 0 && (
-                                        <div className="space-y-2 px-3 pb-3">
-                                            <h4 className="text-[14px] font-bold dark:text-white">
-                                                Product-wise Sales Summary
-                                            </h4>
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full">
-                                                    <thead>
-                                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                                            <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SL</th>
-                                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
-                                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
-                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
-                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
-                                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {bill.product_summary.map((product, pIndex) => (
-                                                            <tr key={pIndex} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                                <td className="p-2 text-center text-[13px] dark:text-gray-300">{pIndex + 1}</td>
-                                                                <td className="p-2 text-[13px] dark:text-white font-medium">{product.product_name}</td>
-                                                                <td className="p-2 text-[13px] dark:text-gray-300">{product.unit_name}</td>
-                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                            </tr>
-                                                        ))}
-                                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                            <td colSpan={5} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
-                                                            <td className="p-2 text-right text-[13px] dark:text-white">
-                                                                {bill.product_summary.reduce((sum, p) => sum + p.total_amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    )}
                                 </CardContent>
                             </Card>
                         ))
@@ -272,6 +236,52 @@ export default function CustomerSummaryBill({ bills = [], customers = [], filter
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Overall Product-wise Sales Summary Table across all customers */}
+                    {product_summary && product_summary.length > 0 && (
+                        <Card className="dark:border-gray-700 dark:bg-gray-800">
+                            <CardHeader className="py-3 px-4 border-b dark:border-gray-700">
+                                <CardTitle className="text-[15px] font-bold dark:text-white">
+                                    Product-wise Sales Summary
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                                <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SL</th>
+                                                <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
+                                                <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Price</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {product_summary.map((product, pIndex) => (
+                                                <tr key={pIndex} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                    <td className="p-2 text-center text-[13px] dark:text-gray-300">{pIndex + 1}</td>
+                                                    <td className="p-2 text-[13px] dark:text-white font-medium">{product.product_name}</td>
+                                                    <td className="p-2 text-[13px] dark:text-gray-300">{product.unit_name}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{product.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                </tr>
+                                            ))}
+                                            <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
+                                                <td colSpan={5} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-white">
+                                                    {product_summary.reduce((sum, p) => sum + p.total_amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {bills.length > 0 && (() => {
                         const grandTotal = bills.reduce((sum, bill) => sum + Number(bill.total_amount), 0);
                         return (

@@ -36,6 +36,11 @@ class CustomerSummaryBillController extends Controller implements HasMiddleware
                 $endDate,
                 $customerId
             ),
+            'product_summary' => $this->reports->summaryProductSummary(
+                $startDate,
+                $endDate,
+                $customerId
+            ),
             'customers' => $this->customers(),
             'filters' => $request->only([
                 'customer_id',
@@ -53,11 +58,16 @@ class CustomerSummaryBillController extends Controller implements HasMiddleware
             $endDate,
             $customerId
         );
+        $productSummary = $this->reports->summaryProductSummary(
+            $startDate,
+            $endDate,
+            $customerId
+        );
         $companySetting = CompanySetting::query()->first();
 
         return Pdf::loadView(
             'pdf.customer-summary-bill',
-            compact('bills', 'companySetting', 'startDate', 'endDate')
+            compact('bills', 'productSummary', 'companySetting', 'startDate', 'endDate')
         )->stream('customer-summary-bill.pdf');
     }
 
