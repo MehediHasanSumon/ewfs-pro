@@ -241,12 +241,32 @@ class CustomerReportService
     ): array {
         return $this->salesRows($startDate, $endDate, $customerId)
             ->groupBy('customer_id')
-            ->map(fn (Collection $items) => [
-                'customer_name' => $items->first()->customer_name,
-                'sales' => $items->values()->all(),
-                'total_quantity' => (float) $items->sum('quantity'),
-                'total_amount' => (float) $items->sum('total_amount'),
-            ])
+            ->map(function (Collection $items) {
+                $productSummary = $items
+                    ->groupBy(fn (object $item) => ($item->product_id ?? trim($item->product_name)) . '_' . number_format((float) $item->price, 2, '.', '') . '_' . trim(strtolower($item->unit_name ?? '')))
+                    ->map(function (Collection $productItems) {
+                        $firstItem = $productItems->first();
+
+                        return [
+                            'product_id' => $firstItem->product_id ?? null,
+                            'product_name' => $firstItem->product_name,
+                            'unit_name' => $firstItem->unit_name,
+                            'price' => (float) round((float) $firstItem->price, 2),
+                            'quantity' => (float) $productItems->sum('quantity'),
+                            'total_amount' => (float) $productItems->sum('total_amount'),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                return [
+                    'customer_name' => $items->first()->customer_name,
+                    'sales' => $items->values()->all(),
+                    'product_summary' => $productSummary,
+                    'total_quantity' => (float) $items->sum('quantity'),
+                    'total_amount' => (float) $items->sum('total_amount'),
+                ];
+            })
             ->values()
             ->all();
     }

@@ -4,61 +4,15 @@
     <meta charset="utf-8">
     <title>Customer Summary Bill</title>
     <style>
+        @page {
+            size: A4 portrait;
+            margin: 15mm 10mm 15mm 10mm;
+        }
         body {
             font-family: Arial, sans-serif;
             font-size: 12px;
             margin: 0;
-            padding-bottom: 60px;
-            position: relative;
-            min-height: 100vh;
-        }
-        .header {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            position: relative;
-        }
-        .header .logo {
-            width: 120px;
-            flex-shrink: 0;
-        }
-        .header .logo img {
-            height: 80px;
-            width: auto;
-            display: block;
-        }
-        .header .company-info {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-60%);
-            text-align: center;
-            width: auto;
-            margin-top: -80px;
-        }
-        .header .company-info h2 {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            font-weight: bold;
-            color: #000;
-        }
-        .header .company-info p {
-            margin: 4px 0;
-            font-size: 12px;
-            color: #333;
-            line-height: 1.4;
-        }
-        .title-section {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .title-box {
-            border: 1px solid #000;
-            display: inline-block;
-            padding: 8px 20px;
-            background-color: #f5f5f5;
-            font-weight: bold;
-            font-size: 14px;
+            padding: 0;
         }
         table {
             width: 100%;
@@ -67,12 +21,12 @@
         }
         th, td {
             border: 1px solid #000;
-            padding: 10px 8px;
+            padding: 8px 6px;
             text-align: left;
         }
         th {
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             color: #000;
         }
         td {
@@ -81,37 +35,47 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 15px 20px;
-            border-top: 1px solid #ccc;
-            background-color: #fff;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 10px;
-            color: #666;
-        }
-        .footer-left { text-align: left; }
-        .footer-right { text-align: right; }
-        @media print {
-            .footer { position: fixed; bottom: 0; }
-        }
     </style>
 </head>
 <body>
     @include('pdf.components.watermark')
-    @include('pdf.components.header')
+    @include('pdf.components.header', ['title' => 'Customer Summary Bill (' . $startDate . ' to ' . $endDate . ')'])
 
-    <div class="title-section">
-        <div class="title-box">Customer Summary Bill ({{ $startDate }} to {{ $endDate }})</div>
-    </div>
+    @php
+        if (!function_exists('numberToWords')) {
+            function numberToWords($num) {
+                $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+                $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+                $teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+                
+                if ($num == 0) return 'Zero';
+                
+                $convertLessThanThousand = function ($n) use ($ones, $tens, $teens, &$convertLessThanThousand) {
+                    if ($n == 0) return '';
+                    if ($n < 10) return $ones[$n];
+                    if ($n < 20) return $teens[$n - 10];
+                    if ($n < 100) return $tens[floor($n / 10)] . ($n % 10 != 0 ? ' ' . $ones[$n % 10] : '');
+                    return $ones[floor($n / 100)] . ' Hundred' . ($n % 100 != 0 ? ' ' . $convertLessThanThousand($n % 100) : '');
+                };
+                
+                $billion = floor($num / 1000000000);
+                $million = floor(($num % 1000000000) / 1000000);
+                $thousand = floor(($num % 1000000) / 1000);
+                $remainder = floor($num % 1000);
+                
+                $result = '';
+                if ($billion > 0) $result .= convertLessThanThousand($billion) . ' Billion ';
+                if ($million > 0) $result .= convertLessThanThousand($million) . ' Million ';
+                if ($thousand > 0) $result .= convertLessThanThousand($thousand) . ' Thousand ';
+                if ($remainder > 0) $result .= convertLessThanThousand($remainder);
+                
+                return trim($result);
+            }
+        }
+    @endphp
 
     @forelse($bills as $bill)
-    <table style="margin-bottom: 30px;">
+    <table style="margin-bottom: 15px;">
         <thead>
             <tr>
                 <th>Date</th>
@@ -121,10 +85,10 @@
                 <th>Unit</th>
                 <th class="text-right">Price</th>
                 <th class="text-right">Quantity</th>
-                <th class="text-right">Total</th>
+                <th class="text-right">Amount</th>
             </tr>
-            <tr >
-                <th colspan="8" style="padding: 10px; text-align: left; font-size: 13px;">
+            <tr>
+                <th colspan="8" style="padding: 8px; text-align: left; font-size: 13px;">
                     {{ $bill['customer_name'] }}
                 </th>
             </tr>
@@ -149,6 +113,39 @@
             </tr>
         </tbody>
     </table>
+
+    {{-- Product-wise Sales Summary Table --}}
+    @if(!empty($bill['product_summary']) && count($bill['product_summary']) > 0)
+    <div style="margin-top: 15px; margin-bottom: 5px; font-weight: bold; font-size: 13px;">Product-wise Sales Summary</div>
+    <table style="margin-bottom: 25px;">
+        <thead>
+            <tr>
+                <th style="width: 40px;" class="text-center">SL</th>
+                <th>Product</th>
+                <th>Unit</th>
+                <th class="text-right">Price</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($bill['product_summary'] as $index => $product)
+            <tr>
+                <td class="text-center">{{ $index + 1 }}</td>
+                <td>{{ $product['product_name'] }}</td>
+                <td>{{ $product['unit_name'] }}</td>
+                <td class="text-right">{{ number_format($product['price'], 2) }}</td>
+                <td class="text-right">{{ number_format($product['quantity'], 2) }}</td>
+                <td class="text-right">{{ number_format($product['total_amount'], 2) }}</td>
+            </tr>
+            @endforeach
+            <tr style="font-weight: bold;">
+                <td colspan="5" class="text-right">Total:</td>
+                <td class="text-right">{{ number_format($bill['total_amount'], 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    @endif
     @empty
     <p style="text-align: center; padding: 20px; color: #999;">No records found</p>
     @endforelse
@@ -156,56 +153,13 @@
     @if(count($bills) > 0)
     @php
         $grandTotal = collect($bills)->sum('total_amount');
-        
-        function numberToWords($num) {
-            $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-            $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-            $teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-            
-            if ($num == 0) return 'Zero';
-            
-            function convertLessThanThousand($n, $ones, $tens, $teens) {
-                if ($n == 0) return '';
-                if ($n < 10) return $ones[$n];
-                if ($n < 20) return $teens[$n - 10];
-                if ($n < 100) return $tens[floor($n / 10)] . ($n % 10 != 0 ? ' ' . $ones[$n % 10] : '');
-                return $ones[floor($n / 100)] . ' Hundred' . ($n % 100 != 0 ? ' ' . convertLessThanThousand($n % 100, $ones, $tens, $teens) : '');
-            }
-            
-            $billion = floor($num / 1000000000);
-            $million = floor(($num % 1000000000) / 1000000);
-            $thousand = floor(($num % 1000000) / 1000);
-            $remainder = floor($num % 1000);
-            
-            $result = '';
-            if ($billion > 0) $result .= convertLessThanThousand($billion, $ones, $tens, $teens) . ' Billion ';
-            if ($million > 0) $result .= convertLessThanThousand($million, $ones, $tens, $teens) . ' Million ';
-            if ($thousand > 0) $result .= convertLessThanThousand($thousand, $ones, $tens, $teens) . ' Thousand ';
-            if ($remainder > 0) $result .= convertLessThanThousand($remainder, $ones, $tens, $teens);
-            
-            return trim($result);
-        }
     @endphp
-    <table style="margin-top: 20px;">
-        <tbody>
-            <tr style="font-weight: bold; font-size: 14px;">
-                <td colspan="6" style="padding: 12px;">Grand Total:</td>
-                <td class="text-right" style="padding: 12px;">{{ number_format(collect($bills)->sum('total_quantity'), 2) }}</td>
-                <td class="text-right" style="padding: 12px;">{{ number_format($grandTotal, 2) }}</td>
-            </tr>
-            <tr >
-                <td colspan="8" style="padding: 12px; font-style: italic; font-size: 12px;">
-                    In words: {{ numberToWords(floor($grandTotal)) }}
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <div style="margin-top: 20px; margin-bottom: 30px; padding: 10px 0;">
+        <p style="margin: 0; font-weight: bold; font-size: 13px;">Grand Total: {{ number_format($grandTotal, 2) }}</p>
+        <p style="margin: 5px 0 0 0; font-style: italic; font-size: 12px;">In words: {{ numberToWords(floor($grandTotal)) }}</p>
+    </div>
     @endif
 
-    @include('pdf.components.footer')
-        <div class="footer-right">
-            Date Range: {{ $startDate }} to {{ $endDate }}
-        </div>
-    </div>
+    @include('pdf.components.footer', ['totalRecords' => count($bills)])
 </body>
 </html>

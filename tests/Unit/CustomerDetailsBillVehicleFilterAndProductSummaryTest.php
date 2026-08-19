@@ -446,4 +446,27 @@ test('Customer Details Bill groups items with same 2-decimal unit price into sin
     expect($summary[0]['price'])->toBe(102.01);
     expect($summary[0]['quantity'])->toBe(61.71);
     expect($summary[0]['total_amount'])->toBe(6295.00);
+
+    // Also test summaryBills produces the identical product summary
+    $summaryBills = $service->summaryBills('2026-08-01', '2026-08-01', $customer->id);
+    expect($summaryBills)->toHaveCount(1);
+    expect($summaryBills[0]['product_summary'])->toHaveCount(1);
+    expect($summaryBills[0]['product_summary'][0]['product_name'])->toBe('Diesel');
+    expect($summaryBills[0]['product_summary'][0]['price'])->toBe(102.01);
+    expect($summaryBills[0]['product_summary'][0]['quantity'])->toBe(61.71);
+    expect($summaryBills[0]['product_summary'][0]['total_amount'])->toBe(6295.00);
+
+    // PDF load for customer-summary-bill
+    $companySetting = CompanySetting::first() ?? CompanySetting::create([
+        'company_name' => 'East West Filling Station',
+        'currency' => 'BDT',
+        'status' => true,
+    ]);
+    $pdf = Pdf::loadView('pdf.customer-summary-bill', [
+        'bills' => $summaryBills,
+        'companySetting' => $companySetting,
+        'startDate' => '2026-08-01',
+        'endDate' => '2026-08-01',
+    ]);
+    expect(strlen($pdf->output()))->toBeGreaterThan(1000);
 });
