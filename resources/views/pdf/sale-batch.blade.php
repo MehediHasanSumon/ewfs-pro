@@ -167,9 +167,7 @@
         <div>In words: {{ ucwords((new NumberFormatter('en', NumberFormatter::SPELLOUT))->format(floor($sales->sum('total_amount')))) }} Taka Only</div>
     </div>
 
-    <div class="footer">
-        <p>Generated on {{ date('d/m/Y H:i:s') }}</p>
-    </div>
+    @include('pdf.components.footer')
 </body>
 
 </html>

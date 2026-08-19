@@ -147,8 +147,7 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        <div>Generated on: {{ date('Y-m-d H:i:s') }}</div>
+    @include('pdf.components.footer')
         <div>Total Records: {{ count($shiftClosedList) }}</div>
     </div>
 </body>

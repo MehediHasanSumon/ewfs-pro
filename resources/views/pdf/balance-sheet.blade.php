@@ -274,10 +274,7 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        <div class="footer-left">
-            Generated on: {{ date('Y-m-d H:i:s') }}
-        </div>
+    @include('pdf.components.footer')
         <div class="footer-right">
             Purchases: {{ count($data['purchase_data']) }} | Sales: {{ count($data['sales_data']) + count($data['credit_sales_data']) }} | Expenses: {{ count($data['admin_expenses']) }}
         </div>

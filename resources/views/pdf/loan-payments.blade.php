@@ -200,10 +200,7 @@
     </table>
     @endif
 
-    <div class="footer">
-        <div class="footer-left">
-            Generated on: {{ date('Y-m-d H:i:s') }}
-        </div>
+    @include('pdf.components.footer')
         <div class="footer-right">
             Total Payments: {{ count($recentPayments) }}
         </div>

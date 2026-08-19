@@ -81,7 +81,6 @@
         .total-section {
             margin-top: 20px;
             padding: 15px;
-            background-color: #f5f5f5;
             border: 1px solid #000;
         }
         .total-section p {
@@ -155,8 +154,6 @@
         <p class="words">In words: {{ \App\Helpers\NumberToWordsHelper::convert(floor($customerSales->sum('total_amount'))) }}</p>
     </div>
 
-    <div class="footer">
-        <p>Generated on {{ now()->format('d/m/Y H:i:s') }}</p>
-    </div>
+    @include('pdf.components.footer')
 </body>
 </html>

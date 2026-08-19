@@ -165,10 +165,7 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        <div class="footer-left">
-            Generated on: {{ date('Y-m-d H:i:s') }}
-        </div>
+    @include('pdf.components.footer')
         <div class="footer-right">
             Total Records: {{ count($roles) }}
         </div>

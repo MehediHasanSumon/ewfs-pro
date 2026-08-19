@@ -173,8 +173,7 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        <div>Generated on: {{ date('Y-m-d H:i:s') }}</div>
+    @include('pdf.components.footer')
         <div>Shift: {{ $shiftClosed->shift->name }} | Date: {{ date('d/m/Y', strtotime($shiftClosed->close_date)) }}</div>
     </div>
 </body>

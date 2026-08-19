@@ -224,8 +224,6 @@
         }
     @endphp
 
-    <div class="footer">
-        <p>Generated on {{ now()->format('d/m/Y H:i:s') }} | Total Records: {{ count($purchases) }}</p>
-    </div>
+    @include('pdf.components.footer', ['totalRecords' => count($purchases)])
 </body>
 </html>

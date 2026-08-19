@@ -129,7 +129,6 @@
         .total-section {
             margin-top: 20px;
             padding: 15px;
-            background-color: #f5f5f5;
             border: 1px solid #000;
         }
 
@@ -321,9 +320,7 @@
         </table>
     </div>
 
-    <div class="footer">
-        <p>Generated on {{ now()->format('d/m/Y H:i:s') }} | Invoice: {{ $whiteSale->invoice_no }}</p>
-    </div>
+    @include('pdf.components.footer')
 </body>
 
 </html>

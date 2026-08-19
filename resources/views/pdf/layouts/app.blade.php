@@ -90,7 +90,6 @@
         .total-section {
             margin-top: 20px;
             padding: 15px;
-            background-color: #f5f5f5;
             border: 1px solid #000;
         }
         .total-section p {

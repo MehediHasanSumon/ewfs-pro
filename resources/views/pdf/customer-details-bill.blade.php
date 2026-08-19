@@ -180,7 +180,7 @@
     </table>
     @endforeach
 
-    <div style="margin-bottom: 30px; padding: 10px; background-color: #f5f5f5;">
+    <div style="margin-bottom: 30px; padding: 10px;">
         <p style="margin: 0; font-weight: bold; font-size: 13px;">Grand Total: {{ number_format($bill['total_amount'], 2) }}</p>
         <p style="margin: 5px 0 0 0; font-style: italic; font-size: 12px;">In words: {{ numberToWords(floor($bill['total_amount'])) }}</p>
     </div>

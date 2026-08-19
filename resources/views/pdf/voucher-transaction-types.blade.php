@@ -62,9 +62,6 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        Generated on: {{ now()->format('Y-m-d H:i:s') }} |
-        Total Records: {{ $voucherTransactionTypes->count() }}
-    </div>
+    @include('pdf.components.footer')
 </body>
 </html>

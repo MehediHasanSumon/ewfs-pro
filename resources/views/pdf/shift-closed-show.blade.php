@@ -208,8 +208,7 @@
     </table>
     @endif
 
-    <div class="footer">
-        <div>Generated on: {{ date('Y-m-d H:i:s') }}</div>
+    @include('pdf.components.footer')
         <div>Shift: {{ $shiftClosed->shift->name }}</div>
     </div>
 </body>

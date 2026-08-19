@@ -21,9 +21,9 @@
     </div>
     <div class="company-info">
         @if($companySetting)
-            <h2>{{ $companySetting->company_name ?? 'East West Filling Station' }}</h2>
+            <h2 style="font-size: 22px; margin: 0 0 6px 0; font-weight: bold; color: #000;">{{ $companySetting->company_name ?? 'East West Filling Station' }}</h2>
             @if($companySetting->company_address)
-                <p>{{ $companySetting->company_address }}</p>
+                <p style="margin: 3px 0; font-size: 11px; color: #333;">{{ $companySetting->company_address }}</p>
             @endif
             @php
                 $contacts = [];
@@ -36,17 +36,22 @@
                 if (!empty($companySetting->company_phone)) {
                     $contacts[] = 'Phone: ' . $companySetting->company_phone;
                 }
+                if (!empty($companySetting->fax)) {
+                    $contacts[] = 'Fax: ' . $companySetting->fax;
+                }
             @endphp
             @if(count($contacts) > 0)
-                <p>{{ implode(' | ', $contacts) }}</p>
+                <p style="margin: 3px 0; font-size: 11px; color: #333;">{{ implode(' | ', $contacts) }}</p>
             @endif
         @else
-            <h2>East West Filling Station</h2>
-            <p>Dhaka, Bangladesh</p>
-            <p>mehedihassan2992001@gmail.com | 01750542923</p>
+            <h2 style="font-size: 22px; margin: 0 0 6px 0; font-weight: bold; color: #000;">East West Filling Station</h2>
+            <p style="margin: 3px 0; font-size: 11px; color: #333;">Dhaka, Bangladesh</p>
+            <p style="margin: 3px 0; font-size: 11px; color: #333;">mehedihassan2992001@gmail.com | 01750542923</p>
         @endif
     </div>
 </div>
+
+<div class="header-divider" style="border-bottom: 3px double #000; margin: 10px 0 16px 0; width: 100%; clear: both;"></div>
 
 @if(!empty($title) || !empty($titleSlot) || !empty($subtitle))
 <div class="title-section">
