@@ -17,6 +17,7 @@ interface Sale {
     sale_date: string;
     vehicle_number: string;
     invoice_no: string;
+    memo_no?: string;
     product_name: string;
     unit_name: string;
     price: number;
