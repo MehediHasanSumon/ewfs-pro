@@ -13,7 +13,21 @@
         }
     }
 @endphp
-<div class="header" style="position: relative; width: 100%; padding: 0; margin-bottom: 0;">
+<style>
+    @page {
+        margin-top: 15px !important;
+    }
+    body {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    .header {
+        padding: 0 !important;
+        margin: 0 !important;
+        margin-top: 0 !important;
+    }
+</style>
+<div class="header" style="position: relative; width: 100%; padding: 0 !important; margin: 0 !important; margin-bottom: 0 !important;">
     <table style="width: 100%; border: none; margin: 0; padding: 0; background: none;">
         <tr style="background: none !important;">
             <td style="width: 100px; border: none !important; vertical-align: middle; padding: 0; text-align: left;">
@@ -23,7 +37,7 @@
             </td>
             <td style="border: none !important; text-align: center; vertical-align: middle; padding: 0;">
                 @if($companySetting)
-                    <h2 style="font-size: 24px; font-weight: bold; color: #000; margin: 0 0 2px 0; line-height: 1.15;">
+                    <h2 style="font-size: 28px; font-weight: bold; color: #008000; margin: 0 0 2px 0; line-height: 1.15;">
                         {{ $companySetting->company_name ?? 'East West Filling Station' }}
                     </h2>
                     <div style="margin-top: -3px;">

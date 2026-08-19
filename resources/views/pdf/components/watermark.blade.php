@@ -14,7 +14,7 @@
     }
 @endphp
 @if($watermarkPath)
-<div class="pdf-watermark" style="position: fixed; top: 30%; left: 15%; width: 70%; text-align: center; opacity: 0.08; z-index: -1000;">
+<div class="pdf-watermark" style="position: fixed; top: 30%; left: 15%; width: 70%; text-align: center; opacity: 0.18; z-index: -1000;">
     <img src="{{ $watermarkPath }}" style="max-width: 380px; max-height: 380px; width: auto; height: auto;" alt="Watermark">
 </div>
 @endif
