@@ -136,7 +136,7 @@ class FinancialReportService
             ->where('v.voucher_type', 'receipt')
             ->where(function ($q) {
                 $q->whereIn('vtt.code', ['1072', '1073'])
-                    ->orWhereIn('vtt.system_key', ['opening_balance', 'investment']);
+                    ->orWhereIn('vtt.name', ['Opening Balance', 'Investment']);
             });
 
         if ($endDate) {
