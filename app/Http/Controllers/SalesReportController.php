@@ -48,9 +48,9 @@ class SalesReportController extends Controller implements HasMiddleware
             'report' => $reportData,
             'companySetting' => $companySetting,
             'filters' => $reportData['filters'],
-        ])->setPaper('a4', 'landscape');
+        ])->setPaper('a4', 'portrait');
 
-        return $pdf->stream('sales-report-details.pdf');
+        return $pdf->stream('sales-report.pdf');
     }
 
     private function filters(Request $request): array

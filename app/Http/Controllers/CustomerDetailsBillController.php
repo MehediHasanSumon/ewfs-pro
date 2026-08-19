@@ -61,7 +61,7 @@ class CustomerDetailsBillController extends Controller implements HasMiddleware
         return Pdf::loadView(
             'pdf.customer-details-bill',
             compact('bills', 'companySetting', 'startDate', 'endDate')
-        )->stream('customer-details-bill.pdf');
+        )->setPaper('a4', 'portrait')->stream('customer-details-bill.pdf');
     }
 
     private function filters(Request $request): array

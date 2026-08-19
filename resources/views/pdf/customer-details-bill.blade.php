@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <title>Customer Details Bill</title>
     <style>
+        @page {
+            size: A4 portrait;
+            margin: 15mm 10mm 15mm 10mm;
+        }
         body {
             font-family: Arial, sans-serif;
             font-size: 12px;
