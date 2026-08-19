@@ -35,10 +35,6 @@ class SalesReportController extends Controller implements HasMiddleware
             'report' => $reportData,
             'filters' => $reportData['filters'],
             'customers' => $filterOptions['customers'],
-            'vehicles' => $filterOptions['vehicles'],
-            'products' => $filterOptions['products'],
-            'shifts' => $filterOptions['shifts'],
-            'paymentTypes' => $filterOptions['paymentTypes'],
         ]);
     }
 
@@ -64,11 +60,6 @@ class SalesReportController extends Controller implements HasMiddleware
             'end_date',
             'customer_id',
             'customer',
-            'vehicle_id',
-            'vehicle',
-            'product_id',
-            'payment_type',
-            'shift_id',
         ]);
     }
 }

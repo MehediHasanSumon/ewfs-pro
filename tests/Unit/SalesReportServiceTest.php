@@ -361,24 +361,6 @@ it('generates customer-wise grouped sales report matching test requirements', fu
         ->and($report['grand_total_quantity'])->toBe(145.0)
         ->and($report['total_invoices'])->toBe(5);
 
-    // Test Payment Type Filter: Bank
-    $bankOnlyReport = $service->report([
-        'start_date' => '2026-08-01',
-        'end_date' => '2026-08-05',
-        'payment_type' => 'Bank',
-    ]);
-    expect($bankOnlyReport['grand_total_amount'])->toBe(3000.00)
-        ->and($bankOnlyReport['total_customers'])->toBe(1);
-
-    // Test Payment Type Filter: Credit
-    $creditOnlyReport = $service->report([
-        'start_date' => '2026-08-01',
-        'end_date' => '2026-08-05',
-        'payment_type' => 'Credit',
-    ]);
-    expect($creditOnlyReport['grand_total_amount'])->toBe(2000.00)
-        ->and($creditOnlyReport['total_customers'])->toBe(1);
-
     // Test Customer Filter
     $custBOnlyReport = $service->report([
         'start_date' => '2026-08-01',
@@ -387,6 +369,14 @@ it('generates customer-wise grouped sales report matching test requirements', fu
     ]);
     expect($custBOnlyReport['grand_total_amount'])->toBe(5000.00)
         ->and($custBOnlyReport['total_customers'])->toBe(1);
+
+    // Test Date Range Filter
+    $dateFilterReport = $service->report([
+        'start_date' => '2026-08-05',
+        'end_date' => '2026-08-05',
+    ]);
+    expect($dateFilterReport['grand_total_amount'])->toBe(5000.00)
+        ->and($dateFilterReport['total_customers'])->toBe(1);
 });
 
 it('renders every product item on a multi-item invoice as a separate row and handles walk-in customer', function (): void {
@@ -511,13 +501,4 @@ it('renders every product item on a multi-item invoice as a separate row and han
     expect($report['grand_total_amount'])->toBe(7050.00)
         ->and($report['grand_total_quantity'])->toBe(53.0)
         ->and($report['total_invoices'])->toBe(1);
-
-    // Test Product Filter: Engine Oil only
-    $engineOilReport = $service->report([
-        'start_date' => '2026-08-10',
-        'end_date' => '2026-08-10',
-        'product_id' => $engineOil,
-    ]);
-    expect($engineOilReport['grand_total_amount'])->toBe(1000.00)
-        ->and($engineOilReport['grand_total_quantity'])->toBe(2.0);
 });

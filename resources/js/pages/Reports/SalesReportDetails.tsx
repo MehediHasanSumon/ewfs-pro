@@ -21,7 +21,6 @@ interface SaleItem {
     vehicle_no: string;
     invoice_no: string;
     memo_no: string;
-    done_by: string;
     product_name: string;
     unit_name: string;
     quantity: number;
@@ -43,11 +42,6 @@ interface ReportData {
         end_date: string;
         customer_id?: number | null;
         customer?: string | null;
-        vehicle_id?: number | null;
-        vehicle?: string | null;
-        product_id?: number | null;
-        payment_type?: string | null;
-        shift_id?: number | null;
     };
     customers: CustomerGroup[];
     grand_total_quantity: number;
@@ -60,23 +54,12 @@ interface ReportData {
 interface DropdownOption {
     id: number;
     name?: string;
-    vehicle_number?: string;
-    product_name?: string;
-}
-
-interface PaymentTypeOption {
-    value: string;
-    label: string;
 }
 
 interface SalesReportDetailsProps {
     report: ReportData;
     filters: ReportData['filters'];
     customers: DropdownOption[];
-    vehicles: DropdownOption[];
-    products: DropdownOption[];
-    shifts: DropdownOption[];
-    paymentTypes: PaymentTypeOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -96,10 +79,6 @@ export default function SalesReportDetails({
     },
     filters = { start_date: '', end_date: '' },
     customers = [],
-    vehicles = [],
-    products = [],
-    shifts = [],
-    paymentTypes = [],
 }: SalesReportDetailsProps) {
     const { can } = usePermission();
     const canFilter = can('can-sale-filter') || can('view-sale');
@@ -108,10 +87,6 @@ export default function SalesReportDetails({
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [customerId, setCustomerId] = useState(filters.customer_id ? String(filters.customer_id) : 'all');
-    const [vehicleId, setVehicleId] = useState(filters.vehicle_id ? String(filters.vehicle_id) : 'all');
-    const [productId, setProductId] = useState(filters.product_id ? String(filters.product_id) : 'all');
-    const [paymentType, setPaymentType] = useState(filters.payment_type || 'all');
-    const [shiftId, setShiftId] = useState(filters.shift_id ? String(filters.shift_id) : 'all');
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return 'N/A';
@@ -128,10 +103,6 @@ export default function SalesReportDetails({
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
         if (customerId && customerId !== 'all') params.customer_id = customerId;
-        if (vehicleId && vehicleId !== 'all') params.vehicle_id = vehicleId;
-        if (productId && productId !== 'all') params.product_id = productId;
-        if (paymentType && paymentType !== 'all') params.payment_type = paymentType;
-        if (shiftId && shiftId !== 'all') params.shift_id = shiftId;
 
         router.get('/sales-report', params, { preserveState: true });
     };
@@ -140,10 +111,6 @@ export default function SalesReportDetails({
         setStartDate('');
         setEndDate('');
         setCustomerId('all');
-        setVehicleId('all');
-        setProductId('all');
-        setPaymentType('all');
-        setShiftId('all');
 
         router.get('/sales-report', {}, { preserveState: true });
     };
@@ -153,10 +120,6 @@ export default function SalesReportDetails({
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
         if (customerId && customerId !== 'all') params.append('customer_id', customerId);
-        if (vehicleId && vehicleId !== 'all') params.append('vehicle_id', vehicleId);
-        if (productId && productId !== 'all') params.append('product_id', productId);
-        if (paymentType && paymentType !== 'all') params.append('payment_type', paymentType);
-        if (shiftId && shiftId !== 'all') params.append('shift_id', shiftId);
 
         openPdfViewer(`/sales-report/download-pdf?${params.toString()}`);
     };
@@ -190,27 +153,7 @@ export default function SalesReportDetails({
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4 lg:grid-cols-4">
-                                <div>
-                                    <Label className="dark:text-gray-200">Start Date</Label>
-                                    <Input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
-
-                                <div>
-                                    <Label className="dark:text-gray-200">End Date</Label>
-                                    <Input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
-
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                                 <div>
                                     <Label className="dark:text-gray-200">Customer</Label>
                                     <Select value={customerId} onValueChange={setCustomerId}>
@@ -229,71 +172,23 @@ export default function SalesReportDetails({
                                 </div>
 
                                 <div>
-                                    <Label className="dark:text-gray-200">Vehicle</Label>
-                                    <Select value={vehicleId} onValueChange={setVehicleId}>
-                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                            <SelectValue placeholder="All Vehicles" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Vehicles</SelectItem>
-                                            {vehicles.map((v) => (
-                                                <SelectItem key={v.id} value={String(v.id)}>
-                                                    {v.vehicle_number}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label className="dark:text-gray-200">Start Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
                                 </div>
 
                                 <div>
-                                    <Label className="dark:text-gray-200">Product</Label>
-                                    <Select value={productId} onValueChange={setProductId}>
-                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                            <SelectValue placeholder="All Products" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Products</SelectItem>
-                                            {products.map((p) => (
-                                                <SelectItem key={p.id} value={String(p.id)}>
-                                                    {p.product_name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div>
-                                    <Label className="dark:text-gray-200">Payment Type</Label>
-                                    <Select value={paymentType} onValueChange={setPaymentType}>
-                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                            <SelectValue placeholder="All Payment Types" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Payment Types</SelectItem>
-                                            {paymentTypes.map((pt) => (
-                                                <SelectItem key={pt.value} value={pt.value}>
-                                                    {pt.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div>
-                                    <Label className="dark:text-gray-200">Shift</Label>
-                                    <Select value={shiftId} onValueChange={setShiftId}>
-                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                            <SelectValue placeholder="All Shifts" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Shifts</SelectItem>
-                                            {shifts.map((s) => (
-                                                <SelectItem key={s.id} value={String(s.id)}>
-                                                    {s.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label className="dark:text-gray-200">End Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
                                 </div>
 
                                 <div className="flex items-end gap-2">
@@ -327,7 +222,6 @@ export default function SalesReportDetails({
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Vehicle</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Invoice No</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Memo No</th>
-                                                    <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Done By</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product</th>
                                                     <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Unit</th>
                                                     <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
@@ -346,7 +240,6 @@ export default function SalesReportDetails({
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.vehicle_no || 'N/A'}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.invoice_no}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.memo_no || 'N/A'}</td>
-                                                        <td className="p-2 text-[13px] dark:text-gray-300">{sale.done_by || 'N/A'}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.product_name}</td>
                                                         <td className="p-2 text-[13px] dark:text-gray-300">{sale.unit_name}</td>
                                                         <td className="p-2 text-right text-[13px] dark:text-gray-300">
@@ -362,7 +255,7 @@ export default function SalesReportDetails({
                                                     </tr>
                                                 ))}
                                                 <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                    <td colSpan={7} className="p-2 text-[13px] dark:text-white">
+                                                    <td colSpan={6} className="p-2 text-[13px] dark:text-white">
                                                         Total From {customerGroup.customer_name} :
                                                     </td>
                                                     <td className="p-2 text-right text-[13px] dark:text-white">

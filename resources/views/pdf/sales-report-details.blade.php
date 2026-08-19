@@ -160,12 +160,9 @@
                 Date Between: {{ \Carbon\Carbon::parse($filters['start_date'])->format('d/m/Y') }} to {{ \Carbon\Carbon::parse($filters['end_date'])->format('d/m/Y') }}
             </div>
         </div>
-        @if(!empty($filters['payment_type']) || !empty($filters['customer']) || !empty($filters['vehicle']))
+        @if(!empty($filters['customer']))
             <div class="filter-meta">
-                Filtered By:
-                @if(!empty($filters['payment_type'])) Payment Type: <strong>{{ $filters['payment_type'] }}</strong> | @endif
-                @if(!empty($filters['customer'])) Customer: <strong>{{ $filters['customer'] }}</strong> | @endif
-                @if(!empty($filters['vehicle'])) Vehicle: <strong>{{ $filters['vehicle'] }}</strong> @endif
+                Filtered By: Customer: <strong>{{ $filters['customer'] }}</strong>
             </div>
         @endif
     </div>
@@ -174,22 +171,21 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width: 70px;">Date</th>
-                    <th style="width: 90px;">Vehicle</th>
-                    <th style="width: 85px;">Invoice No</th>
-                    <th style="width: 75px;">Memo No</th>
-                    <th style="width: 80px;">Done By</th>
+                    <th style="width: 75px;">Date</th>
+                    <th style="width: 110px;">Vehicle</th>
+                    <th style="width: 95px;">Invoice No</th>
+                    <th style="width: 85px;">Memo No</th>
                     <th>Product</th>
                     <th style="width: 50px;">Unit</th>
-                    <th class="text-right" style="width: 60px;">Quantity</th>
-                    <th class="text-right" style="width: 65px;">Price</th>
-                    <th class="text-right" style="width: 80px;">Total</th>
-                    <th class="text-center" style="width: 70px;">Type</th>
+                    <th class="text-right" style="width: 70px;">Quantity</th>
+                    <th class="text-right" style="width: 75px;">Price</th>
+                    <th class="text-right" style="width: 90px;">Total</th>
+                    <th class="text-center" style="width: 75px;">Type</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td colspan="11" class="text-center" style="padding: 20px; color: #888;">No sales records found for the selected criteria.</td>
+                    <td colspan="10" class="text-center" style="padding: 20px; color: #888;">No sales records found for the selected criteria.</td>
                 </tr>
             </tbody>
         </table>
@@ -198,22 +194,21 @@
             <table>
                 <thead>
                     <tr class="customer-header-row">
-                        <td colspan="11" style="padding: 6px 8px; font-size: 11px; font-weight: bold;">
+                        <td colspan="10" style="padding: 6px 8px; font-size: 11px; font-weight: bold;">
                             Customer: {{ $customerGroup['customer_name'] }}
                         </td>
                     </tr>
                     <tr>
-                        <th style="width: 70px;">Date</th>
-                        <th style="width: 95px;">Vehicle</th>
-                        <th style="width: 85px;">Invoice No</th>
-                        <th style="width: 75px;">Memo No</th>
-                        <th style="width: 85px;">Done By</th>
+                        <th style="width: 75px;">Date</th>
+                        <th style="width: 110px;">Vehicle</th>
+                        <th style="width: 95px;">Invoice No</th>
+                        <th style="width: 85px;">Memo No</th>
                         <th>Product</th>
-                        <th style="width: 45px;">Unit</th>
-                        <th class="text-right" style="width: 60px;">Quantity</th>
-                        <th class="text-right" style="width: 65px;">Price</th>
-                        <th class="text-right" style="width: 80px;">Total</th>
-                        <th class="text-center" style="width: 70px;">Type</th>
+                        <th style="width: 50px;">Unit</th>
+                        <th class="text-right" style="width: 70px;">Quantity</th>
+                        <th class="text-right" style="width: 75px;">Price</th>
+                        <th class="text-right" style="width: 90px;">Total</th>
+                        <th class="text-center" style="width: 75px;">Type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,7 +218,6 @@
                             <td>{{ $sale->vehicle_no ?? 'N/A' }}</td>
                             <td>{{ $sale->invoice_no }}</td>
                             <td>{{ $sale->memo_no ?? 'N/A' }}</td>
-                            <td>{{ $sale->done_by ?? 'N/A' }}</td>
                             <td>{{ $sale->product_name }}</td>
                             <td>{{ $sale->unit_name }}</td>
                             <td class="text-right">{{ number_format($sale->quantity, 2) }}</td>
@@ -243,7 +237,7 @@
                         </tr>
                     @endforeach
                     <tr class="customer-total-row">
-                        <td colspan="7" class="text-right" style="font-weight: bold;">
+                        <td colspan="6" class="text-right" style="font-weight: bold;">
                             Total From {{ $customerGroup['customer_name'] }} :
                         </td>
                         <td class="text-right" style="font-weight: bold;">
