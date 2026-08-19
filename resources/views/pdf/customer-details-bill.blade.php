@@ -72,39 +72,6 @@
     @include('pdf.components.watermark')
     @include('pdf.components.header', ['title' => 'Customer Details Bill (' . $startDate . ' to ' . $endDate . ')'])
 
-    @php
-        if (!function_exists('numberToWords')) {
-            function numberToWords($num) {
-                $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-                $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-                $teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-                
-                if ($num == 0) return 'Zero';
-                
-                $convertLessThanThousand = function ($n) use ($ones, $tens, $teens, &$convertLessThanThousand) {
-                    if ($n == 0) return '';
-                    if ($n < 10) return $ones[$n];
-                    if ($n < 20) return $teens[$n - 10];
-                    if ($n < 100) return $tens[floor($n / 10)] . ($n % 10 != 0 ? ' ' . $ones[$n % 10] : '');
-                    return $ones[floor($n / 100)] . ' Hundred' . ($n % 100 != 0 ? ' ' . $convertLessThanThousand($n % 100) : '');
-                };
-                
-                $billion = floor($num / 1000000000);
-                $million = floor(($num % 1000000000) / 1000000);
-                $thousand = floor(($num % 1000000) / 1000);
-                $remainder = floor($num % 1000);
-                
-                $result = '';
-                if ($billion > 0) $result .= $convertLessThanThousand($billion) . ' Billion ';
-                if ($million > 0) $result .= $convertLessThanThousand($million) . ' Million ';
-                if ($thousand > 0) $result .= $convertLessThanThousand($thousand) . ' Thousand ';
-                if ($remainder > 0) $result .= $convertLessThanThousand($remainder);
-                
-                return trim($result);
-            }
-        }
-    @endphp
-
     @forelse($bills as $bill)
     <div class="customer-info">
         <table>
@@ -200,7 +167,7 @@
 
     <div style="margin-bottom: 30px; padding: 10px 0;">
         <p style="margin: 0; font-weight: bold; font-size: 13px;">Grand Total: {{ number_format($bill['total_amount'], 2) }}</p>
-        <p style="margin: 5px 0 0 0; font-style: italic; font-size: 12px;">In words: {{ numberToWords(floor($bill['total_amount'])) }}</p>
+        <p style="margin: 5px 0 0 0; font-style: italic; font-size: 12px;">In words: {{ \App\Helpers\NumberToWordsHelper::convert(floor($bill['total_amount'])) }}</p>
     </div>
     @empty
     <p style="text-align: center; padding: 20px; color: #999;">No records found</p>
