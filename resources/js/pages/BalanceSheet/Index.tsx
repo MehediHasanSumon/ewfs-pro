@@ -230,38 +230,33 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     </Card>
                 )}
 
-                {/* 1. Top Section: Capital & Loan Balance Table Card */}
+                {/* 1. Top Section: Vertical Balance Breakdown Table */}
                 <Card className="dark:border-gray-700 dark:bg-gray-800 shadow-sm">
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                        <th className="p-3 text-left text-[13px] font-bold dark:text-gray-200">Close Month And Year</th>
-                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
-                                            Capital Balance
-                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Opening Balance + Investment</span>
-                                        </th>
-                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
-                                            Loan Balance
-                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Loan Received</span>
-                                        </th>
-                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
-                                            Total Balance
-                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Total Opening Fund</span>
-                                        </th>
+                                        <th className="p-3 text-left text-[13px] font-bold dark:text-gray-200">Particulars</th>
+                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200 w-48 sm:w-64">Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 text-[13px] font-medium">
-                                        <td className="p-3 dark:text-white font-semibold">{topSheetData.close_month_year.label}</td>
-                                        <td className="p-3 text-right dark:text-white font-semibold">
+                                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-[13px]">
+                                        <td className="p-3 font-semibold dark:text-gray-200">Capital Balance</td>
+                                        <td className="p-3 text-right dark:text-gray-200 font-semibold">
                                             {formatCurrency(topSheetData.close_month_year.capital_balance ?? topSheetData.close_month_year.amount)}
                                         </td>
-                                        <td className="p-3 text-right dark:text-white font-semibold">
+                                    </tr>
+                                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-[13px]">
+                                        <td className="p-3 font-semibold dark:text-gray-200">Loan Balance</td>
+                                        <td className="p-3 text-right dark:text-gray-200 font-semibold">
                                             {formatCurrency(topSheetData.close_month_year.loan_balance ?? 0)}
                                         </td>
-                                        <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-bold text-[14px]">
+                                    </tr>
+                                    <tr className="bg-gray-50 dark:bg-gray-750 dark:border-gray-700 font-bold text-[14px]">
+                                        <td className="p-3 dark:text-white">Total Balance</td>
+                                        <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-extrabold text-[15px]">
                                             {formatCurrency(topSheetData.close_month_year.total_balance ?? topSheetData.close_month_year.amount)}
                                         </td>
                                     </tr>

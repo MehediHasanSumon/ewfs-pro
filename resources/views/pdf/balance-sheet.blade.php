@@ -106,21 +106,25 @@
         <div class="title-box">Balance Sheet</div>
     </div>
 
-    <!-- 1. Top Section: Close Month And Year Table -->
-    <table style="margin-bottom: 12px;">
+    <!-- 1. Top Section: Vertical Balance Breakdown Table -->
+    <table style="margin-bottom: 12px; width: 100%;">
         <thead>
             <tr>
-                <th class="text-left" style="font-size: 11px;">Close Month And Year</th>
-                <th class="text-right" style="font-size: 11px; width: 140px;">Capital Balance</th>
-                <th class="text-right" style="font-size: 11px; width: 140px;">Loan Balance</th>
-                <th class="text-right" style="font-size: 11px; width: 140px;">Total Balance</th>
+                <th class="text-left" style="font-size: 11px;">Particulars</th>
+                <th class="text-right" style="font-size: 11px; width: 180px;">Amount</th>
             </tr>
         </thead>
         <tbody>
-            <tr class="font-bold">
-                <td>{{ $topSheetData['close_month_year']['label'] }}</td>
+            <tr>
+                <td style="font-weight: 600;">Capital Balance</td>
                 <td class="text-right">{{ number_format($topSheetData['close_month_year']['capital_balance'] ?? $topSheetData['close_month_year']['amount'], 2) }}</td>
+            </tr>
+            <tr>
+                <td style="font-weight: 600;">Loan Balance</td>
                 <td class="text-right">{{ number_format($topSheetData['close_month_year']['loan_balance'] ?? 0, 2) }}</td>
+            </tr>
+            <tr class="font-bold" style="background-color: #f5f5f5;">
+                <td>Total Balance</td>
                 <td class="text-right">{{ number_format($topSheetData['close_month_year']['total_balance'] ?? $topSheetData['close_month_year']['amount'], 2) }}</td>
             </tr>
         </tbody>
