@@ -234,74 +234,59 @@ export default function CustomerDetailsBillShortSummary({
                     </Card>
                 )}
 
-                {report ? (
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardHeader className="border-b dark:border-gray-700">
-                            <CardTitle className="text-[16px] font-bold dark:text-white">Customer Details</CardTitle>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-[13px]">
-                                <div className="space-y-1">
-                                    <div><span className="font-semibold dark:text-gray-300">Customer:</span> <span className="dark:text-white">{report.customer.name}</span></div>
-                                    <div><span className="font-semibold dark:text-gray-300">Mobile:</span> <span className="dark:text-white">{report.customer.mobile || '-'}</span></div>
-                                    <div><span className="font-semibold dark:text-gray-300">Address:</span> <span className="dark:text-white">{report.customer.address || '-'}</span></div>
-                                </div>
-                                <div className="space-y-1 md:text-right">
-                                    <div><span className="font-semibold dark:text-gray-300">Period:</span> <span className="dark:text-white">{report.period.formatted}</span></div>
-                                    {report.selected_vehicle && (
-                                        <div><span className="font-semibold dark:text-gray-300">Vehicle:</span> <span className="dark:text-white">{report.selected_vehicle.vehicle_number}</span></div>
-                                    )}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {/* Standard Clean ERP Product Summary Table */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                            <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SN</th>
-                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product Name</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Sales Price</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {report.product_summary.length > 0 ? (
-                                            report.product_summary.map((item) => (
-                                                <tr key={item.sn} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                    <td className="p-2 text-center text-[13px] dark:text-gray-300">{item.sn}</td>
-                                                    <td className="p-2 text-[13px] font-medium dark:text-white">{item.product_name}</td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan={5} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
-                                                    No records found for the selected period
-                                                </td>
+                <div className="space-y-6">
+                    {report && report.product_summary ? (
+                        <Card className="dark:border-gray-700 dark:bg-gray-800">
+                            <CardContent className="p-0">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                                <th className="p-2 text-center text-[13px] font-medium dark:text-gray-300 w-12">SL</th>
+                                                <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Product Name</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Sales Price</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Quantity</th>
+                                                <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                             </tr>
-                                        )}
-                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                            <td colSpan={3} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{report.total_quantity.toFixed(2)}</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{report.total.toFixed(2)}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardContent>
-                            <p className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
-                                {customerId ? 'No records found' : 'Please select a customer to view short summary bill'}
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
+                                        </thead>
+                                        <tbody>
+                                            {report.product_summary.length > 0 ? (
+                                                report.product_summary.map((item, index) => (
+                                                    <tr key={index} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                                        <td className="p-2 text-center text-[13px] dark:text-gray-300">{item.sn || index + 1}</td>
+                                                        <td className="p-2 text-[13px] font-medium dark:text-white">{item.product_name}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={5} className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
+                                                        No records found for the selected period
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
+                                                <td colSpan={3} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-white">{report.total_quantity.toFixed(2)}</td>
+                                                <td className="p-2 text-right text-[13px] dark:text-white">{report.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <Card className="dark:border-gray-700 dark:bg-gray-800">
+                            <CardContent>
+                                <p className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400">
+                                    {customerId ? 'No records found' : 'Please select a customer to view short summary bill'}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             </div>
         </AppLayout>
     );
