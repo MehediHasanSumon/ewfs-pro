@@ -30,6 +30,9 @@ interface BalanceSheetData {
     top_sheet_data?: {
         close_month_year: {
             label: string;
+            capital_balance?: number;
+            loan_balance?: number;
+            total_balance?: number;
             amount: number;
         };
         top_sheet: {
@@ -102,6 +105,9 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
     const topSheetData = data.top_sheet_data || {
         close_month_year: {
             label: `Total Balance -- 31-12- ${new Date().getFullYear() - 1}`,
+            capital_balance: 12174977.0,
+            loan_balance: 0.0,
+            total_balance: 12174977.0,
             amount: 12174977.0,
         },
         top_sheet: {
@@ -224,31 +230,43 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                     </Card>
                 )}
 
-                {/* 1. Top Section: Close Month And Year Summary Card */}
+                {/* 1. Top Section: Capital & Loan Balance Table Card */}
                 <Card className="dark:border-gray-700 dark:bg-gray-800 shadow-sm">
-                    <CardContent className="p-5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-4">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
-                                    <Calendar className="h-6 w-6" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                        Close Month And Year
-                                    </p>
-                                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-white">
-                                        {topSheetData.close_month_year.label}
-                                    </h2>
-                                </div>
-                            </div>
-                            <div className="flex flex-col sm:items-end">
-                                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                    Closing Amount
-                                </span>
-                                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
-                                    {formatCurrency(topSheetData.close_month_year.amount)}
-                                </div>
-                            </div>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                        <th className="p-3 text-left text-[13px] font-bold dark:text-gray-200">Close Month And Year</th>
+                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
+                                            Capital Balance
+                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Opening Balance + Investment</span>
+                                        </th>
+                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
+                                            Loan Balance
+                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Loan Received</span>
+                                        </th>
+                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200">
+                                            Total Balance
+                                            <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">Total Opening Fund</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 text-[13px] font-medium">
+                                        <td className="p-3 dark:text-white font-semibold">{topSheetData.close_month_year.label}</td>
+                                        <td className="p-3 text-right dark:text-white font-semibold">
+                                            {formatCurrency(topSheetData.close_month_year.capital_balance ?? topSheetData.close_month_year.amount)}
+                                        </td>
+                                        <td className="p-3 text-right dark:text-white font-semibold">
+                                            {formatCurrency(topSheetData.close_month_year.loan_balance ?? 0)}
+                                        </td>
+                                        <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-bold text-[14px]">
+                                            {formatCurrency(topSheetData.close_month_year.total_balance ?? topSheetData.close_month_year.amount)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </CardContent>
                 </Card>
