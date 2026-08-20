@@ -60,17 +60,12 @@ class FinancialReportService
 
         $monthActivity = $this->monthlyProductSalesAndPurchases((int) $year);
         $monthExpenses = $this->monthlyOfficeExpenses((int) $year);
+        $monthOwnerPayments = $this->monthlyOwnerPayments((int) $year);
 
         $monthNames = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
             9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
-        ];
-
-        $mockCashPaymentMd = [
-            1 => 110000.00, 2 => 325000.00, 3 => 1500000.00, 4 => 35000.00,
-            5 => 130000.00, 6 => 147000.00, 7 => 185000.00, 8 => 0.00,
-            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
         ];
 
         $monthlySheets = [];
@@ -86,9 +81,9 @@ class FinancialReportService
 
             $grossProfit = $totalMonthSale - $monthPurchase;
             $officeExpense = (float) ($monthExpenses->get($m)?->total_expense ?? 0);
-            $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
+            $ownerPayment = (float) ($monthOwnerPayments->get($m)?->total_payment ?? 0);
 
-            $netBalance = $grossProfit - $officeExpense - $cashPaymentMd;
+            $netBalance = $grossProfit - $officeExpense - $ownerPayment;
             $totalNetBalance += $netBalance;
 
             $monthlySheets[] = [
@@ -96,7 +91,7 @@ class FinancialReportService
                 'opening_balance' => 0.00,
                 'gross_profit' => $grossProfit,
                 'office_expense' => $officeExpense,
-                'cash_payment_md' => $cashPaymentMd,
+                'cash_payment_md' => $ownerPayment,
                 'net_balance' => $netBalance,
             ];
         }
@@ -314,38 +309,64 @@ class FinancialReportService
         $yearEnd = sprintf('%04d-12-31', $year);
 
         return DB::table('vouchers as v')
-            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
-            ->join('voucher_categories as vc', 'vc.id', '=', 'vtt.voucher_category_id')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', function ($join) {
+                $join->on('vc.id', '=', 'v.voucher_category_id')
+                    ->orOn('vc.id', '=', 'vtt.voucher_category_id');
+            })
             ->join('voucher_lines as vl', function ($join) {
                 $join->on('vl.voucher_id', '=', 'v.id')
                     ->where('vl.entry_side', 'debit');
             })
             ->where('v.status', 'posted')
+            ->whereIn('v.voucher_type', ['payment', 'office_payment'])
             ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
             ->where(function ($query) {
+                // 1. Operating category: all payment transaction types
                 $query->where(function ($q) {
-                    $q->where(function ($cat) {
-                        $cat->where('vc.code', 'VC004')
-                            ->orWhere('vc.name', 'Operating');
-                    })
-                    ->where(function ($vType) {
-                        $vType->whereIn('v.voucher_type', ['payment', 'office_payment'])
-                            ->orWhereIn('vtt.voucher_type', ['payment', 'office_payment']);
-                    });
+                    $q->where('vc.code', 'VC004')
+                        ->orWhere('vc.name', 'Operating')
+                        ->orWhere('v.voucher_category_id', 4);
                 })
+                // 2. Employee category: Monthly Salary (1001) & Employee Bonus (1004)
                 ->orWhere(function ($q) {
                     $q->where(function ($cat) {
                         $cat->where('vc.code', 'VC002')
-                            ->orWhere('vc.name', 'Employee');
+                            ->orWhere('vc.name', 'Employee')
+                            ->orWhere('v.voucher_category_id', 2);
                     })
                     ->where(function ($type) {
                         $type->whereIn('vtt.code', ['1001', '1004'])
-                            ->orWhereIn('vtt.name', ['Monthly Salary', 'Employee Bonus']);
+                            ->orWhereIn('vtt.name', ['Monthly Salary', 'Employee Bonus', 'Salary Payment', 'Bonus']);
                     });
                 });
             })
             ->groupByRaw('MONTH(v.voucher_date)')
             ->selectRaw('MONTH(v.voucher_date) as month_num, SUM(vl.amount) as total_expense')
+            ->get()
+            ->keyBy('month_num');
+    }
+
+    public function monthlyOwnerPayments(int $year): Collection
+    {
+        $yearStart = sprintf('%04d-01-01', $year);
+        $yearEnd = sprintf('%04d-12-31', $year);
+
+        return DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'payment')
+            ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
+            ->where(function ($q) {
+                $q->where('vtt.code', '1071')
+                    ->orWhere('vtt.name', 'Owner Withdrawal');
+            })
+            ->groupByRaw('MONTH(v.voucher_date)')
+            ->selectRaw('MONTH(v.voucher_date) as month_num, SUM(vl.amount) as total_payment')
             ->get()
             ->keyBy('month_num');
     }
