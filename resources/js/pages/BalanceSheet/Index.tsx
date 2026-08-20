@@ -285,7 +285,6 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Office Expense</th>
                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Cash Payment (Md Sir)</th>
                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Net Balance</th>
-                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300 w-24">Remark</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -298,19 +297,16 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                                 <td className={`p-2 text-right text-[13px] font-semibold ${row.net_balance < 0 ? 'text-red-500 dark:text-red-400' : 'dark:text-white'}`}>
                                                     {formatCurrency(row.net_balance)}
                                                 </td>
-                                                <td className="p-2 text-[13px] text-gray-500 dark:text-gray-400">{row.remark || '-'}</td>
                                             </tr>
                                         ))}
                                         {/* Total Rows */}
                                         <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
                                             <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Net Balance:</td>
                                             <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_net_balance)}</td>
-                                            <td></td>
                                         </tr>
                                         <tr className="font-bold bg-gray-100 dark:bg-gray-750 dark:border-gray-700">
                                             <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Profit:</td>
                                             <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_profit)}</td>
-                                            <td></td>
                                         </tr>
                                     </tbody>
                                 </table>
