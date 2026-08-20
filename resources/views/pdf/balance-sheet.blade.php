@@ -138,13 +138,14 @@
                 <table style="margin: 0;">
                     <thead>
                         <tr>
-                            <th colspan="5" class="text-center" style="font-size: 11px;">Top Sheet</th>
+                            <th colspan="6" class="text-center" style="font-size: 11px;">Top Sheet</th>
                         </tr>
                         <tr>
-                            <th colspan="5" class="text-center" style="font-weight: normal; font-size: 10px;">Month wise balance sheet</th>
+                            <th colspan="6" class="text-center" style="font-weight: normal; font-size: 10px;">Month wise balance sheet</th>
                         </tr>
                         <tr>
                             <th>Month</th>
+                            <th class="text-right">Opening Balance</th>
                             <th class="text-right">Gross Profit</th>
                             <th class="text-right">Office Expence</th>
                             <th class="text-right">Cash Pement (Md Sir)</th>
@@ -155,6 +156,7 @@
                         @foreach($topSheetData['top_sheet']['months'] as $row)
                         <tr>
                             <td class="font-bold">{{ $row['month'] }}</td>
+                            <td class="text-right">{{ isset($row['opening_balance']) && $row['opening_balance'] ? number_format($row['opening_balance'], 2) : '-' }}</td>
                             <td class="text-right">{{ $row['gross_profit'] ? number_format($row['gross_profit'], 2) : '-' }}</td>
                             <td class="text-right">{{ $row['office_expense'] ? number_format($row['office_expense'], 2) : '-' }}</td>
                             <td class="text-right">{{ $row['cash_payment_md'] ? number_format($row['cash_payment_md'], 2) : '-' }}</td>
@@ -170,11 +172,11 @@
                         </tr>
                         @endforeach
                         <tr class="font-bold" style="background-color: #f9f9f9;">
-                            <td colspan="4" class="text-right">Total Net Balance</td>
+                            <td colspan="5" class="text-right">Total Net Balance</td>
                             <td class="text-right">{{ number_format($topSheetData['top_sheet']['total_net_balance'], 2) }}</td>
                         </tr>
                         <tr class="font-bold" style="background-color: #f5f5f5;">
-                            <td colspan="4" class="text-right">Total Profit</td>
+                            <td colspan="5" class="text-right">Total Profit</td>
                             <td class="text-right">{{ number_format($topSheetData['top_sheet']['total_profit'], 2) }}</td>
                         </tr>
                     </tbody>

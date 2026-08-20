@@ -13,11 +13,12 @@ import { useState } from 'react';
 
 interface MonthlySheetRow {
     month: string;
+    opening_balance?: number;
     gross_profit: number;
     office_expense: number;
     cash_payment_md: number;
     net_balance: number;
-    remark: string;
+    remark?: string;
 }
 
 interface CashHistoryItem {
@@ -124,99 +125,99 @@ export default function BalanceSheet({
             months: [
                 {
                     month: 'January',
+                    opening_balance: 0.0,
                     gross_profit: 2651445.0,
                     office_expense: 1425985.0,
                     cash_payment_md: 110000.0,
                     net_balance: 1459479.0,
-                    remark: '',
                 },
                 {
                     month: 'February',
+                    opening_balance: 0.0,
                     gross_profit: 1897694.0,
                     office_expense: 1203797.0,
                     cash_payment_md: 325000.0,
                     net_balance: 725519.0,
-                    remark: '',
                 },
                 {
                     month: 'March',
+                    opening_balance: 0.0,
                     gross_profit: 2572568.0,
                     office_expense: 1624320.0,
                     cash_payment_md: 1500000.0,
                     net_balance: -322003.0,
-                    remark: '',
                 },
                 {
                     month: 'April',
+                    opening_balance: 0.0,
                     gross_profit: 2141998.0,
                     office_expense: 1577281.0,
                     cash_payment_md: 35000.0,
                     net_balance: 529717.0,
-                    remark: '',
                 },
                 {
                     month: 'May',
+                    opening_balance: 0.0,
                     gross_profit: 2496907.99,
                     office_expense: 1420390.0,
                     cash_payment_md: 130000.0,
                     net_balance: 946517.99,
-                    remark: '',
                 },
                 {
                     month: 'June',
+                    opening_balance: 0.0,
                     gross_profit: 2854843.0,
                     office_expense: 1454710.0,
                     cash_payment_md: 147000.0,
                     net_balance: 1425523.0,
-                    remark: '',
                 },
                 {
                     month: 'July',
+                    opening_balance: 0.0,
                     gross_profit: 2893048.0,
                     office_expense: 1300090.0,
                     cash_payment_md: 185000.0,
                     net_balance: 1607958.0,
-                    remark: '',
                 },
                 {
                     month: 'August',
+                    opening_balance: 0.0,
                     gross_profit: 0.0,
                     office_expense: 0.0,
                     cash_payment_md: 0.0,
                     net_balance: 0.0,
-                    remark: '',
                 },
                 {
                     month: 'September',
+                    opening_balance: 0.0,
                     gross_profit: 0.0,
                     office_expense: 0.0,
                     cash_payment_md: 0.0,
                     net_balance: 0.0,
-                    remark: '',
                 },
                 {
                     month: 'October',
+                    opening_balance: 0.0,
                     gross_profit: 0.0,
                     office_expense: 0.0,
                     cash_payment_md: 0.0,
                     net_balance: 0.0,
-                    remark: '',
                 },
                 {
                     month: 'November',
+                    opening_balance: 0.0,
                     gross_profit: 0.0,
                     office_expense: 0.0,
                     cash_payment_md: 0.0,
                     net_balance: 0.0,
-                    remark: '',
                 },
                 {
                     month: 'December',
+                    opening_balance: 0.0,
                     gross_profit: 0.0,
                     office_expense: 0.0,
                     cash_payment_md: 0.0,
                     net_balance: 0.0,
-                    remark: '',
                 },
             ],
             total_net_balance: 6372710.99,
@@ -429,6 +430,9 @@ export default function BalanceSheet({
                                                 Month
                                             </th>
                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Opening Balance
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
                                                 Gross Profit
                                             </th>
                                             <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
@@ -451,6 +455,11 @@ export default function BalanceSheet({
                                                 >
                                                     <td className="p-2 text-[13px] font-medium dark:text-white">
                                                         {row.month}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {formatCurrency(
+                                                            row.opening_balance,
+                                                        )}
                                                     </td>
                                                     <td className="p-2 text-right text-[13px] dark:text-gray-300">
                                                         {formatCurrency(
@@ -480,7 +489,7 @@ export default function BalanceSheet({
                                         {/* Total Rows */}
                                         <tr className="border-b bg-gray-50 font-bold dark:border-gray-700 dark:bg-gray-700">
                                             <td
-                                                colSpan={4}
+                                                colSpan={5}
                                                 className="p-2 text-right text-[13px] dark:text-white"
                                             >
                                                 Total Net Balance:
@@ -494,7 +503,7 @@ export default function BalanceSheet({
                                         </tr>
                                         <tr className="dark:bg-gray-750 bg-gray-100 font-bold dark:border-gray-700">
                                             <td
-                                                colSpan={4}
+                                                colSpan={5}
                                                 className="p-2 text-right text-[13px] dark:text-white"
                                             >
                                                 Total Profit:

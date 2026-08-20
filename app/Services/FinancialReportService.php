@@ -59,18 +59,18 @@ class FinancialReportService
         $prevYear = (int)$year - 1;
 
         $monthlySheets = [
-            ['month' => 'January', 'gross_profit' => 2651445.00, 'office_expense' => 1425985.00, 'cash_payment_md' => 110000.00, 'net_balance' => 1459479.00, 'remark' => ''],
-            ['month' => 'February', 'gross_profit' => 1897694.00, 'office_expense' => 1203797.00, 'cash_payment_md' => 325000.00, 'net_balance' => 725519.00, 'remark' => ''],
-            ['month' => 'March', 'gross_profit' => 2572568.00, 'office_expense' => 1624320.00, 'cash_payment_md' => 1500000.00, 'net_balance' => -322003.00, 'remark' => ''],
-            ['month' => 'April', 'gross_profit' => 2141998.00, 'office_expense' => 1577281.00, 'cash_payment_md' => 35000.00, 'net_balance' => 529717.00, 'remark' => ''],
-            ['month' => 'May', 'gross_profit' => 2496907.99, 'office_expense' => 1420390.00, 'cash_payment_md' => 130000.00, 'net_balance' => 946517.99, 'remark' => ''],
-            ['month' => 'June', 'gross_profit' => 2854843.00, 'office_expense' => 1454710.00, 'cash_payment_md' => 147000.00, 'net_balance' => 1425523.00, 'remark' => ''],
-            ['month' => 'July', 'gross_profit' => 2893048.00, 'office_expense' => 1300090.00, 'cash_payment_md' => 185000.00, 'net_balance' => 1607958.00, 'remark' => ''],
-            ['month' => 'August', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
-            ['month' => 'September', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
-            ['month' => 'October', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
-            ['month' => 'November', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
-            ['month' => 'December', 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00, 'remark' => ''],
+            ['month' => 'January', 'opening_balance' => 0.00, 'gross_profit' => 2651445.00, 'office_expense' => 1425985.00, 'cash_payment_md' => 110000.00, 'net_balance' => 1459479.00],
+            ['month' => 'February', 'opening_balance' => 0.00, 'gross_profit' => 1897694.00, 'office_expense' => 1203797.00, 'cash_payment_md' => 325000.00, 'net_balance' => 725519.00],
+            ['month' => 'March', 'opening_balance' => 0.00, 'gross_profit' => 2572568.00, 'office_expense' => 1624320.00, 'cash_payment_md' => 1500000.00, 'net_balance' => -322003.00],
+            ['month' => 'April', 'opening_balance' => 0.00, 'gross_profit' => 2141998.00, 'office_expense' => 1577281.00, 'cash_payment_md' => 35000.00, 'net_balance' => 529717.00],
+            ['month' => 'May', 'opening_balance' => 0.00, 'gross_profit' => 2496907.99, 'office_expense' => 1420390.00, 'cash_payment_md' => 130000.00, 'net_balance' => 946517.99],
+            ['month' => 'June', 'opening_balance' => 0.00, 'gross_profit' => 2854843.00, 'office_expense' => 1454710.00, 'cash_payment_md' => 147000.00, 'net_balance' => 1425523.00],
+            ['month' => 'July', 'opening_balance' => 0.00, 'gross_profit' => 2893048.00, 'office_expense' => 1300090.00, 'cash_payment_md' => 185000.00, 'net_balance' => 1607958.00],
+            ['month' => 'August', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
+            ['month' => 'September', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
+            ['month' => 'October', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
+            ['month' => 'November', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
+            ['month' => 'December', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
         ];
 
         $totalNetBalance = 6372710.99;
