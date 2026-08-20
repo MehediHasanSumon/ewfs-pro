@@ -58,23 +58,70 @@ class FinancialReportService
         $year = date('Y', strtotime($startDate));
         $prevYear = (int)$year - 1;
 
-        $monthlySheets = [
-            ['month' => 'January', 'opening_balance' => 0.00, 'gross_profit' => 2651445.00, 'office_expense' => 1425985.00, 'cash_payment_md' => 110000.00, 'net_balance' => 1459479.00],
-            ['month' => 'February', 'opening_balance' => 0.00, 'gross_profit' => 1897694.00, 'office_expense' => 1203797.00, 'cash_payment_md' => 325000.00, 'net_balance' => 725519.00],
-            ['month' => 'March', 'opening_balance' => 0.00, 'gross_profit' => 2572568.00, 'office_expense' => 1624320.00, 'cash_payment_md' => 1500000.00, 'net_balance' => -322003.00],
-            ['month' => 'April', 'opening_balance' => 0.00, 'gross_profit' => 2141998.00, 'office_expense' => 1577281.00, 'cash_payment_md' => 35000.00, 'net_balance' => 529717.00],
-            ['month' => 'May', 'opening_balance' => 0.00, 'gross_profit' => 2496907.99, 'office_expense' => 1420390.00, 'cash_payment_md' => 130000.00, 'net_balance' => 946517.99],
-            ['month' => 'June', 'opening_balance' => 0.00, 'gross_profit' => 2854843.00, 'office_expense' => 1454710.00, 'cash_payment_md' => 147000.00, 'net_balance' => 1425523.00],
-            ['month' => 'July', 'opening_balance' => 0.00, 'gross_profit' => 2893048.00, 'office_expense' => 1300090.00, 'cash_payment_md' => 185000.00, 'net_balance' => 1607958.00],
-            ['month' => 'August', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
-            ['month' => 'September', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
-            ['month' => 'October', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
-            ['month' => 'November', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
-            ['month' => 'December', 'opening_balance' => 0.00, 'gross_profit' => 0.00, 'office_expense' => 0.00, 'cash_payment_md' => 0.00, 'net_balance' => 0.00],
+        $monthActivity = $this->monthlyProductSalesAndPurchases((int) $year);
+        $hasSalesOrPurchases = $monthActivity['regular_sales']->isNotEmpty()
+            || $monthActivity['credit_sales']->isNotEmpty()
+            || $monthActivity['purchases']->isNotEmpty();
+
+        $monthNames = [
+            1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+            5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+            9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
         ];
 
-        $totalNetBalance = 6372710.99;
-        $totalProfit = 6372710.99;
+        $mockProfits = [
+            1 => 2651445.00, 2 => 1897694.00, 3 => 2572568.00, 4 => 2141998.00,
+            5 => 2496907.99, 6 => 2854843.00, 7 => 2893048.00, 8 => 0.00,
+            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
+        ];
+
+        $mockOfficeExpenses = [
+            1 => 1425985.00, 2 => 1203797.00, 3 => 1624320.00, 4 => 1577281.00,
+            5 => 1420390.00, 6 => 1454710.00, 7 => 1300090.00, 8 => 0.00,
+            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
+        ];
+
+        $mockCashPaymentMd = [
+            1 => 110000.00, 2 => 325000.00, 3 => 1500000.00, 4 => 35000.00,
+            5 => 130000.00, 6 => 147000.00, 7 => 185000.00, 8 => 0.00,
+            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
+        ];
+
+        $monthlySheets = [];
+        $totalNetBalance = 0.0;
+
+        for ($m = 1; $m <= 12; $m++) {
+            $monthName = $monthNames[$m];
+            $regularSale = (float) ($monthActivity['regular_sales']->get($m)?->total_sales ?? 0);
+            $creditSale = (float) ($monthActivity['credit_sales']->get($m)?->total_sales ?? 0);
+            $totalMonthSale = $regularSale + $creditSale;
+
+            $monthPurchase = (float) ($monthActivity['purchases']->get($m)?->total_purchases ?? 0);
+
+            if ($hasSalesOrPurchases) {
+                $grossProfit = $totalMonthSale - $monthPurchase;
+                $officeExpense = $mockOfficeExpenses[$m] ?? 0.00;
+                $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
+            } else {
+                $grossProfit = $mockProfits[$m] ?? 0.00;
+                $officeExpense = $mockOfficeExpenses[$m] ?? 0.00;
+                $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
+            }
+
+            $netBalance = $grossProfit - $officeExpense - $cashPaymentMd;
+            $totalNetBalance += $netBalance;
+
+            $monthlySheets[] = [
+                'month' => $monthName,
+                'opening_balance' => 0.00,
+                'gross_profit' => $grossProfit,
+                'office_expense' => $officeExpense,
+                'cash_payment_md' => $cashPaymentMd,
+                'net_balance' => $netBalance,
+            ];
+        }
+
+        $totalProfit = $totalNetBalance;
 
         $cashHistory = [
             'items' => [
@@ -227,6 +274,58 @@ class FinancialReportService
     public function financeOpeningBalance(?string $endDate = null): float
     {
         return $this->capitalBalance($endDate) + $this->loanBalance($endDate);
+    }
+
+    public function monthlyProductSalesAndPurchases(int $year): array
+    {
+        $yearStart = sprintf('%04d-01-01', $year);
+        $yearEnd = sprintf('%04d-12-31', $year);
+
+        $regularSales = DB::table('sale_items as si')
+            ->join('sales as s', 's.id', '=', 'si.sale_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 's.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->whereIn('s.status', ['posted', 'partially_paid', 'paid'])
+            ->whereBetween('s.sale_date', [$yearStart, $yearEnd])
+            ->groupByRaw('MONTH(s.sale_date)')
+            ->selectRaw('MONTH(s.sale_date) as month_num, SUM(si.line_total) as total_sales, SUM(si.quantity * si.unit_cost) as total_cost')
+            ->get()
+            ->keyBy('month_num');
+
+        $creditSales = DB::table('credit_sale_items as csi')
+            ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
+            ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'csc.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->whereIn('cs.status', ['posted', 'partially_paid', 'paid'])
+            ->whereBetween('cs.sale_date', [$yearStart, $yearEnd])
+            ->groupByRaw('MONTH(cs.sale_date)')
+            ->selectRaw('MONTH(cs.sale_date) as month_num, SUM(csi.line_total) as total_sales, SUM(csi.quantity * csi.unit_cost) as total_cost')
+            ->get()
+            ->keyBy('month_num');
+
+        $purchases = DB::table('purchase_items as pi')
+            ->join('purchases as p', 'p.id', '=', 'pi.purchase_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'p.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->whereIn('p.status', ['posted', 'partially_paid', 'paid'])
+            ->whereBetween('p.purchase_date', [$yearStart, $yearEnd])
+            ->groupByRaw('MONTH(p.purchase_date)')
+            ->selectRaw('MONTH(p.purchase_date) as month_num, SUM(pi.line_total) as total_purchases')
+            ->get()
+            ->keyBy('month_num');
+
+        return [
+            'regular_sales' => $regularSales,
+            'credit_sales' => $creditSales,
+            'purchases' => $purchases,
+        ];
     }
 
     public function positionSummary(string $asOfDate): array
