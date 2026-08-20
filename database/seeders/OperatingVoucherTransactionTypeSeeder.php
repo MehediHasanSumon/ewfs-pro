@@ -23,7 +23,6 @@ class OperatingVoucherTransactionTypeSeeder extends Seeder
             }
 
             $types = [
-                // Payment Types
                 [
                     'code' => '2002',
                     'name' => 'Mobile Bill',

@@ -60,9 +60,14 @@ class FinancialReportService
         $year = date('Y', strtotime($startDate));
         $prevYear = (int)$year - 1;
 
+        $monthFinanceReceipts = $this->monthlyFinanceReceipts((int) $year);
         $monthGrossProfits = $this->monthlyGrossProfits((int) $year);
         $monthExpenses = $this->monthlyOfficeExpenses((int) $year);
         $monthOwnerPayments = $this->monthlyOwnerPayments((int) $year);
+
+        $priorStatus = $this->priorNetBalance((int) $year);
+        $hasStarted = $priorStatus['has_started'];
+        $runningNetBalance = $priorStatus['net_balance'];
 
         $monthNames = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
@@ -71,21 +76,47 @@ class FinancialReportService
         ];
 
         $monthlySheets = [];
-        $totalNetBalance = 0.0;
+        $totalProfit = 0.0;
 
         for ($m = 1; $m <= 12; $m++) {
             $monthName = $monthNames[$m];
+            $currentFinanceReceipts = (float) ($monthFinanceReceipts->get($m)?->total_receipts ?? 0.0);
             $monthData = $monthGrossProfits->get($m);
             $grossProfit = (float) ($monthData?->gross_profit ?? 0.0);
             $officeExpense = (float) ($monthExpenses->get($m)?->total_expense ?? 0.0);
             $ownerPayment = (float) ($monthOwnerPayments->get($m)?->total_payment ?? 0.0);
 
-            $netBalance = $grossProfit - $officeExpense - $ownerPayment;
-            $totalNetBalance += $netBalance;
+            $hasActivityInMonth = (
+                $currentFinanceReceipts > 0
+                || abs($grossProfit) > 0.000001
+                || $officeExpense > 0
+                || $ownerPayment > 0
+            );
+
+            if (! $hasStarted) {
+                if ($hasActivityInMonth) {
+                    $hasStarted = true;
+                    $openingBalance = $currentFinanceReceipts;
+                    $netBalance = $openingBalance + $grossProfit - $officeExpense - $ownerPayment;
+                    $runningNetBalance = $netBalance;
+                } else {
+                    $openingBalance = 0.00;
+                    $netBalance = 0.00;
+                }
+            } else {
+                $openingBalance = $runningNetBalance + $currentFinanceReceipts;
+                $netBalance = $openingBalance + $grossProfit - $officeExpense - $ownerPayment;
+                $runningNetBalance = $netBalance;
+            }
+
+            if ($hasStarted) {
+                $monthlyOperationalProfit = $grossProfit - $officeExpense - $ownerPayment;
+                $totalProfit += $monthlyOperationalProfit;
+            }
 
             $monthlySheets[] = [
                 'month' => $monthName,
-                'opening_balance' => 0.00,
+                'opening_balance' => $openingBalance,
                 'gross_profit' => $grossProfit,
                 'office_expense' => $officeExpense,
                 'cash_payment_md' => $ownerPayment,
@@ -93,7 +124,7 @@ class FinancialReportService
             ];
         }
 
-        $totalProfit = $totalNetBalance;
+        $totalNetBalance = $hasStarted ? $runningNetBalance : 0.0;
 
         $cashHistory = [
             'items' => [
@@ -246,6 +277,185 @@ class FinancialReportService
     public function financeOpeningBalance(?string $endDate = null): float
     {
         return $this->capitalBalance($endDate) + $this->loanBalance($endDate);
+    }
+
+    public function monthlyFinanceReceipts(int $year): Collection
+    {
+        $yearStart = sprintf('%04d-01-01', $year);
+        $yearEnd = sprintf('%04d-12-31', $year);
+
+        $financeCategoryCode = VoucherCategoryHelper::financeCode();
+        $openingBalanceCode = VoucherTransactionTypeHelper::getCode('finance', 'opening_balance');
+        $investmentCode = VoucherTransactionTypeHelper::getCode('finance', 'investment');
+        $loanReceivedCode = VoucherTransactionTypeHelper::getCode('finance', 'loan_received');
+
+        $qualifyingCodes = [$openingBalanceCode, $investmentCode, $loanReceivedCode];
+
+        return DB::table('vouchers as v')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'receipt')
+            ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
+            ->where(function ($q) use ($qualifyingCodes, $financeCategoryCode) {
+                $q->whereIn('vtt.code', $qualifyingCodes)
+                    ->orWhere(function ($sub) use ($financeCategoryCode) {
+                        $sub->where(function ($c) use ($financeCategoryCode) {
+                            $c->where('vc.code', $financeCategoryCode)
+                                ->orWhere('vc.name', 'Finance');
+                        })
+                        ->whereIn('vtt.name', ['Opening Balance', 'Investment', 'Loan Received']);
+                    });
+            })
+            ->groupByRaw('MONTH(v.voucher_date)')
+            ->selectRaw('MONTH(v.voucher_date) as month_num, SUM(vl.amount) as total_receipts')
+            ->get()
+            ->keyBy('month_num');
+    }
+
+    public function priorNetBalance(int $year): array
+    {
+        $yearStart = sprintf('%04d-01-01', $year);
+
+        $financeCategoryCode = VoucherCategoryHelper::financeCode();
+        $openingBalanceCode = VoucherTransactionTypeHelper::getCode('finance', 'opening_balance');
+        $investmentCode = VoucherTransactionTypeHelper::getCode('finance', 'investment');
+        $loanReceivedCode = VoucherTransactionTypeHelper::getCode('finance', 'loan_received');
+
+        $qualifyingCodes = [$openingBalanceCode, $investmentCode, $loanReceivedCode];
+
+        $priorFinanceReceipts = (float) DB::table('vouchers as v')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'receipt')
+            ->whereDate('v.voucher_date', '<', $yearStart)
+            ->where(function ($q) use ($qualifyingCodes, $financeCategoryCode) {
+                $q->whereIn('vtt.code', $qualifyingCodes)
+                    ->orWhere(function ($sub) use ($financeCategoryCode) {
+                        $sub->where(function ($c) use ($financeCategoryCode) {
+                            $c->where('vc.code', $financeCategoryCode)
+                                ->orWhere('vc.name', 'Finance');
+                        })
+                        ->whereIn('vtt.name', ['Opening Balance', 'Investment', 'Loan Received']);
+                    });
+            })
+            ->sum('vl.amount');
+
+        // Prior Regular Sales GP
+        $priorRegularGP = (float) DB::table('sale_items as si')
+            ->join('sales as s', 's.id', '=', 'si.sale_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 's.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->whereIn('s.status', ['posted', 'partially_paid', 'paid'])
+            ->whereDate('s.sale_date', '<', $yearStart)
+            ->selectRaw('COALESCE(SUM(si.line_total - (si.quantity * si.unit_cost)), 0) as gp')
+            ->value('gp');
+
+        // Prior Credit Sales GP
+        $priorCreditGP = (float) DB::table('credit_sale_items as csi')
+            ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
+            ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'csc.journal_entry_id')
+                    ->where('je.status', 'posted');
+            })
+            ->whereIn('cs.status', ['posted', 'partially_paid', 'paid'])
+            ->whereDate('cs.sale_date', '<', $yearStart)
+            ->selectRaw('COALESCE(SUM(csi.line_total - (csi.quantity * csi.unit_cost)), 0) as gp')
+            ->value('gp');
+
+        // Prior Office Expenses
+        $operatingCategoryCode = VoucherCategoryHelper::operatingCode();
+        $employeeCategoryCode = VoucherCategoryHelper::employeeCode();
+        $salaryCode = VoucherTransactionTypeHelper::getCode('employee', 'monthly_salary');
+        $bonusCode = VoucherTransactionTypeHelper::getCode('employee', 'employee_bonus');
+
+        $priorExpenses = (float) DB::table('vouchers as v')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->whereIn('v.voucher_type', ['payment', 'office_payment'])
+            ->whereDate('v.voucher_date', '<', $yearStart)
+            ->where(function ($query) use ($operatingCategoryCode, $employeeCategoryCode, $salaryCode, $bonusCode) {
+                $query->where(function ($q) use ($operatingCategoryCode) {
+                    $q->where(function ($cat) use ($operatingCategoryCode) {
+                        $cat->where('vc.code', $operatingCategoryCode)
+                            ->orWhere('vc.name', 'Operating');
+                    })
+                    ->where(function ($vType) {
+                        $vType->where('v.voucher_type', 'payment')
+                            ->orWhere('v.voucher_type', 'office_payment');
+                    });
+                })
+                ->orWhere(function ($q) use ($employeeCategoryCode, $salaryCode, $bonusCode) {
+                    $q->where(function ($cat) use ($employeeCategoryCode) {
+                        $cat->where('vc.code', $employeeCategoryCode)
+                            ->orWhere('vc.name', 'Employee');
+                    })
+                    ->where('v.voucher_type', 'payment')
+                    ->where(function ($type) use ($salaryCode, $bonusCode) {
+                        $type->whereIn('vtt.code', [$salaryCode, $bonusCode])
+                            ->orWhereIn('vtt.name', ['Monthly Salary', 'Employee Bonus', 'Salary Payment', 'Bonus']);
+                    });
+                });
+            })
+            ->sum('vl.amount');
+
+        // Prior Owner Payments
+        $ownerWithdrawalCode = VoucherTransactionTypeHelper::getCode('finance', 'owner_withdrawal');
+        $priorOwnerPayments = (float) DB::table('vouchers as v')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->where('v.voucher_type', 'payment')
+            ->whereDate('v.voucher_date', '<', $yearStart)
+            ->where(function ($q) use ($financeCategoryCode, $ownerWithdrawalCode) {
+                $q->where('vtt.code', $ownerWithdrawalCode)
+                    ->orWhere(function ($sub) use ($financeCategoryCode) {
+                        $sub->where(function ($c) use ($financeCategoryCode) {
+                            $c->where('vc.code', $financeCategoryCode)
+                                ->orWhere('vc.name', 'Finance');
+                        })
+                        ->where('vtt.name', 'Owner Withdrawal');
+                    });
+            })
+            ->sum('vl.amount');
+
+        $hasStarted = (
+            $priorFinanceReceipts > 0
+            || abs($priorRegularGP) > 0.000001
+            || abs($priorCreditGP) > 0.000001
+            || $priorExpenses > 0
+            || $priorOwnerPayments > 0
+        );
+
+        $netBalance = $hasStarted
+            ? ($priorFinanceReceipts + $priorRegularGP + $priorCreditGP - $priorExpenses - $priorOwnerPayments)
+            : 0.0;
+
+        return [
+            'has_started' => $hasStarted,
+            'net_balance' => $netBalance,
+        ];
     }
 
     public function monthlyGrossProfits(int $year): Collection
