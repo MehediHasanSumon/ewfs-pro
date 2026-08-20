@@ -8,12 +8,15 @@ class AccountHelper
 {
     public static function generateAccountNumber(): string
     {
-        $lastAccount = Account::orderBy('ac_number', 'desc')->first();
-        
-        if ($lastAccount && str_starts_with($lastAccount->ac_number, '1')) {
-            return str_pad((int)$lastAccount->ac_number + 1, 6, '0', STR_PAD_LEFT);
+        $maxNum = Account::query()
+            ->whereRaw("ac_number REGEXP '^[0-9]+$'")
+            ->selectRaw('MAX(CAST(ac_number AS UNSIGNED)) as max_ac')
+            ->value('max_ac');
+
+        if ($maxNum && $maxNum >= 100000) {
+            return (string) ($maxNum + 1);
         }
-        
+
         return '100001';
     }
 }
