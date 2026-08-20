@@ -172,6 +172,7 @@ $voucherTransactionTypes = [
         'monthly_salary' => ['code' => '1001', 'name' => 'Monthly Salary', 'voucher_type' => 'payment'],
         'salary_advance' => ['code' => '1002', 'name' => 'Salary Advance', 'voucher_type' => 'payment'],
         'personal_loan' => ['code' => '1003', 'name' => 'Personal Loan', 'voucher_type' => 'payment'],
+        'employee_bonus' => ['code' => '1004', 'name' => 'Employee Bonus', 'voucher_type' => 'payment'],
         'advance_return' => ['code' => '1008', 'name' => 'Advance Return', 'voucher_type' => 'receipt'],
         'loan_recovery' => ['code' => '1009', 'name' => 'Loan Recovery', 'voucher_type' => 'receipt'],
     ],
