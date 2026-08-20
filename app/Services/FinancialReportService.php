@@ -59,26 +59,12 @@ class FinancialReportService
         $prevYear = (int)$year - 1;
 
         $monthActivity = $this->monthlyProductSalesAndPurchases((int) $year);
-        $hasSalesOrPurchases = $monthActivity['regular_sales']->isNotEmpty()
-            || $monthActivity['credit_sales']->isNotEmpty()
-            || $monthActivity['purchases']->isNotEmpty();
+        $monthExpenses = $this->monthlyOfficeExpenses((int) $year);
 
         $monthNames = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
             9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
-        ];
-
-        $mockProfits = [
-            1 => 2651445.00, 2 => 1897694.00, 3 => 2572568.00, 4 => 2141998.00,
-            5 => 2496907.99, 6 => 2854843.00, 7 => 2893048.00, 8 => 0.00,
-            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
-        ];
-
-        $mockOfficeExpenses = [
-            1 => 1425985.00, 2 => 1203797.00, 3 => 1624320.00, 4 => 1577281.00,
-            5 => 1420390.00, 6 => 1454710.00, 7 => 1300090.00, 8 => 0.00,
-            9 => 0.00, 10 => 0.00, 11 => 0.00, 12 => 0.00,
         ];
 
         $mockCashPaymentMd = [
@@ -98,15 +84,9 @@ class FinancialReportService
 
             $monthPurchase = (float) ($monthActivity['purchases']->get($m)?->total_purchases ?? 0);
 
-            if ($hasSalesOrPurchases) {
-                $grossProfit = $totalMonthSale - $monthPurchase;
-                $officeExpense = $mockOfficeExpenses[$m] ?? 0.00;
-                $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
-            } else {
-                $grossProfit = $mockProfits[$m] ?? 0.00;
-                $officeExpense = $mockOfficeExpenses[$m] ?? 0.00;
-                $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
-            }
+            $grossProfit = $totalMonthSale - $monthPurchase;
+            $officeExpense = (float) ($monthExpenses->get($m)?->total_expense ?? 0);
+            $cashPaymentMd = $mockCashPaymentMd[$m] ?? 0.00;
 
             $netBalance = $grossProfit - $officeExpense - $cashPaymentMd;
             $totalNetBalance += $netBalance;
@@ -326,6 +306,48 @@ class FinancialReportService
             'credit_sales' => $creditSales,
             'purchases' => $purchases,
         ];
+    }
+
+    public function monthlyOfficeExpenses(int $year): Collection
+    {
+        $yearStart = sprintf('%04d-01-01', $year);
+        $yearEnd = sprintf('%04d-12-31', $year);
+
+        return DB::table('vouchers as v')
+            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->join('voucher_categories as vc', 'vc.id', '=', 'vtt.voucher_category_id')
+            ->join('voucher_lines as vl', function ($join) {
+                $join->on('vl.voucher_id', '=', 'v.id')
+                    ->where('vl.entry_side', 'debit');
+            })
+            ->where('v.status', 'posted')
+            ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
+            ->where(function ($query) {
+                $query->where(function ($q) {
+                    $q->where(function ($cat) {
+                        $cat->where('vc.code', 'VC004')
+                            ->orWhere('vc.name', 'Operating');
+                    })
+                    ->where(function ($vType) {
+                        $vType->whereIn('v.voucher_type', ['payment', 'office_payment'])
+                            ->orWhereIn('vtt.voucher_type', ['payment', 'office_payment']);
+                    });
+                })
+                ->orWhere(function ($q) {
+                    $q->where(function ($cat) {
+                        $cat->where('vc.code', 'VC002')
+                            ->orWhere('vc.name', 'Employee');
+                    })
+                    ->where(function ($type) {
+                        $type->whereIn('vtt.code', ['1001', '1004'])
+                            ->orWhereIn('vtt.name', ['Monthly Salary', 'Employee Bonus']);
+                    });
+                });
+            })
+            ->groupByRaw('MONTH(v.voucher_date)')
+            ->selectRaw('MONTH(v.voucher_date) as month_num, SUM(vl.amount) as total_expense')
+            ->get()
+            ->keyBy('month_num');
     }
 
     public function positionSummary(string $asOfDate): array
