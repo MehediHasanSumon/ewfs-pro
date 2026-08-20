@@ -144,20 +144,16 @@ class FinancialReportService
 
         $capitalBalance = $this->capitalBalance($endDate);
         $loanBalance = $this->loanBalance($endDate);
-        $hasVouchers = DB::table('vouchers as v')
-            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
-            ->where('v.status', 'posted')
-            ->whereIn('vtt.code', ['1072', '1073', '1074', '1075', '1076'])
-            ->exists();
 
-        $capitalAmount = $hasVouchers ? $capitalBalance : 12174977.00;
-        $loanAmount = $hasVouchers ? $loanBalance : 0.00;
+        $capitalAmount = $capitalBalance;
+        $loanAmount = $loanBalance;
         $totalBalanceAmount = $capitalAmount + $loanAmount;
 
         $investAmount = $totalBalanceAmount;
         $totalInvestProfit = $investAmount + $totalProfit;
         $totalAmount = $totalInvestProfit;
-        $recentDue = 11551984.00;
+        $customerPos = $this->customerPosition($endDate);
+        $recentDue = (float) ($customerPos['due'] ?? 0.0);
         $cash = $totalAmount - $recentDue;
 
         return [

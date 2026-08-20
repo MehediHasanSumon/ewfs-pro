@@ -114,10 +114,10 @@ export default function BalanceSheet({
     const topSheetData = data.top_sheet_data || {
         close_month_year: {
             label: `Total Balance -- 31-12- ${new Date().getFullYear() - 1}`,
-            capital_balance: 12174977.0,
+            capital_balance: 0.0,
             loan_balance: 0.0,
-            total_balance: 12174977.0,
-            amount: 12174977.0,
+            total_balance: 0.0,
+            amount: 0.0,
         },
         top_sheet: {
             title: 'Top Sheet',

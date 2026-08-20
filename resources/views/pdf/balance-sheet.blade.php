@@ -54,7 +54,7 @@
 
     @php
         $topSheetData = $data['top_sheet_data'] ?? [
-            'close_month_year' => ['label' => 'Total Balance -- 31-12- 2025', 'amount' => 12174977.00],
+            'close_month_year' => ['label' => 'Total Balance -- 31-12- 2025', 'capital_balance' => 0.00, 'loan_balance' => 0.00, 'total_balance' => 0.00, 'amount' => 0.00],
             'top_sheet' => [
                 'title' => 'Top Sheet',
                 'subtitle' => 'Month wise balance sheet',
