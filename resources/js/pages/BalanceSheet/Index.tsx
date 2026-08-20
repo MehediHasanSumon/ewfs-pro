@@ -3,13 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { Calendar, FileText, Filter, X } from 'lucide-react';
+import { FileText, Filter, X } from 'lucide-react';
 import { useState } from 'react';
-import { usePermission } from '@/hooks/usePermission';
 
 interface MonthlySheetRow {
     month: string;
@@ -74,16 +74,22 @@ interface BalanceSheetProps {
     };
 }
 
-export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) {
+export default function BalanceSheet({
+    data,
+    filters = {},
+}: BalanceSheetProps) {
     const { can } = usePermission();
     const canFilter = can('can-account-filter');
     const canDownload = can('can-account-download');
 
     const [startDate, setStartDate] = useState(
-        filters.start_date || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]
+        filters.start_date ||
+            new Date(new Date().getFullYear(), 0, 1)
+                .toISOString()
+                .split('T')[0],
     );
     const [endDate, setEndDate] = useState(
-        filters.end_date || new Date().toISOString().split('T')[0]
+        filters.end_date || new Date().toISOString().split('T')[0],
     );
 
     const applyFilters = () => {
@@ -95,7 +101,9 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
     };
 
     const clearFilters = () => {
-        const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1)
+            .toISOString()
+            .split('T')[0];
         const today = new Date().toISOString().split('T')[0];
         setStartDate(startOfYear);
         setEndDate(today);
@@ -114,18 +122,102 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
             title: 'Top Sheet',
             subtitle: 'Month wise balance sheet',
             months: [
-                { month: 'January', gross_profit: 2651445.0, office_expense: 1425985.0, cash_payment_md: 110000.0, net_balance: 1459479.0, remark: '' },
-                { month: 'February', gross_profit: 1897694.0, office_expense: 1203797.0, cash_payment_md: 325000.0, net_balance: 725519.0, remark: '' },
-                { month: 'March', gross_profit: 2572568.0, office_expense: 1624320.0, cash_payment_md: 1500000.0, net_balance: -322003.0, remark: '' },
-                { month: 'April', gross_profit: 2141998.0, office_expense: 1577281.0, cash_payment_md: 35000.0, net_balance: 529717.0, remark: '' },
-                { month: 'May', gross_profit: 2496907.99, office_expense: 1420390.0, cash_payment_md: 130000.0, net_balance: 946517.99, remark: '' },
-                { month: 'June', gross_profit: 2854843.0, office_expense: 1454710.0, cash_payment_md: 147000.0, net_balance: 1425523.0, remark: '' },
-                { month: 'July', gross_profit: 2893048.0, office_expense: 1300090.0, cash_payment_md: 185000.0, net_balance: 1607958.0, remark: '' },
-                { month: 'August', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
-                { month: 'September', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
-                { month: 'October', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
-                { month: 'November', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
-                { month: 'December', gross_profit: 0.0, office_expense: 0.0, cash_payment_md: 0.0, net_balance: 0.0, remark: '' },
+                {
+                    month: 'January',
+                    gross_profit: 2651445.0,
+                    office_expense: 1425985.0,
+                    cash_payment_md: 110000.0,
+                    net_balance: 1459479.0,
+                    remark: '',
+                },
+                {
+                    month: 'February',
+                    gross_profit: 1897694.0,
+                    office_expense: 1203797.0,
+                    cash_payment_md: 325000.0,
+                    net_balance: 725519.0,
+                    remark: '',
+                },
+                {
+                    month: 'March',
+                    gross_profit: 2572568.0,
+                    office_expense: 1624320.0,
+                    cash_payment_md: 1500000.0,
+                    net_balance: -322003.0,
+                    remark: '',
+                },
+                {
+                    month: 'April',
+                    gross_profit: 2141998.0,
+                    office_expense: 1577281.0,
+                    cash_payment_md: 35000.0,
+                    net_balance: 529717.0,
+                    remark: '',
+                },
+                {
+                    month: 'May',
+                    gross_profit: 2496907.99,
+                    office_expense: 1420390.0,
+                    cash_payment_md: 130000.0,
+                    net_balance: 946517.99,
+                    remark: '',
+                },
+                {
+                    month: 'June',
+                    gross_profit: 2854843.0,
+                    office_expense: 1454710.0,
+                    cash_payment_md: 147000.0,
+                    net_balance: 1425523.0,
+                    remark: '',
+                },
+                {
+                    month: 'July',
+                    gross_profit: 2893048.0,
+                    office_expense: 1300090.0,
+                    cash_payment_md: 185000.0,
+                    net_balance: 1607958.0,
+                    remark: '',
+                },
+                {
+                    month: 'August',
+                    gross_profit: 0.0,
+                    office_expense: 0.0,
+                    cash_payment_md: 0.0,
+                    net_balance: 0.0,
+                    remark: '',
+                },
+                {
+                    month: 'September',
+                    gross_profit: 0.0,
+                    office_expense: 0.0,
+                    cash_payment_md: 0.0,
+                    net_balance: 0.0,
+                    remark: '',
+                },
+                {
+                    month: 'October',
+                    gross_profit: 0.0,
+                    office_expense: 0.0,
+                    cash_payment_md: 0.0,
+                    net_balance: 0.0,
+                    remark: '',
+                },
+                {
+                    month: 'November',
+                    gross_profit: 0.0,
+                    office_expense: 0.0,
+                    cash_payment_md: 0.0,
+                    net_balance: 0.0,
+                    remark: '',
+                },
+                {
+                    month: 'December',
+                    gross_profit: 0.0,
+                    office_expense: 0.0,
+                    cash_payment_md: 0.0,
+                    net_balance: 0.0,
+                    remark: '',
+                },
             ],
             total_net_balance: 6372710.99,
             total_profit: 6372710.99,
@@ -161,7 +253,10 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
         if (val < 0) {
             return `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
         }
-        return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return val.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
     };
 
     return (
@@ -172,8 +267,12 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                 {/* Top Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold dark:text-white">Balance Sheet</h1>
-                        <p className="text-gray-600 dark:text-gray-400">View month-wise top sheet and cash history summary</p>
+                        <h1 className="text-3xl font-bold dark:text-white">
+                            Balance Sheet
+                        </h1>
+                        <p className="text-gray-600 dark:text-gray-400">
+                            View month-wise top sheet and cash history summary
+                        </p>
                     </div>
                     {canDownload && (
                         <Button
@@ -182,10 +281,13 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                                 const params = new URLSearchParams();
                                 params.append('start_date', startDate);
                                 params.append('end_date', endDate);
-                                openPdfViewer(`/balance-sheet/download-pdf?${params.toString()}`);
+                                openPdfViewer(
+                                    `/balance-sheet/download-pdf?${params.toString()}`,
+                                );
                             }}
                         >
-                            <FileText className="mr-2 h-4 w-4" />Download
+                            <FileText className="mr-2 h-4 w-4" />
+                            Download
                         </Button>
                     )}
                 </div>
@@ -202,27 +304,45 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                         <CardContent>
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 <div>
-                                    <Label className="dark:text-gray-200">Start Date</Label>
+                                    <Label className="dark:text-gray-200">
+                                        Start Date
+                                    </Label>
                                     <Input
                                         type="date"
                                         value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
+                                        onChange={(e) =>
+                                            setStartDate(e.target.value)
+                                        }
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
                                 <div>
-                                    <Label className="dark:text-gray-200">End Date</Label>
+                                    <Label className="dark:text-gray-200">
+                                        End Date
+                                    </Label>
                                     <Input
                                         type="date"
                                         value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
+                                        onChange={(e) =>
+                                            setEndDate(e.target.value)
+                                        }
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
                                 <div className="flex items-end gap-2 sm:col-span-2">
-                                    <Button onClick={applyFilters} className="px-4">Apply Filters</Button>
-                                    <Button onClick={clearFilters} variant="secondary" className="px-4">
-                                        <X className="mr-2 h-4 w-4" />Clear
+                                    <Button
+                                        onClick={applyFilters}
+                                        className="px-4"
+                                    >
+                                        Apply Filters
+                                    </Button>
+                                    <Button
+                                        onClick={clearFilters}
+                                        variant="secondary"
+                                        className="px-4"
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear
                                     </Button>
                                 </div>
                             </div>
@@ -231,33 +351,58 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                 )}
 
                 {/* 1. Top Section: Vertical Balance Breakdown Table */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800 shadow-sm">
+                <Card className="shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                        <th className="p-3 text-left text-[13px] font-bold dark:text-gray-200">Particulars</th>
-                                        <th className="p-3 text-right text-[13px] font-bold dark:text-gray-200 w-48 sm:w-64">Amount</th>
+                                    <tr className="dark:bg-gray-750 border-b bg-gray-50 dark:border-gray-700">
+                                        <th className="p-3 text-left text-[13px] font-bold dark:text-gray-200">
+                                            Particulars
+                                        </th>
+                                        <th className="w-48 p-3 text-right text-[13px] font-bold sm:w-64 dark:text-gray-200">
+                                            Amount
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-[13px]">
-                                        <td className="p-3 font-semibold dark:text-gray-200">Capital Balance</td>
-                                        <td className="p-3 text-right dark:text-gray-200 font-semibold">
-                                            {formatCurrency(topSheetData.close_month_year.capital_balance ?? topSheetData.close_month_year.amount)}
+                                    <tr className="border-b text-[13px] hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
+                                        <td className="p-3 font-semibold dark:text-gray-200">
+                                            Capital Balance
+                                        </td>
+                                        <td className="p-3 text-right font-semibold dark:text-gray-200">
+                                            {formatCurrency(
+                                                topSheetData.close_month_year
+                                                    .capital_balance ??
+                                                    topSheetData
+                                                        .close_month_year
+                                                        .amount,
+                                            )}
                                         </td>
                                     </tr>
-                                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-[13px]">
-                                        <td className="p-3 font-semibold dark:text-gray-200">Loan Balance</td>
-                                        <td className="p-3 text-right dark:text-gray-200 font-semibold">
-                                            {formatCurrency(topSheetData.close_month_year.loan_balance ?? 0)}
+                                    <tr className="border-b text-[13px] hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
+                                        <td className="p-3 font-semibold dark:text-gray-200">
+                                            Loan Balance
+                                        </td>
+                                        <td className="p-3 text-right font-semibold dark:text-gray-200">
+                                            {formatCurrency(
+                                                topSheetData.close_month_year
+                                                    .loan_balance ?? 0,
+                                            )}
                                         </td>
                                     </tr>
-                                    <tr className="bg-gray-50 dark:bg-gray-750 dark:border-gray-700 font-bold text-[14px]">
-                                        <td className="p-3 dark:text-white">Total Balance</td>
-                                        <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-extrabold text-[15px]">
-                                            {formatCurrency(topSheetData.close_month_year.total_balance ?? topSheetData.close_month_year.amount)}
+                                    <tr className="dark:bg-gray-750 bg-gray-50 text-[14px] font-bold dark:border-gray-700">
+                                        <td className="p-3 dark:text-white">
+                                            Total Balance
+                                        </td>
+                                        <td className="p-3 text-right text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                                            {formatCurrency(
+                                                topSheetData.close_month_year
+                                                    .total_balance ??
+                                                    topSheetData
+                                                        .close_month_year
+                                                        .amount,
+                                            )}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -270,43 +415,96 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                     {/* Left: Top Sheet (Month-wise Balance Sheet) */}
                     <Card className="lg:col-span-8 dark:border-gray-700 dark:bg-gray-800">
-                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
-                            <CardTitle className="text-[15px] font-bold dark:text-white text-center">
-                                Top Sheet - Month-wise Balance Sheet
+                        <CardHeader className="dark:bg-gray-750 border-b bg-gray-50/50 px-4 py-3 dark:border-gray-700">
+                            <CardTitle className="text-center text-[15px] font-bold dark:text-white">
+                                Month-wise Balance Sheet
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Month</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Gross Profit</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Office Expense</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Cash Payment (Md Sir)</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Net Balance</th>
+                                        <tr className="dark:bg-gray-750 border-b bg-gray-50 dark:border-gray-700">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">
+                                                Month
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Gross Profit
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Office Expense
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Owner Payment
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Net Balance
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {topSheetData.top_sheet.months.map((row, idx) => (
-                                            <tr key={idx} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                <td className="p-2 text-[13px] font-medium dark:text-white">{row.month}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.gross_profit)}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.office_expense)}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(row.cash_payment_md)}</td>
-                                                <td className={`p-2 text-right text-[13px] font-semibold ${row.net_balance < 0 ? 'text-red-500 dark:text-red-400' : 'dark:text-white'}`}>
-                                                    {formatCurrency(row.net_balance)}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {topSheetData.top_sheet.months.map(
+                                            (row, idx) => (
+                                                <tr
+                                                    key={idx}
+                                                    className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+                                                >
+                                                    <td className="p-2 text-[13px] font-medium dark:text-white">
+                                                        {row.month}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {formatCurrency(
+                                                            row.gross_profit,
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {formatCurrency(
+                                                            row.office_expense,
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {formatCurrency(
+                                                            row.cash_payment_md,
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        className={`p-2 text-right text-[13px] font-semibold ${row.net_balance < 0 ? 'text-red-500 dark:text-red-400' : 'dark:text-white'}`}
+                                                    >
+                                                        {formatCurrency(
+                                                            row.net_balance,
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
                                         {/* Total Rows */}
-                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                            <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Net Balance:</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_net_balance)}</td>
+                                        <tr className="border-b bg-gray-50 font-bold dark:border-gray-700 dark:bg-gray-700">
+                                            <td
+                                                colSpan={4}
+                                                className="p-2 text-right text-[13px] dark:text-white"
+                                            >
+                                                Total Net Balance:
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">
+                                                {formatCurrency(
+                                                    topSheetData.top_sheet
+                                                        .total_net_balance,
+                                                )}
+                                            </td>
                                         </tr>
-                                        <tr className="font-bold bg-gray-100 dark:bg-gray-750 dark:border-gray-700">
-                                            <td colSpan={4} className="p-2 text-right text-[13px] dark:text-white">Total Profit:</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.top_sheet.total_profit)}</td>
+                                        <tr className="dark:bg-gray-750 bg-gray-100 font-bold dark:border-gray-700">
+                                            <td
+                                                colSpan={4}
+                                                className="p-2 text-right text-[13px] dark:text-white"
+                                            >
+                                                Total Profit:
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">
+                                                {formatCurrency(
+                                                    topSheetData.top_sheet
+                                                        .total_profit,
+                                                )}
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -316,8 +514,8 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
 
                     {/* Right: Cash History */}
                     <Card className="lg:col-span-4 dark:border-gray-700 dark:bg-gray-800">
-                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
-                            <CardTitle className="text-[15px] font-bold dark:text-white text-center">
+                        <CardHeader className="dark:bg-gray-750 border-b bg-gray-50/50 px-4 py-3 dark:border-gray-700">
+                            <CardTitle className="text-center text-[15px] font-bold dark:text-white">
                                 Cash History
                             </CardTitle>
                         </CardHeader>
@@ -325,30 +523,77 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Particular</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Qty</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
+                                        <tr className="dark:bg-gray-750 border-b bg-gray-50 dark:border-gray-700">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">
+                                                Particular
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Qty
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Amount
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {topSheetData.cash_history.items.map((item, idx) => (
-                                            <tr key={idx} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                                <td className="p-2 text-[13px] capitalize font-medium dark:text-white">{item.particular}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{item.qty ? item.qty.toLocaleString() : '-'}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(item.amount)}</td>
-                                            </tr>
-                                        ))}
-                                        <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                            <td colSpan={2} className="p-2 text-right text-[13px] dark:text-white">Total:</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.cash_history.subtotal)}</td>
+                                        {topSheetData.cash_history.items.map(
+                                            (item, idx) => (
+                                                <tr
+                                                    key={idx}
+                                                    className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+                                                >
+                                                    <td className="p-2 text-[13px] font-medium capitalize dark:text-white">
+                                                        {item.particular}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {item.qty
+                                                            ? item.qty.toLocaleString()
+                                                            : '-'}
+                                                    </td>
+                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                        {formatCurrency(
+                                                            item.amount,
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                        <tr className="border-b bg-gray-50 font-bold dark:border-gray-700 dark:bg-gray-700">
+                                            <td
+                                                colSpan={2}
+                                                className="p-2 text-right text-[13px] dark:text-white"
+                                            >
+                                                Total:
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">
+                                                {formatCurrency(
+                                                    topSheetData.cash_history
+                                                        .subtotal,
+                                                )}
+                                            </td>
                                         </tr>
-                                        {topSheetData.cash_history.extra_items && topSheetData.cash_history.extra_items.map((item, idx) => (
-                                            <tr key={`extra-${idx}`} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 font-semibold">
-                                                <td colSpan={2} className="p-2 text-left text-[13px] dark:text-white">{item.particular}</td>
-                                                <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(item.amount)}</td>
-                                            </tr>
-                                        ))}
+                                        {topSheetData.cash_history
+                                            .extra_items &&
+                                            topSheetData.cash_history.extra_items.map(
+                                                (item, idx) => (
+                                                    <tr
+                                                        key={`extra-${idx}`}
+                                                        className="border-b font-semibold hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+                                                    >
+                                                        <td
+                                                            colSpan={2}
+                                                            className="p-2 text-left text-[13px] dark:text-white"
+                                                        >
+                                                            {item.particular}
+                                                        </td>
+                                                        <td className="p-2 text-right text-[13px] dark:text-white">
+                                                            {formatCurrency(
+                                                                item.amount,
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ),
+                                            )}
                                     </tbody>
                                 </table>
                             </div>
@@ -360,7 +605,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     {/* Bottom Left Summary */}
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                        <CardHeader className="dark:bg-gray-750 border-b bg-gray-50/50 px-4 py-3 dark:border-gray-700">
                             <CardTitle className="text-[15px] font-bold dark:text-white">
                                 Total Cash & Profit Summary
                             </CardTitle>
@@ -369,23 +614,48 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Total Cash</th>
-                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
+                                        <tr className="dark:bg-gray-750 border-b bg-gray-50 dark:border-gray-700">
+                                            <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">
+                                                Total Cash
+                                            </th>
+                                            <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">
+                                                Amount
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] font-medium dark:text-white">Invest Amount</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.invest_amount)}</td>
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">
+                                                Invest Amount
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .invest_amount,
+                                                )}
+                                            </td>
                                         </tr>
                                         <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] font-medium dark:text-white">Profit</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.profit)}</td>
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">
+                                                Profit
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .profit,
+                                                )}
+                                            </td>
                                         </tr>
-                                        <tr className="font-bold bg-indigo-50 dark:bg-indigo-950 dark:border-gray-700">
-                                            <td className="p-3 text-[14px] dark:text-white">Total</td>
-                                            <td className="p-3 text-right text-[14px] dark:text-white">{formatCurrency(topSheetData.bottom_summary.total_invest_profit)}</td>
+                                        <tr className="bg-indigo-50 font-bold dark:border-gray-700 dark:bg-indigo-950">
+                                            <td className="p-3 text-[14px] dark:text-white">
+                                                Total
+                                            </td>
+                                            <td className="p-3 text-right text-[14px] dark:text-white">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .total_invest_profit,
+                                                )}
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -395,7 +665,7 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
 
                     {/* Bottom Right Summary */}
                     <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardHeader className="py-3 px-4 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750">
+                        <CardHeader className="dark:bg-gray-750 border-b bg-gray-50/50 px-4 py-3 dark:border-gray-700">
                             <CardTitle className="text-[15px] font-bold dark:text-white">
                                 Total Amount & Due/Cash Summary
                             </CardTitle>
@@ -404,21 +674,49 @@ export default function BalanceSheet({ data, filters = {} }: BalanceSheetProps) 
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <tbody>
-                                        <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 font-semibold">
-                                            <td className="p-2 text-[13px] dark:text-white">Total Amount</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-white">{formatCurrency(topSheetData.bottom_summary.total_amount)}</td>
+                                        <tr className="border-b font-semibold hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
+                                            <td className="p-2 text-[13px] dark:text-white">
+                                                Total Amount
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-white">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .total_amount,
+                                                )}
+                                            </td>
                                         </tr>
                                         <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] font-medium dark:text-white">Recent Due</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.recent_due)}</td>
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">
+                                                Recent Due
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .recent_due,
+                                                )}
+                                            </td>
                                         </tr>
                                         <tr className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700">
-                                            <td className="p-2 text-[13px] font-medium dark:text-white">Cash</td>
-                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.cash)}</td>
+                                            <td className="p-2 text-[13px] font-medium dark:text-white">
+                                                Cash
+                                            </td>
+                                            <td className="p-2 text-right text-[13px] dark:text-gray-300">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .cash,
+                                                )}
+                                            </td>
                                         </tr>
-                                        <tr className="bg-gray-50 dark:bg-gray-750">
-                                            <td className="p-3 text-[13px] font-bold text-gray-700 dark:text-gray-300">Extra</td>
-                                            <td className="p-3 text-right text-[13px] font-bold text-gray-700 dark:text-gray-300">{formatCurrency(topSheetData.bottom_summary.extra)}</td>
+                                        <tr className="dark:bg-gray-750 bg-gray-50">
+                                            <td className="p-3 text-[13px] font-bold text-gray-700 dark:text-gray-300">
+                                                Extra
+                                            </td>
+                                            <td className="p-3 text-right text-[13px] font-bold text-gray-700 dark:text-gray-300">
+                                                {formatCurrency(
+                                                    topSheetData.bottom_summary
+                                                        .extra,
+                                                )}
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
