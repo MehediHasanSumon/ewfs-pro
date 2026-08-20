@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Helpers\AccountGroupHelper;
+use App\Helpers\VoucherCategoryHelper;
+use App\Helpers\VoucherTransactionTypeHelper;
 use App\Models\Account;
 use App\Models\Customer;
 use Illuminate\Support\Collection;
@@ -58,7 +60,7 @@ class FinancialReportService
         $year = date('Y', strtotime($startDate));
         $prevYear = (int)$year - 1;
 
-        $monthActivity = $this->monthlyProductSalesAndPurchases((int) $year);
+        $monthGrossProfits = $this->monthlyGrossProfits((int) $year);
         $monthExpenses = $this->monthlyOfficeExpenses((int) $year);
         $monthOwnerPayments = $this->monthlyOwnerPayments((int) $year);
 
@@ -73,15 +75,10 @@ class FinancialReportService
 
         for ($m = 1; $m <= 12; $m++) {
             $monthName = $monthNames[$m];
-            $regularSale = (float) ($monthActivity['regular_sales']->get($m)?->total_sales ?? 0);
-            $creditSale = (float) ($monthActivity['credit_sales']->get($m)?->total_sales ?? 0);
-            $totalMonthSale = $regularSale + $creditSale;
-
-            $monthPurchase = (float) ($monthActivity['purchases']->get($m)?->total_purchases ?? 0);
-
-            $grossProfit = $totalMonthSale - $monthPurchase;
-            $officeExpense = (float) ($monthExpenses->get($m)?->total_expense ?? 0);
-            $ownerPayment = (float) ($monthOwnerPayments->get($m)?->total_payment ?? 0);
+            $monthData = $monthGrossProfits->get($m);
+            $grossProfit = (float) ($monthData?->gross_profit ?? 0.0);
+            $officeExpense = (float) ($monthExpenses->get($m)?->total_expense ?? 0.0);
+            $ownerPayment = (float) ($monthOwnerPayments->get($m)?->total_payment ?? 0.0);
 
             $netBalance = $grossProfit - $officeExpense - $ownerPayment;
             $totalNetBalance += $netBalance;
@@ -251,11 +248,12 @@ class FinancialReportService
         return $this->capitalBalance($endDate) + $this->loanBalance($endDate);
     }
 
-    public function monthlyProductSalesAndPurchases(int $year): array
+    public function monthlyGrossProfits(int $year): Collection
     {
         $yearStart = sprintf('%04d-01-01', $year);
         $yearEnd = sprintf('%04d-12-31', $year);
 
+        // 1. Regular Sales & Product COGS (Cash, Bank, Mobile Bank, etc.)
         $regularSales = DB::table('sale_items as si')
             ->join('sales as s', 's.id', '=', 'si.sale_id')
             ->join('journal_entries as je', function ($join) {
@@ -265,10 +263,16 @@ class FinancialReportService
             ->whereIn('s.status', ['posted', 'partially_paid', 'paid'])
             ->whereBetween('s.sale_date', [$yearStart, $yearEnd])
             ->groupByRaw('MONTH(s.sale_date)')
-            ->selectRaw('MONTH(s.sale_date) as month_num, SUM(si.line_total) as total_sales, SUM(si.quantity * si.unit_cost) as total_cost')
+            ->selectRaw('
+                MONTH(s.sale_date) as month_num,
+                SUM(si.line_total) as total_sales,
+                SUM(si.quantity * si.unit_cost) as total_cogs,
+                SUM(si.line_total - (si.quantity * si.unit_cost)) as gross_profit
+            ')
             ->get()
             ->keyBy('month_num');
 
+        // 2. Credit Sales & Product COGS
         $creditSales = DB::table('credit_sale_items as csi')
             ->join('credit_sale_customers as csc', 'csc.id', '=', 'csi.credit_sale_customer_id')
             ->join('credit_sales as cs', 'cs.id', '=', 'csc.credit_sale_id')
@@ -279,28 +283,34 @@ class FinancialReportService
             ->whereIn('cs.status', ['posted', 'partially_paid', 'paid'])
             ->whereBetween('cs.sale_date', [$yearStart, $yearEnd])
             ->groupByRaw('MONTH(cs.sale_date)')
-            ->selectRaw('MONTH(cs.sale_date) as month_num, SUM(csi.line_total) as total_sales, SUM(csi.quantity * csi.unit_cost) as total_cost')
+            ->selectRaw('
+                MONTH(cs.sale_date) as month_num,
+                SUM(csi.line_total) as total_sales,
+                SUM(csi.quantity * csi.unit_cost) as total_cogs,
+                SUM(csi.line_total - (csi.quantity * csi.unit_cost)) as gross_profit
+            ')
             ->get()
             ->keyBy('month_num');
 
-        $purchases = DB::table('purchase_items as pi')
-            ->join('purchases as p', 'p.id', '=', 'pi.purchase_id')
-            ->join('journal_entries as je', function ($join) {
-                $join->on('je.id', '=', 'p.journal_entry_id')
-                    ->where('je.status', 'posted');
-            })
-            ->whereIn('p.status', ['posted', 'partially_paid', 'paid'])
-            ->whereBetween('p.purchase_date', [$yearStart, $yearEnd])
-            ->groupByRaw('MONTH(p.purchase_date)')
-            ->selectRaw('MONTH(p.purchase_date) as month_num, SUM(pi.line_total) as total_purchases')
-            ->get()
-            ->keyBy('month_num');
+        $monthly = collect();
+        for ($m = 1; $m <= 12; $m++) {
+            $regSale = (float) ($regularSales->get($m)?->total_sales ?? 0);
+            $regCogs = (float) ($regularSales->get($m)?->total_cogs ?? 0);
+            $regProfit = (float) ($regularSales->get($m)?->gross_profit ?? 0);
 
-        return [
-            'regular_sales' => $regularSales,
-            'credit_sales' => $creditSales,
-            'purchases' => $purchases,
-        ];
+            $credSale = (float) ($creditSales->get($m)?->total_sales ?? 0);
+            $credCogs = (float) ($creditSales->get($m)?->total_cogs ?? 0);
+            $credProfit = (float) ($creditSales->get($m)?->gross_profit ?? 0);
+
+            $monthly->put($m, (object) [
+                'month_num' => $m,
+                'total_sales' => $regSale + $credSale,
+                'total_cogs' => $regCogs + $credCogs,
+                'gross_profit' => $regProfit + $credProfit,
+            ]);
+        }
+
+        return $monthly;
     }
 
     public function monthlyOfficeExpenses(int $year): Collection
@@ -308,12 +318,14 @@ class FinancialReportService
         $yearStart = sprintf('%04d-01-01', $year);
         $yearEnd = sprintf('%04d-12-31', $year);
 
+        $operatingCategoryCode = VoucherCategoryHelper::operatingCode();
+        $employeeCategoryCode = VoucherCategoryHelper::employeeCode();
+        $salaryCode = VoucherTransactionTypeHelper::getCode('employee', 'monthly_salary');
+        $bonusCode = VoucherTransactionTypeHelper::getCode('employee', 'employee_bonus');
+
         return DB::table('vouchers as v')
             ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
-            ->leftJoin('voucher_categories as vc', function ($join) {
-                $join->on('vc.id', '=', 'v.voucher_category_id')
-                    ->orOn('vc.id', '=', 'vtt.voucher_category_id');
-            })
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
             ->join('voucher_lines as vl', function ($join) {
                 $join->on('vl.voucher_id', '=', 'v.id')
                     ->where('vl.entry_side', 'debit');
@@ -321,22 +333,27 @@ class FinancialReportService
             ->where('v.status', 'posted')
             ->whereIn('v.voucher_type', ['payment', 'office_payment'])
             ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
-            ->where(function ($query) {
-                // 1. Operating category: all payment transaction types
-                $query->where(function ($q) {
-                    $q->where('vc.code', 'VC004')
-                        ->orWhere('vc.name', 'Operating')
-                        ->orWhere('v.voucher_category_id', 4);
-                })
-                // 2. Employee category: Monthly Salary (1001) & Employee Bonus (1004)
-                ->orWhere(function ($q) {
-                    $q->where(function ($cat) {
-                        $cat->where('vc.code', 'VC002')
-                            ->orWhere('vc.name', 'Employee')
-                            ->orWhere('v.voucher_category_id', 2);
+            ->where(function ($query) use ($operatingCategoryCode, $employeeCategoryCode, $salaryCode, $bonusCode) {
+                // 1. Operating category: ALL payment transaction types
+                $query->where(function ($q) use ($operatingCategoryCode) {
+                    $q->where(function ($cat) use ($operatingCategoryCode) {
+                        $cat->where('vc.code', $operatingCategoryCode)
+                            ->orWhere('vc.name', 'Operating');
                     })
-                    ->where(function ($type) {
-                        $type->whereIn('vtt.code', ['1001', '1004'])
+                    ->where(function ($vType) {
+                        $vType->where('v.voucher_type', 'payment')
+                            ->orWhere('v.voucher_type', 'office_payment');
+                    });
+                })
+                // 2. Employee category: ONLY Monthly Salary (1001) and Employee Bonus (1004) payments
+                ->orWhere(function ($q) use ($employeeCategoryCode, $salaryCode, $bonusCode) {
+                    $q->where(function ($cat) use ($employeeCategoryCode) {
+                        $cat->where('vc.code', $employeeCategoryCode)
+                            ->orWhere('vc.name', 'Employee');
+                    })
+                    ->where('v.voucher_type', 'payment')
+                    ->where(function ($type) use ($salaryCode, $bonusCode) {
+                        $type->whereIn('vtt.code', [$salaryCode, $bonusCode])
                             ->orWhereIn('vtt.name', ['Monthly Salary', 'Employee Bonus', 'Salary Payment', 'Bonus']);
                     });
                 });
@@ -352,8 +369,12 @@ class FinancialReportService
         $yearStart = sprintf('%04d-01-01', $year);
         $yearEnd = sprintf('%04d-12-31', $year);
 
+        $financeCategoryCode = VoucherCategoryHelper::financeCode();
+        $ownerWithdrawalCode = VoucherTransactionTypeHelper::getCode('finance', 'owner_withdrawal');
+
         return DB::table('vouchers as v')
-            ->join('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
+            ->leftJoin('voucher_categories as vc', 'vc.id', '=', DB::raw('COALESCE(v.voucher_category_id, vtt.voucher_category_id)'))
             ->join('voucher_lines as vl', function ($join) {
                 $join->on('vl.voucher_id', '=', 'v.id')
                     ->where('vl.entry_side', 'debit');
@@ -361,9 +382,15 @@ class FinancialReportService
             ->where('v.status', 'posted')
             ->where('v.voucher_type', 'payment')
             ->whereBetween('v.voucher_date', [$yearStart, $yearEnd])
-            ->where(function ($q) {
-                $q->where('vtt.code', '1071')
-                    ->orWhere('vtt.name', 'Owner Withdrawal');
+            ->where(function ($q) use ($financeCategoryCode, $ownerWithdrawalCode) {
+                $q->where('vtt.code', $ownerWithdrawalCode)
+                    ->orWhere(function ($sub) use ($financeCategoryCode) {
+                        $sub->where(function ($c) use ($financeCategoryCode) {
+                            $c->where('vc.code', $financeCategoryCode)
+                                ->orWhere('vc.name', 'Finance');
+                        })
+                        ->where('vtt.name', 'Owner Withdrawal');
+                    });
             })
             ->groupByRaw('MONTH(v.voucher_date)')
             ->selectRaw('MONTH(v.voucher_date) as month_num, SUM(vl.amount) as total_payment')
