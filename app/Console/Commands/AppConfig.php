@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\GroupSeeder;
+use Database\Seeders\OperatingVoucherTransactionTypeSeeder;
 use Database\Seeders\SystemVoucherCategorySeeder;
 use Database\Seeders\SystemVoucherTransactionTypeSeeder;
 use Illuminate\Console\Command;
@@ -24,6 +25,7 @@ class AppConfig extends Command
         CategorySeeder::class,
         SystemVoucherCategorySeeder::class,
         SystemVoucherTransactionTypeSeeder::class,
+        OperatingVoucherTransactionTypeSeeder::class,
     ];
 
     public function handle(): int
