@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Account Statement - {{ $account->name }}</title>
+    <title>{{ $account->name }} Statement</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -48,41 +48,26 @@
         }
         .title-section {
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            margin-top: 10px;
         }
         .title-box {
             border: 1px solid #000;
             display: inline-block;
-            padding: 6px 18px;
+            padding: 6px 20px;
             background-color: #f5f5f5;
             font-weight: bold;
             font-size: 13px;
         }
-        .account-info {
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            background-color: #f9f9f9;
-            border: 1px solid #e0e0e0;
-        }
-        .account-info table {
-            width: 100%;
-            border: none;
-            margin: 0;
-        }
-        .account-info td {
-            border: none;
-            padding: 2px 4px;
-            font-size: 11px;
-        }
         table.data-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
-            margin-bottom: 20px;
+            margin-top: 10px;
+            margin-bottom: 25px;
         }
         table.data-table th, table.data-table td {
             border: 1px solid #000;
-            padding: 6px 6px;
+            padding: 7px 8px;
             text-align: left;
         }
         table.data-table th {
@@ -92,13 +77,13 @@
             color: #000;
         }
         table.data-table td {
-            font-size: 10px;
+            font-size: 10.5px;
             color: #333;
         }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .signature-section {
-            margin-top: 40px;
+            margin-top: 50px;
             padding: 10px 0;
             border-top: 1px solid #ddd;
         }
@@ -124,41 +109,22 @@
     @include('pdf.components.header')
 
     <div class="title-section">
-        <div class="title-box">Account Statement ({{ $startDate }} to {{ $endDate }})</div>
-    </div>
-
-    <div class="account-info">
-        <table>
-            <tr>
-                <td style="width: 50%;"><strong>Account Name:</strong> {{ $account->name }}</td>
-                <td style="width: 50%;"><strong>Account Number:</strong> {{ $account->ac_number }}</td>
-            </tr>
-            <tr>
-                <td><strong>Group:</strong> {{ $account->group?->name ?? 'N/A' }}</td>
-                <td>
-                    <strong>Opening Balance:</strong> 
-                    {{ number_format(abs($openingBalance), 2) }} 
-                    {{ $openingBalance >= 0 ? ($account->group?->normal_balance === 'credit' ? 'Cr' : 'Dr') : ($account->group?->normal_balance === 'credit' ? 'Dr' : 'Cr') }}
-                </td>
-            </tr>
-        </table>
+        <div class="title-box">{{ $account->name }} Statement ({{ $startDate }} to {{ $endDate }})</div>
     </div>
 
     @php
         $sumAmount = 0;
-        $isCreditNormal = $account->group?->normal_balance === 'credit';
     @endphp
 
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width: 30px;">SL</th>
-                <th style="width: 80px;">Date</th>
+                <th style="width: 35px;">SL</th>
+                <th style="width: 85px;">Date</th>
                 <th>Transaction Type</th>
-                <th style="width: 90px;">Payment Type</th>
-                <th style="width: 95px;">Payment Method</th>
-                <th class="text-right" style="width: 100px;">Amount</th>
-                <th class="text-right" style="width: 100px;">Balance</th>
+                <th style="width: 100px;">Payment Type</th>
+                <th style="width: 105px;">Payment Method</th>
+                <th class="text-right" style="width: 110px;">Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -179,13 +145,10 @@
                     <td style="font-weight: 500;">{{ $payType }}</td>
                     <td style="text-transform: capitalize;">{{ $transaction->payment_type ?? '-' }}</td>
                     <td class="text-right">{{ number_format($amt, 2) }}</td>
-                    <td class="text-right" style="font-weight: bold;">
-                        {{ number_format(abs($transaction->balance), 2) }} {{ $transaction->balance >= 0 ? 'Cr' : 'Dr' }}
-                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="text-center" style="padding: 20px; color: #888;">
+                    <td colspan="6" class="text-center" style="padding: 20px; color: #888;">
                         No transactions found for the selected period
                     </td>
                 </tr>
@@ -194,9 +157,6 @@
                 <tr style="font-weight: bold; background-color: #f5f5f5;">
                     <td colspan="5" class="text-right">Total:</td>
                     <td class="text-right">{{ number_format($totalAmount > 0 ? $totalAmount : $sumAmount, 2) }}</td>
-                    <td class="text-right">
-                        {{ number_format(abs($closingBalance), 2) }} {{ $closingBalance >= 0 ? 'Cr' : 'Dr' }}
-                    </td>
                 </tr>
             @endif
         </tbody>

@@ -319,7 +319,6 @@ export default function AccountDetails({
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Description</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Method</th>
                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -367,13 +366,6 @@ export default function AccountDetails({
                                                         <td className="p-2 text-right text-[13px] font-medium dark:text-gray-200">
                                                             {Number(transaction.amount).toFixed(2)}
                                                         </td>
-                                                        <td
-                                                            className={`p-2 text-right text-[13px] font-medium ${
-                                                                transaction.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                                                            }`}
-                                                        >
-                                                            {Math.abs(transaction.balance).toFixed(2)} {transaction.balance >= 0 ? 'Cr' : 'Dr'}
-                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -384,15 +376,12 @@ export default function AccountDetails({
                                                 <td className="p-2 text-right text-[13px] dark:text-white">
                                                     {Number(totalAmount > 0 ? totalAmount : (periodDebit + periodCredit)).toFixed(2)}
                                                 </td>
-                                                <td className="p-2 text-right text-[13px] dark:text-white">
-                                                    {Math.abs(closingBalance).toFixed(2)} {closingBalance >= 0 ? 'Cr' : 'Dr'}
-                                                </td>
                                             </tr>
                                         </>
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={8}
+                                                colSpan={7}
                                                 className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400"
                                             >
                                                 No transactions found for the selected period
