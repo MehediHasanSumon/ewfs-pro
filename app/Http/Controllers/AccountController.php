@@ -213,7 +213,7 @@ class AccountController extends Controller implements HasMiddleware
             'employee.designation:id,name',
         ]);
 
-        $startDate = $request->get('start_date', date('Y-01-01'));
+        $startDate = $request->get('start_date', date('Y-m-d'));
         $endDate = $request->get('end_date', date('Y-m-d'));
         $perPage = max(1, min((int) $request->get('per_page', 15), 100));
 
