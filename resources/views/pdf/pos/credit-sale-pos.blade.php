@@ -118,20 +118,60 @@
         }
     </style>
 </head>
+@php
+    $logoPath = null;
+    if (!empty($companySetting?->company_logo)) {
+        $relative = ltrim($companySetting->company_logo, '/');
+        if (str_starts_with($relative, 'storage/')) {
+            $relative = substr($relative, 8);
+        }
+        $fullLogo = public_path('storage/' . $relative);
+        if (file_exists($fullLogo)) {
+            $logoPath = $fullLogo;
+        } elseif (file_exists(storage_path('app/public/' . $relative))) {
+            $logoPath = storage_path('app/public/' . $relative);
+        }
+    }
+    if (!$logoPath && file_exists(public_path('images/logo.jpg'))) {
+        $logoPath = public_path('images/logo.jpg');
+    }
+@endphp
 <body>
-    <div class="text-center">
-        @if(file_exists(public_path('images/logo.jpg')))
-            <img src="{{ public_path('images/logo.jpg') }}" class="logo" alt="Logo">
-        @endif
-        <div class="company-name">{{ $companySetting->company_name ?? 'East West Filling Station' }}</div>
-        <div class="company-address">{{ $companySetting->address ?? 'Dhour Baribad, Turag, Dhaka.' }}</div>
-        <div class="company-contact">
-            @if(!empty($companySetting->phone)) Phone: {{ $companySetting->phone }} @endif
-            @if(!empty($companySetting->mobile)) | Mob: {{ $companySetting->mobile }} @endif
-        </div>
-        <div class="divider"></div>
-        <div class="receipt-title">Credit Sale Receipt (POS)</div>
-    </div>
+    <table style="width: 100%; border: none; margin: 0 0 2px 0; border-collapse: collapse;">
+        <tr>
+            <td style="width: 38px; text-align: left; vertical-align: middle; padding: 0;">
+                @if($logoPath)
+                    <img src="{{ $logoPath }}" style="max-height: 38px; max-width: 38px; display: block;" alt="Logo">
+                @endif
+            </td>
+            <td style="text-align: center; vertical-align: middle; padding: 0 2px;">
+                <div class="company-name" style="font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 0; line-height: 1.2;">
+                    {{ $companySetting->company_name ?? 'East West Filling Station' }}
+                </div>
+                <div class="company-address" style="font-size: 8px; margin: 1px 0; line-height: 1.2;">
+                    {{ $companySetting->company_address ?? ($companySetting->address ?? 'Dhour Baribad, Turag, Dhaka.') }}
+                </div>
+                @php
+                    $contactList = [];
+                    if (!empty($companySetting?->company_phone ?? $companySetting?->phone)) {
+                        $contactList[] = 'Tel: ' . ($companySetting?->company_phone ?? $companySetting?->phone);
+                    }
+                    if (!empty($companySetting?->company_mobile ?? $companySetting?->mobile)) {
+                        $contactList[] = 'Mob: ' . ($companySetting?->company_mobile ?? $companySetting?->mobile);
+                    }
+                @endphp
+                @if(count($contactList) > 0)
+                    <div class="company-contact" style="font-size: 7.5px; margin: 1px 0;">
+                        {{ implode(' | ', $contactList) }}
+                    </div>
+                @endif
+            </td>
+            <td style="width: 38px; padding: 0;"></td>
+        </tr>
+    </table>
+
+    <div class="divider"></div>
+    <div class="receipt-title text-center">Credit Sale Receipt (POS)</div>
 
     @php
         $customer = $creditSale->customer;
