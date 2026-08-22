@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Group;
 use App\Models\CompanySetting;
 use App\Services\DocumentNumberService;
+use App\Services\LedgerQueryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +25,7 @@ class AccountController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('permission:view-account|can-account-download', only: ['index', 'downloadPdf']),
+            new Middleware('permission:view-account|can-account-download', only: ['index', 'show', 'downloadPdf', 'downloadStatementPdf']),
             new Middleware('permission:create-account', only: ['store']),
             new Middleware('permission:update-account', only: ['update']),
             new Middleware('permission:delete-account', only: ['destroy']),
@@ -200,5 +201,84 @@ class AccountController extends Controller implements HasMiddleware
 
         $pdf = Pdf::loadView('pdf.accounts', compact('accounts', 'companySetting'));
         return $pdf->stream();
+    }
+
+    public function show(Request $request, Account $account, LedgerQueryService $ledger)
+    {
+        $account->loadMissing([
+            'group',
+            'customer:id,account_id,name,code,mobile',
+            'supplier:id,account_id,name,mobile',
+            'employee:id,account_id,employee_name,employee_code,designation_id',
+            'employee.designation:id,name',
+        ]);
+
+        $startDate = $request->get('start_date', date('Y-01-01'));
+        $endDate = $request->get('end_date', date('Y-m-d'));
+        $perPage = max(1, min((int) $request->get('per_page', 15), 100));
+
+        $result = $ledger->paginatedAccountLedger($account, $startDate, $endDate, $perPage);
+
+        // Overall stats (all-time)
+        $allTimeTotals = DB::table('journal_lines as jl')
+            ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
+            ->where('jl.account_id', $account->id)
+            ->whereIn('je.status', ['posted', 'reversed'])
+            ->selectRaw('
+                COUNT(jl.id) as total_count,
+                COALESCE(SUM(jl.debit_amount), 0) as total_debit,
+                COALESCE(SUM(jl.credit_amount), 0) as total_credit
+            ')
+            ->first();
+
+        $isCreditNormal = $account->group?->normal_balance === 'credit';
+        $allTimeBalance = $isCreditNormal
+            ? (float) $allTimeTotals->total_credit - (float) $allTimeTotals->total_debit
+            : (float) $allTimeTotals->total_debit - (float) $allTimeTotals->total_credit;
+
+        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
+
+        return Inertia::render('Accounts/AccountDetails', [
+            'account' => $account,
+            'groups' => $groups,
+            'transactions' => $result['transactions'],
+            'openingBalance' => (float) $result['opening_balance'],
+            'periodDebit' => (float) $result['total_debit'],
+            'periodCredit' => (float) $result['total_credit'],
+            'closingBalance' => (float) $result['closing_balance'],
+            'allTimeBalance' => (float) $allTimeBalance,
+            'allTimeDebit' => (float) $allTimeTotals->total_debit,
+            'allTimeCredit' => (float) $allTimeTotals->total_credit,
+            'transactionCount' => (int) $allTimeTotals->total_count,
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'search' => $request->get('search', ''),
+                'per_page' => $perPage,
+            ],
+        ]);
+    }
+
+    public function downloadStatementPdf(Request $request, Account $account, LedgerQueryService $ledger)
+    {
+        $startDate = $request->get('start_date', date('Y-01-01'));
+        $endDate = $request->get('end_date', date('Y-m-d'));
+
+        $account->loadMissing('group');
+        $result = $ledger->accountLedger($account, $startDate, $endDate);
+        $transactions = $result['transactions'];
+        $openingBalance = $result['opening_balance'];
+        $closingBalance = $result['closing_balance'];
+        $companySetting = CompanySetting::first();
+
+        $pdf = Pdf::loadView('pdf.general-ledger', compact(
+            'account',
+            'transactions',
+            'companySetting',
+            'startDate',
+            'endDate'
+        ));
+
+        return $pdf->stream("account-{$account->ac_number}-statement.pdf");
     }
 }

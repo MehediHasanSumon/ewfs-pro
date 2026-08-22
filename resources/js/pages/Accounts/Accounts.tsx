@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { usePermission } from '@/hooks/usePermission';
 import { ChevronDown, ChevronUp, Edit, Filter, Plus, Trash2, X, Database, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -402,8 +402,13 @@ export default function Accounts({ accounts, groups = [], filters }: AccountsPro
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
                                                     {(accounts.current_page - 1) * accounts.per_page + index + 1}
                                                 </td>
-                                                <td className="p-4 text-[13px] dark:text-white">
-                                                    {account.name}
+                                                <td className="p-4 text-[13px] font-medium">
+                                                    <Link
+                                                        href={`/accounts/${account.id}`}
+                                                        className="font-semibold text-indigo-600 hover:text-indigo-900 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                    >
+                                                        {account.name}
+                                                    </Link>
                                                 </td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">
                                                     {account.ac_number}
