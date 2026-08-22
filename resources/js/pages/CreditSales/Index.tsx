@@ -448,7 +448,6 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
                                         <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Vehicle</th>
                                         <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Quantity</th>
                                         <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Total Amount</th>
-                                        <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Due Amount</th>
                                         <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Status</th>
                                         {hasActionPermission && (
                                             <th className="p-4 text-left text-[13px] font-medium dark:text-gray-300">Actions</th>
@@ -477,7 +476,6 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{vehicleNumber(sale)}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.quantity}</td>
                                                 <td className="p-4 text-[13px] dark:text-gray-300">{sale.total_amount.toLocaleString()}</td>
-                                                <td className="p-4 text-[13px] dark:text-gray-300">{sale.due_amount.toLocaleString()}</td>
                                                 <td className="p-4">
                                                     <span className={`rounded px-2 py-1 text-xs ${parseFloat(sale.due_amount.toString()) === 0
                                                             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
@@ -518,7 +516,7 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={hasActionPermission ? 12 : 11} className="p-8 text-center text-gray-500 dark:text-gray-400">
+                                            <td colSpan={hasActionPermission ? 11 : 10} className="p-8 text-center text-gray-500 dark:text-gray-400">
                                                 <ShoppingCart className="mx-auto mb-4 h-12 w-12 text-gray-400" />
                                                 No sales found
                                             </td>

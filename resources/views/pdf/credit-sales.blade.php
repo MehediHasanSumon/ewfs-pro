@@ -145,14 +145,13 @@
         <thead>
             <tr>
                 <th class="text-center" style="width: 30px;">SL</th>
-                <th style="width: 70px;">Date</th>
-                <th style="width: 50px;">Shift</th>
-                <th style="width: 80px;">Invoice No</th>
+                <th style="width: 75px;">Date</th>
+                <th style="width: 60px;">Shift</th>
+                <th style="width: 85px;">Invoice No</th>
                 <th>Customer</th>
                 <th>Vehicle</th>
-                <th class="text-right" style="width: 60px;">Quantity</th>
-                <th class="text-right" style="width: 80px;">Total Amount</th>
-                <th class="text-right" style="width: 80px;">Due Amount</th>
+                <th class="text-right" style="width: 70px;">Quantity</th>
+                <th class="text-right" style="width: 95px;">Total Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -166,11 +165,10 @@
                 <td>{{ $sale->vehicle->vehicle_number ?? 'N/A' }}</td>
                 <td class="text-right">{{ number_format($sale->quantity, 2) }}</td>
                 <td class="text-right">{{ number_format($sale->total_amount, 2) }}</td>
-                <td class="text-right">{{ number_format($sale->due_amount, 2) }}</td>
             </tr>
             @empty
             <tr>
-                <td colspan="9" class="text-center" style="padding: 20px; color: #999;">No credit sales found</td>
+                <td colspan="8" class="text-center" style="padding: 20px; color: #999;">No credit sales found</td>
             </tr>
             @endforelse
         </tbody>
@@ -179,7 +177,6 @@
             <tr style="font-weight: bold;">
                 <td colspan="7" class="text-right">Total:</td>
                 <td class="text-right">{{ number_format($creditSales->sum('total_amount'), 2) }}</td>
-                <td class="text-right">{{ number_format($creditSales->sum('due_amount'), 2) }}</td>
             </tr>
         </tfoot>
         @endif
