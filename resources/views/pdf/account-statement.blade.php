@@ -154,14 +154,13 @@
         <thead>
             <tr>
                 <th style="width: 30px;">SL</th>
-                <th style="width: 70px;">Date</th>
-                <th style="width: 80px;">Transaction ID</th>
-                <th style="width: 110px;">Transaction Type</th>
-                <th>Description</th>
-                <th style="width: 70px;">Payment Method</th>
-                <th class="text-right" style="width: 75px;">Debit</th>
-                <th class="text-right" style="width: 75px;">Credit</th>
-                <th class="text-right" style="width: 85px;">Balance</th>
+                <th style="width: 80px;">Date</th>
+                <th style="width: 100px;">Transaction ID</th>
+                <th>Transaction Type</th>
+                <th style="width: 90px;">Payment Method</th>
+                <th class="text-right" style="width: 85px;">Debit</th>
+                <th class="text-right" style="width: 85px;">Credit</th>
+                <th class="text-right" style="width: 95px;">Balance</th>
             </tr>
         </thead>
         <tbody>
@@ -177,7 +176,6 @@
                     <td>{{ $transaction->transaction_date ?? $transaction->voucher_date }}</td>
                     <td>{{ $transaction->voucher_no ?? $transaction->transaction_id ?? '-' }}</td>
                     <td>{{ $transaction->transaction_type_name ?? $transaction->voucher_type ?? '-' }}</td>
-                    <td>{{ $transaction->description ?? '-' }}</td>
                     <td style="text-transform: capitalize;">{{ $transaction->payment_type ?? '-' }}</td>
                     <td class="text-right">{{ $debit > 0 ? number_format($debit, 2) : '-' }}</td>
                     <td class="text-right">{{ $credit > 0 ? number_format($credit, 2) : '-' }}</td>
@@ -187,14 +185,14 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="text-center" style="padding: 20px; color: #888;">
+                    <td colspan="8" class="text-center" style="padding: 20px; color: #888;">
                         No transactions found for the selected period
                     </td>
                 </tr>
             @endforelse
             @if(count($transactions) > 0)
                 <tr style="font-weight: bold; background-color: #f5f5f5;">
-                    <td colspan="6" class="text-right">Total:</td>
+                    <td colspan="5" class="text-right">Total:</td>
                     <td class="text-right">{{ number_format($totalDebit, 2) }}</td>
                     <td class="text-right">{{ number_format($totalCredit, 2) }}</td>
                     <td class="text-right">

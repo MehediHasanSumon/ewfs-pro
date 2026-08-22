@@ -311,7 +311,6 @@ export default function AccountDetails({
                                     <tr className="border-b dark:border-gray-700">
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">SL</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction ID</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction Type</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Description</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Method</th>
@@ -333,9 +332,6 @@ export default function AccountDetails({
                                                     </td>
                                                     <td className="p-2 text-[13px] dark:text-white">
                                                         {transaction.transaction_date || transaction.voucher_date}
-                                                    </td>
-                                                    <td className="p-2 text-[13px] dark:text-gray-300">
-                                                        {transaction.voucher_no || transaction.transaction_id || '-'}
                                                     </td>
                                                     <td className="p-2 text-[13px] dark:text-gray-300 font-medium">
                                                         {transaction.transaction_type_name || transaction.voucher_type || '-'}
@@ -362,7 +358,7 @@ export default function AccountDetails({
                                                 </tr>
                                             ))}
                                             <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                <td colSpan={6} className="p-2 text-[13px] dark:text-white">
+                                                <td colSpan={5} className="p-2 text-[13px] dark:text-white">
                                                     Total:
                                                 </td>
                                                 <td className="p-2 text-right text-[13px] dark:text-white">
@@ -379,7 +375,7 @@ export default function AccountDetails({
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={9}
+                                                colSpan={8}
                                                 className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400"
                                             >
                                                 No transactions found for the selected period
