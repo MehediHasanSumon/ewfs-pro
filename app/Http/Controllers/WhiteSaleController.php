@@ -144,6 +144,20 @@ class WhiteSaleController extends Controller implements HasMiddleware
         ])->stream('white-sale-'.$whiteSale->invoice_no.'.pdf');
     }
 
+    public function downloadPosPdf(Sale $whiteSale)
+    {
+        $this->assertWhiteSale($whiteSale);
+        $whiteSale->load(['shift', 'products.product', 'products.category', 'products.unit']);
+
+        $itemCount = $whiteSale->products->count() ?: 1;
+        $paperHeight = max(450, 340 + ($itemCount * 30));
+
+        return Pdf::loadView('pdf.pos.white-sale-pos', [
+            'whiteSale' => $whiteSale,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->setPaper([0, 0, 226.77, $paperHeight], 'portrait')->stream('white-sale-pos-'.$whiteSale->invoice_no.'.pdf');
+    }
+
     public function downloadPdf(Request $request)
     {
         $whiteSale = $this->filteredQuery($request)->firstOrFail();

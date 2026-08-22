@@ -172,6 +172,28 @@ class SaleController extends Controller implements HasMiddleware
         ])->setPaper('A4', 'portrait')->stream("sale-invoice-{$sale->invoice_no}.pdf");
     }
 
+    public function downloadPosInvoice(Sale $sale)
+    {
+        abort_unless($sale->sale_type === 'regular', 404);
+        abort_unless($sale->journalEntry?->status === 'posted', 404);
+
+        $loadedSale = $sale->load([
+            'items.product',
+            'items.unit',
+            'shift',
+            'paymentDetail.account',
+            'transaction.account',
+        ]);
+
+        $itemCount = $loadedSale->items->count();
+        $paperHeight = max(450, 320 + ($itemCount * 30));
+
+        return Pdf::loadView('pdf.pos.sale-pos', [
+            'sale' => $loadedSale,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->setPaper([0, 0, 226.77, $paperHeight], 'portrait')->stream("sale-pos-{$sale->invoice_no}.pdf");
+    }
+
     public function downloadPdf(Request $request)
     {
         return Pdf::loadView('pdf.sales', [

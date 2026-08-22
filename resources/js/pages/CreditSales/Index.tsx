@@ -23,6 +23,7 @@ import {
     FileText,
     Filter,
     Plus,
+    Printer,
     Trash2,
     ShoppingCart,
     X,
@@ -489,6 +490,36 @@ export default function CreditSales({ creditSales, products = [], vehicles = [],
                                                 {hasActionPermission && (
                                                     <td className="p-4">
                                                         <div className="flex gap-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    openPdfViewer(
+                                                                        `/credit-sales/${sale.id}/pdf`,
+                                                                        `Invoice ${sale.invoice_no}`,
+                                                                        `credit-sale-${sale.invoice_no}.pdf`,
+                                                                    )
+                                                                }
+                                                                className="text-blue-600 hover:text-blue-800"
+                                                                title="View Invoice (A4)"
+                                                            >
+                                                                <FileText className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    openPdfViewer(
+                                                                        `/credit-sales/${sale.id}/pos`,
+                                                                        `POS Receipt ${sale.invoice_no}`,
+                                                                        `credit-sale-pos-${sale.invoice_no}.pdf`,
+                                                                    )
+                                                                }
+                                                                className="text-emerald-600 hover:text-emerald-800"
+                                                                title="POS Print (Receipt)"
+                                                            >
+                                                                <Printer className="h-4 w-4" />
+                                                            </Button>
                                                             {can('update-credit-sale') && (
                                                                 <Button
                                                                     variant="ghost"

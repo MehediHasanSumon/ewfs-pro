@@ -332,6 +332,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('sales/{sale}/edit', [SaleController::class, 'edit'])->name('sales.edit');
     Route::get('sales/{sale}/pdf', [SaleController::class, 'downloadInvoice'])->name('sales.invoice.pdf');
+    Route::get('sales/{sale}/pos', [SaleController::class, 'downloadPosInvoice'])->name('sales.pos.pdf');
     Route::put('sales/{sale}', [SaleController::class, 'update'])->name('sales.update');
     Route::delete('sales/bulk/delete', [SaleController::class, 'bulkDelete'])->name('sales.bulk.delete');
     Route::delete('sales/{sale}', [SaleController::class, 'destroy'])->name('sales.destroy');
@@ -340,6 +341,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('credit-sales', [CreditSaleController::class, 'index'])->name('credit-sales.index');
     Route::get('credit-sales/download-pdf', [CreditSaleController::class, 'downloadPdf'])->name('credit-sales.download.pdf');
     Route::post('credit-sales', [CreditSaleController::class, 'store'])->name('credit-sales.store');
+    Route::get('credit-sales/{creditSale}/pdf', [CreditSaleController::class, 'downloadSinglePdf'])->name('credit-sales.single.pdf');
+    Route::get('credit-sales/{creditSale}/pos', [CreditSaleController::class, 'downloadPosPdf'])->name('credit-sales.pos.pdf');
     Route::get('credit-sales/{creditSale}/edit', [CreditSaleController::class, 'edit'])->name('credit-sales.edit');
     Route::put('credit-sales/{creditSale}', [CreditSaleController::class, 'update'])->name('credit-sales.update');
     Route::delete('credit-sales/{creditSale}', [CreditSaleController::class, 'destroy'])->name('credit-sales.destroy');
@@ -500,6 +503,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('white-sales/{whiteSale}', [WhiteSaleController::class, 'destroy'])->name('white-sales.destroy');
     Route::delete('white-sales/bulk/delete', [WhiteSaleController::class, 'bulkDelete'])->name('white-sales.bulk.delete');
     Route::get('white-sales/{whiteSale}/pdf', [WhiteSaleController::class, 'downloadSinglePdf'])->name('white-sales.single.pdf');
+    Route::get('white-sales/{whiteSale}/pos', [WhiteSaleController::class, 'downloadPosPdf'])->name('white-sales.pos.pdf');
     Route::get('white-sales/download-pdf', [WhiteSaleController::class, 'downloadPdf'])->name('white-sales.download.pdf');
 
     // Monthly Dispenser Report routes

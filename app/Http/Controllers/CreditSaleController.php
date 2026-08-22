@@ -125,6 +125,43 @@ class CreditSaleController extends Controller implements HasMiddleware
         return back()->with('success', 'Credit sales deleted successfully.');
     }
 
+    public function downloadSinglePdf(CreditSale $creditSale)
+    {
+        $creditSale->loadMissing([
+            'shift',
+            'customers.customer',
+            'customers.items.product',
+            'customers.items.category',
+            'customers.items.unit',
+            'customers.items.vehicle',
+        ]);
+
+        return Pdf::loadView('pdf.pos.credit-sale-pos', [
+            'creditSale' => $creditSale,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->setPaper('A4', 'portrait')->stream("credit-sale-{$creditSale->invoice_no}.pdf");
+    }
+
+    public function downloadPosPdf(CreditSale $creditSale)
+    {
+        $creditSale->loadMissing([
+            'shift',
+            'customers.customer',
+            'customers.items.product',
+            'customers.items.category',
+            'customers.items.unit',
+            'customers.items.vehicle',
+        ]);
+
+        $itemCount = $creditSale->customers->flatMap->items->count() ?: 1;
+        $paperHeight = max(450, 340 + ($itemCount * 30));
+
+        return Pdf::loadView('pdf.pos.credit-sale-pos', [
+            'creditSale' => $creditSale,
+            'companySetting' => CompanySetting::query()->first(),
+        ])->setPaper([0, 0, 226.77, $paperHeight], 'portrait')->stream("credit-sale-pos-{$creditSale->invoice_no}.pdf");
+    }
+
     public function downloadPdf(Request $request)
     {
         return Pdf::loadView('pdf.credit-sales', [

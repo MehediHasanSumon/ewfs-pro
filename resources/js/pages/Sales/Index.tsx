@@ -24,6 +24,7 @@ import {
     FileText,
     Filter,
     Plus,
+    Printer,
     ShoppingCart,
     Trash2,
     X,
@@ -713,21 +714,38 @@ export default function Sales({
                                                     <td className="p-4">
                                                         <div className="flex gap-2">
                                                             {canViewInvoice && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() =>
-                                                                        openPdfViewer(
-                                                                            `/sales/${sale.id}/pdf`,
-                                                                            `Invoice ${sale.invoice_no}`,
-                                                                            `sale-invoice-${sale.invoice_no}.pdf`,
-                                                                        )
-                                                                    }
-                                                                    className="text-blue-600 hover:text-blue-800"
-                                                                    title="View Invoice"
-                                                                >
-                                                                    <FileText className="h-4 w-4" />
-                                                                </Button>
+                                                                <>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() =>
+                                                                            openPdfViewer(
+                                                                                `/sales/${sale.id}/pdf`,
+                                                                                `Invoice ${sale.invoice_no}`,
+                                                                                `sale-invoice-${sale.invoice_no}.pdf`,
+                                                                            )
+                                                                        }
+                                                                        className="text-blue-600 hover:text-blue-800"
+                                                                        title="View Invoice (A4)"
+                                                                    >
+                                                                        <FileText className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() =>
+                                                                            openPdfViewer(
+                                                                                `/sales/${sale.id}/pos`,
+                                                                                `POS Receipt ${sale.invoice_no}`,
+                                                                                `sale-pos-${sale.invoice_no}.pdf`,
+                                                                            )
+                                                                        }
+                                                                        className="text-emerald-600 hover:text-emerald-800"
+                                                                        title="POS Print (Receipt)"
+                                                                    >
+                                                                        <Printer className="h-4 w-4" />
+                                                                    </Button>
+                                                                </>
                                                             )}
 
                                                             {can(

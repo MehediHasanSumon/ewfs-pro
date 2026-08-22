@@ -25,6 +25,7 @@ import {
     FileText,
     Filter,
     Plus,
+    Printer,
     Trash2,
     ShoppingCart,
     X,
@@ -588,11 +589,20 @@ export default function WhiteSales({ whiteSales, products = [], shifts = [], fil
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => openPdfViewer(`/white-sales/${sale.id}/pdf`)}
+                                                                onClick={() => openPdfViewer(`/white-sales/${sale.id}/pdf`, `Invoice ${sale.invoice_no}`, `white-sale-${sale.invoice_no}.pdf`)}
                                                                 className="text-blue-600 hover:text-blue-800"
-                                                                title="Download PDF"
+                                                                title="View Invoice (A4)"
                                                             >
                                                                 <FileText className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => openPdfViewer(`/white-sales/${sale.id}/pos`, `POS Receipt ${sale.invoice_no}`, `white-sale-pos-${sale.invoice_no}.pdf`)}
+                                                                className="text-emerald-600 hover:text-emerald-800"
+                                                                title="POS Print (Receipt)"
+                                                            >
+                                                                <Printer className="h-4 w-4" />
                                                             </Button>
                                                             {can('update-white-sale') && (
                                                                 <Button
