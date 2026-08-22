@@ -25,6 +25,14 @@ interface VoucherCategory {
     name: string;
 }
 
+interface VoucherTransactionType {
+    id: number;
+    voucher_category_id: number;
+    code: string;
+    name: string;
+    voucher_type: string;
+}
+
 interface Account {
     id: number;
     name: string;
@@ -42,6 +50,7 @@ interface Transaction {
     transaction_type: 'Dr' | 'Cr';
     voucher_no?: string;
     voucher_type?: string;
+    transaction_type_name?: string;
     voucher_date?: string;
     description?: string;
     payment_type?: string;
@@ -54,6 +63,7 @@ interface Transaction {
 interface AccountDetailsProps {
     account: Account;
     categories: VoucherCategory[];
+    transactionTypes: VoucherTransactionType[];
     transactions: {
         data: Transaction[];
         current_page: number;
@@ -79,6 +89,7 @@ interface AccountDetailsProps {
 export default function AccountDetails({
     account,
     categories = [],
+    transactionTypes = [],
     transactions,
     openingBalance = 0,
     periodDebit = 0,
@@ -95,6 +106,21 @@ export default function AccountDetails({
     const [categoryId, setCategoryId] = useState(filters.category_id || 'all');
     const [transactionType, setTransactionType] = useState(filters.transaction_type || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || 15);
+
+    const filteredTransactionTypes = categoryId && categoryId !== 'all'
+        ? transactionTypes.filter(t => t.voucher_category_id.toString() === categoryId)
+        : transactionTypes;
+
+    const handleCategoryChange = (val: string) => {
+        setCategoryId(val);
+        // Reset transaction type if not belonging to new category
+        if (val !== 'all') {
+            const valid = transactionTypes.some(t => t.voucher_category_id.toString() === val && t.id.toString() === transactionType);
+            if (!valid) {
+                setTransactionType('all');
+            }
+        }
+    };
 
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -228,7 +254,7 @@ export default function AccountDetails({
                                 </div>
                                 <div>
                                     <Label className="dark:text-gray-200">Transaction Category</Label>
-                                    <Select value={categoryId} onValueChange={setCategoryId}>
+                                    <Select value={categoryId} onValueChange={handleCategoryChange}>
                                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                             <SelectValue placeholder="All Categories" />
                                         </SelectTrigger>
@@ -236,7 +262,7 @@ export default function AccountDetails({
                                             <SelectItem value="all">All Categories</SelectItem>
                                             {categories.map((cat) => (
                                                 <SelectItem key={cat.id} value={cat.id.toString()}>
-                                                    {cat.name}
+                                                    {cat.name} ({cat.code})
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -246,17 +272,15 @@ export default function AccountDetails({
                                     <Label className="dark:text-gray-200">Transaction Type</Label>
                                     <Select value={transactionType} onValueChange={setTransactionType}>
                                         <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                                            <SelectValue placeholder="All Types" />
+                                            <SelectValue placeholder="All Transaction Types" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Types</SelectItem>
-                                            <SelectItem value="payment">Payment</SelectItem>
-                                            <SelectItem value="receipt">Receipt</SelectItem>
-                                            <SelectItem value="sale">Sale</SelectItem>
-                                            <SelectItem value="purchase">Purchase</SelectItem>
-                                            <SelectItem value="journal">Journal</SelectItem>
-                                            <SelectItem value="dr">Debit (Dr)</SelectItem>
-                                            <SelectItem value="cr">Credit (Cr)</SelectItem>
+                                            <SelectItem value="all">All Transaction Types</SelectItem>
+                                            {filteredTransactionTypes.map((type) => (
+                                                <SelectItem key={type.id} value={type.id.toString()}>
+                                                    {type.name} ({type.code})
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -288,8 +312,9 @@ export default function AccountDetails({
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">SL</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction ID</th>
+                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction Type</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Description</th>
-                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Type</th>
+                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Method</th>
                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Debit</th>
                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Credit</th>
                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Balance</th>
@@ -312,11 +337,14 @@ export default function AccountDetails({
                                                     <td className="p-2 text-[13px] dark:text-gray-300">
                                                         {transaction.voucher_no || transaction.transaction_id || '-'}
                                                     </td>
+                                                    <td className="p-2 text-[13px] dark:text-gray-300 font-medium">
+                                                        {transaction.transaction_type_name || transaction.voucher_type || '-'}
+                                                    </td>
                                                     <td className="p-2 text-[13px] dark:text-gray-300">
                                                         {transaction.description || '-'}
                                                     </td>
                                                     <td className="p-2 text-[13px] dark:text-gray-300 capitalize">
-                                                        {transaction.payment_type || transaction.voucher_type || '-'}
+                                                        {transaction.payment_type || '-'}
                                                     </td>
                                                     <td className="p-2 text-right text-[13px] dark:text-gray-300">
                                                         {transaction.debit_amount > 0 ? Number(transaction.debit_amount).toFixed(2) : '-'}
@@ -334,7 +362,7 @@ export default function AccountDetails({
                                                 </tr>
                                             ))}
                                             <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                <td colSpan={5} className="p-2 text-[13px] dark:text-white">
+                                                <td colSpan={6} className="p-2 text-[13px] dark:text-white">
                                                     Total:
                                                 </td>
                                                 <td className="p-2 text-right text-[13px] dark:text-white">
@@ -351,7 +379,7 @@ export default function AccountDetails({
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={8}
+                                                colSpan={9}
                                                 className="p-4 text-center text-[13px] text-gray-500 dark:text-gray-400"
                                             >
                                                 No transactions found for the selected period

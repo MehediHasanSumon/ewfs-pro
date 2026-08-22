@@ -310,9 +310,14 @@ class LedgerQueryService
             });
         }
 
-        if (!empty($filters['transaction_type']) && $filters['transaction_type'] !== 'all') {
+        if (!empty($filters['transaction_type_id']) && $filters['transaction_type_id'] !== 'all') {
+            $typeId = (int) $filters['transaction_type_id'];
+            $query->where('v.voucher_transaction_type_id', $typeId);
+        } elseif (!empty($filters['transaction_type']) && $filters['transaction_type'] !== 'all') {
             $type = strtolower($filters['transaction_type']);
-            if ($type === 'payment') {
+            if (is_numeric($type)) {
+                $query->where('v.voucher_transaction_type_id', (int) $type);
+            } elseif ($type === 'payment') {
                 $query->where(function ($q) {
                     $q->where('v.voucher_type', 'payment')
                       ->orWhereIn('je.event_type', ['payment_voucher', 'payment', 'salary_payment']);
@@ -332,6 +337,11 @@ class LedgerQueryService
                 $query->where('jl.debit_amount', '>', 0);
             } elseif ($type === 'cr') {
                 $query->where('jl.credit_amount', '>', 0);
+            } else {
+                $query->where(function ($q) use ($type) {
+                    $q->where('vtt.code', $type)
+                      ->orWhere('vtt.name', 'like', "%{$type}%");
+                });
             }
         }
 
@@ -341,7 +351,8 @@ class LedgerQueryService
                 $q->where('je.entry_no', 'like', "%{$search}%")
                   ->orWhere('v.voucher_no', 'like', "%{$search}%")
                   ->orWhere('jl.description', 'like', "%{$search}%")
-                  ->orWhere('je.description', 'like', "%{$search}%");
+                  ->orWhere('je.description', 'like', "%{$search}%")
+                  ->orWhere('vtt.name', 'like', "%{$search}%");
             });
         }
 
@@ -401,7 +412,8 @@ class LedgerQueryService
             jl.payment_method AS payment_type,
             COALESCE(v.voucher_date, je.business_date) AS voucher_date,
             COALESCE(v.voucher_no, je.reference_no, je.entry_no) AS voucher_no,
-            COALESCE(v.voucher_type, je.event_type) AS voucher_type
+            COALESCE(vtt.name, v.voucher_type, je.event_type) AS voucher_type,
+            vtt.name AS transaction_type_name
         ";
     }
 

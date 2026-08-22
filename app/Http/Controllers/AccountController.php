@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Account;
 use App\Models\Group;
 use App\Models\VoucherCategory;
+use App\Models\VoucherTransactionType;
 use App\Models\CompanySetting;
 use App\Services\DocumentNumberService;
 use App\Services\LedgerQueryService;
@@ -226,9 +227,14 @@ class AccountController extends Controller implements HasMiddleware
             ->orderBy('name')
             ->get(['id', 'code', 'name']);
 
+        $transactionTypes = VoucherTransactionType::where('status', true)
+            ->orderBy('name')
+            ->get(['id', 'voucher_category_id', 'code', 'name', 'voucher_type']);
+
         return Inertia::render('Accounts/AccountDetails', [
             'account' => $account,
             'categories' => $categories,
+            'transactionTypes' => $transactionTypes,
             'transactions' => $result['transactions'],
             'openingBalance' => (float) $result['opening_balance'],
             'periodDebit' => (float) $result['total_debit'],
