@@ -200,7 +200,7 @@ export default function AccountDetails({
                             {account.name}
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            A/C Number: {account.ac_number} • Group: {account.group?.name || 'N/A'} • Current Balance: <span className={`font-bold ${closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{Math.abs(closingBalance).toFixed(2)} {closingBalance >= 0 ? 'Cr' : 'Dr'}</span>
+                            A/C Number: {account.ac_number}
                         </p>
                     </div>
                     <div className="flex gap-2">

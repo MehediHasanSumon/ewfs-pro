@@ -270,9 +270,11 @@ class AccountController extends Controller implements HasMiddleware
         $closingBalance = $result['closing_balance'];
         $companySetting = CompanySetting::first();
 
-        $pdf = Pdf::loadView('pdf.general-ledger', compact(
+        $pdf = Pdf::loadView('pdf.account-statement', compact(
             'account',
             'transactions',
+            'openingBalance',
+            'closingBalance',
             'companySetting',
             'startDate',
             'endDate'
