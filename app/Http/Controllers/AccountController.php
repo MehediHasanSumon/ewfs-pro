@@ -237,6 +237,7 @@ class AccountController extends Controller implements HasMiddleware
             'transactionTypes' => $transactionTypes,
             'transactions' => $result['transactions'],
             'openingBalance' => (float) $result['opening_balance'],
+            'totalAmount' => (float) ($result['total_amount'] ?? 0),
             'periodDebit' => (float) $result['total_debit'],
             'periodCredit' => (float) $result['total_credit'],
             'closingBalance' => (float) $result['closing_balance'],
@@ -267,6 +268,7 @@ class AccountController extends Controller implements HasMiddleware
         $result = $ledger->accountLedger($account, $startDate, $endDate, $filters);
         $transactions = $result['transactions'];
         $openingBalance = $result['opening_balance'];
+        $totalAmount = $result['total_amount'] ?? 0;
         $closingBalance = $result['closing_balance'];
         $companySetting = CompanySetting::first();
 
@@ -274,6 +276,7 @@ class AccountController extends Controller implements HasMiddleware
             'account',
             'transactions',
             'openingBalance',
+            'totalAmount',
             'closingBalance',
             'companySetting',
             'startDate',

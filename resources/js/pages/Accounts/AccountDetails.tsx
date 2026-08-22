@@ -48,6 +48,7 @@ interface Transaction {
     transaction_id: string;
     transaction_date: string;
     transaction_type: 'Dr' | 'Cr';
+    voucher_payment_type?: string;
     voucher_no?: string;
     voucher_type?: string;
     transaction_type_name?: string;
@@ -74,6 +75,7 @@ interface AccountDetailsProps {
         to: number;
     };
     openingBalance: number;
+    totalAmount?: number;
     periodDebit: number;
     periodCredit: number;
     closingBalance: number;
@@ -92,6 +94,7 @@ export default function AccountDetails({
     transactionTypes = [],
     transactions,
     openingBalance = 0,
+    totalAmount = 0,
     periodDebit = 0,
     periodCredit = 0,
     closingBalance = 0,
@@ -312,60 +315,74 @@ export default function AccountDetails({
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">SL</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Date</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Transaction Type</th>
+                                        <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Type</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Description</th>
                                         <th className="p-2 text-left text-[13px] font-medium dark:text-gray-300">Payment Method</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Debit</th>
-                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Credit</th>
+                                        <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Amount</th>
                                         <th className="p-2 text-right text-[13px] font-medium dark:text-gray-300">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {transactions.data && transactions.data.length > 0 ? (
                                         <>
-                                            {transactions.data.map((transaction, index) => (
-                                                <tr
-                                                    key={transaction.id || index}
-                                                    className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
-                                                >
-                                                    <td className="p-2 text-[13px] dark:text-white">
-                                                        {(transactions.current_page - 1) * transactions.per_page + index + 1}
-                                                    </td>
-                                                    <td className="p-2 text-[13px] dark:text-white">
-                                                        {transaction.transaction_date || transaction.voucher_date}
-                                                    </td>
-                                                    <td className="p-2 text-[13px] dark:text-gray-300 font-medium">
-                                                        {transaction.transaction_type_name || transaction.voucher_type || '-'}
-                                                    </td>
-                                                    <td className="p-2 text-[13px] dark:text-gray-300">
-                                                        {transaction.description || '-'}
-                                                    </td>
-                                                    <td className="p-2 text-[13px] dark:text-gray-300 capitalize">
-                                                        {transaction.payment_type || '-'}
-                                                    </td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
-                                                        {transaction.debit_amount > 0 ? Number(transaction.debit_amount).toFixed(2) : '-'}
-                                                    </td>
-                                                    <td className="p-2 text-right text-[13px] dark:text-gray-300">
-                                                        {transaction.credit_amount > 0 ? Number(transaction.credit_amount).toFixed(2) : '-'}
-                                                    </td>
-                                                    <td
-                                                        className={`p-2 text-right text-[13px] font-medium ${
-                                                            transaction.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                                                        }`}
+                                            {transactions.data.map((transaction, index) => {
+                                                const payType = transaction.voucher_payment_type || (
+                                                    transaction.voucher_type && ['payment', 'receipt', 'received'].includes(transaction.voucher_type.toLowerCase())
+                                                        ? transaction.voucher_type.charAt(0).toUpperCase() + transaction.voucher_type.slice(1)
+                                                        : (transaction.transaction_type === 'Dr' ? 'Payment' : 'Received')
+                                                );
+                                                const isReceived = payType.toLowerCase() === 'received' || payType.toLowerCase() === 'receipt';
+
+                                                return (
+                                                    <tr
+                                                        key={transaction.id || index}
+                                                        className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
                                                     >
-                                                        {Math.abs(transaction.balance).toFixed(2)} {transaction.balance >= 0 ? 'Cr' : 'Dr'}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                        <td className="p-2 text-[13px] dark:text-white">
+                                                            {(transactions.current_page - 1) * transactions.per_page + index + 1}
+                                                        </td>
+                                                        <td className="p-2 text-[13px] dark:text-white">
+                                                            {transaction.transaction_date || transaction.voucher_date}
+                                                        </td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300 font-medium">
+                                                            {transaction.transaction_type_name || transaction.voucher_type || '-'}
+                                                        </td>
+                                                        <td className="p-2 text-[13px]">
+                                                            <span
+                                                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                                                    isReceived
+                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400'
+                                                                        : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400'
+                                                                }`}
+                                                            >
+                                                                {payType}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300">
+                                                            {transaction.description || '-'}
+                                                        </td>
+                                                        <td className="p-2 text-[13px] dark:text-gray-300 capitalize">
+                                                            {transaction.payment_type || '-'}
+                                                        </td>
+                                                        <td className="p-2 text-right text-[13px] font-medium dark:text-gray-200">
+                                                            {Number(transaction.amount).toFixed(2)}
+                                                        </td>
+                                                        <td
+                                                            className={`p-2 text-right text-[13px] font-medium ${
+                                                                transaction.balance >= 0 ? 'text-green-600' : 'text-red-600'
+                                                            }`}
+                                                        >
+                                                            {Math.abs(transaction.balance).toFixed(2)} {transaction.balance >= 0 ? 'Cr' : 'Dr'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                             <tr className="border-b font-bold bg-gray-50 dark:bg-gray-700 dark:border-gray-700">
-                                                <td colSpan={5} className="p-2 text-[13px] dark:text-white">
+                                                <td colSpan={6} className="p-2 text-[13px] dark:text-white">
                                                     Total:
                                                 </td>
                                                 <td className="p-2 text-right text-[13px] dark:text-white">
-                                                    {Number(periodDebit).toFixed(2)}
-                                                </td>
-                                                <td className="p-2 text-right text-[13px] dark:text-white">
-                                                    {Number(periodCredit).toFixed(2)}
+                                                    {Number(totalAmount > 0 ? totalAmount : (periodDebit + periodCredit)).toFixed(2)}
                                                 </td>
                                                 <td className="p-2 text-right text-[13px] dark:text-white">
                                                     {Math.abs(closingBalance).toFixed(2)} {closingBalance >= 0 ? 'Cr' : 'Dr'}

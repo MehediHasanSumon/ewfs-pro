@@ -145,8 +145,7 @@
     </div>
 
     @php
-        $totalDebit = 0;
-        $totalCredit = 0;
+        $sumAmount = 0;
         $isCreditNormal = $account->group?->normal_balance === 'credit';
     @endphp
 
@@ -155,37 +154,38 @@
             <tr>
                 <th style="width: 30px;">SL</th>
                 <th style="width: 80px;">Date</th>
-                <th style="width: 100px;">Transaction ID</th>
                 <th>Transaction Type</th>
-                <th style="width: 90px;">Payment Method</th>
-                <th class="text-right" style="width: 85px;">Debit</th>
-                <th class="text-right" style="width: 85px;">Credit</th>
-                <th class="text-right" style="width: 95px;">Balance</th>
+                <th style="width: 90px;">Payment Type</th>
+                <th style="width: 95px;">Payment Method</th>
+                <th class="text-right" style="width: 100px;">Amount</th>
+                <th class="text-right" style="width: 100px;">Balance</th>
             </tr>
         </thead>
         <tbody>
             @forelse($transactions as $index => $transaction)
                 @php
-                    $debit = (float) ($transaction->debit_amount ?? 0);
-                    $credit = (float) ($transaction->credit_amount ?? 0);
-                    $totalDebit += $debit;
-                    $totalCredit += $credit;
+                    $amt = (float) ($transaction->amount ?? 0);
+                    $sumAmount += $amt;
+                    $payType = $transaction->voucher_payment_type ?? (
+                        isset($transaction->voucher_type) && in_array(strtolower($transaction->voucher_type), ['payment', 'receipt', 'received'])
+                            ? ucfirst($transaction->voucher_type)
+                            : ($transaction->transaction_type === 'Dr' ? 'Payment' : 'Received')
+                    );
                 @endphp
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td>{{ $transaction->transaction_date ?? $transaction->voucher_date }}</td>
-                    <td>{{ $transaction->voucher_no ?? $transaction->transaction_id ?? '-' }}</td>
                     <td>{{ $transaction->transaction_type_name ?? $transaction->voucher_type ?? '-' }}</td>
+                    <td style="font-weight: 500;">{{ $payType }}</td>
                     <td style="text-transform: capitalize;">{{ $transaction->payment_type ?? '-' }}</td>
-                    <td class="text-right">{{ $debit > 0 ? number_format($debit, 2) : '-' }}</td>
-                    <td class="text-right">{{ $credit > 0 ? number_format($credit, 2) : '-' }}</td>
+                    <td class="text-right">{{ number_format($amt, 2) }}</td>
                     <td class="text-right" style="font-weight: bold;">
                         {{ number_format(abs($transaction->balance), 2) }} {{ $transaction->balance >= 0 ? 'Cr' : 'Dr' }}
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="8" class="text-center" style="padding: 20px; color: #888;">
+                    <td colspan="7" class="text-center" style="padding: 20px; color: #888;">
                         No transactions found for the selected period
                     </td>
                 </tr>
@@ -193,8 +193,7 @@
             @if(count($transactions) > 0)
                 <tr style="font-weight: bold; background-color: #f5f5f5;">
                     <td colspan="5" class="text-right">Total:</td>
-                    <td class="text-right">{{ number_format($totalDebit, 2) }}</td>
-                    <td class="text-right">{{ number_format($totalCredit, 2) }}</td>
+                    <td class="text-right">{{ number_format($totalAmount > 0 ? $totalAmount : $sumAmount, 2) }}</td>
                     <td class="text-right">
                         {{ number_format(abs($closingBalance), 2) }} {{ $closingBalance >= 0 ? 'Cr' : 'Dr' }}
                     </td>

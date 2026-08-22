@@ -125,6 +125,7 @@ class LedgerQueryService
             'opening_balance' => $openingBalance,
             'total_debit' => (float) $totals->total_debit,
             'total_credit' => (float) $totals->total_credit,
+            'total_amount' => (float) $totals->total_amount,
             'closing_balance' => $closingBalance,
         ];
     }
@@ -168,6 +169,7 @@ class LedgerQueryService
             'opening_balance' => $openingBalance,
             'total_debit' => (float) $totals->total_debit,
             'total_credit' => (float) $totals->total_credit,
+            'total_amount' => (float) $totals->total_amount,
             'closing_balance' => $closingBalance,
         ];
     }
@@ -368,7 +370,8 @@ class LedgerQueryService
         return $this->accountLinesQuery($accountId, $startDate, $endDate, $filters)
             ->selectRaw(
                 'COALESCE(SUM(jl.debit_amount), 0) AS total_debit,
-                 COALESCE(SUM(jl.credit_amount), 0) AS total_credit'
+                 COALESCE(SUM(jl.credit_amount), 0) AS total_credit,
+                 COALESCE(SUM(CASE WHEN jl.debit_amount >= jl.credit_amount THEN jl.debit_amount ELSE jl.credit_amount END), 0) AS total_amount'
             )
             ->first();
     }
@@ -413,7 +416,15 @@ class LedgerQueryService
             COALESCE(v.voucher_date, je.business_date) AS voucher_date,
             COALESCE(v.voucher_no, je.reference_no, je.entry_no) AS voucher_no,
             COALESCE(vtt.name, v.voucher_type, je.event_type) AS voucher_type,
-            vtt.name AS transaction_type_name
+            vtt.name AS transaction_type_name,
+            CASE 
+                WHEN v.voucher_type = 'payment' OR je.event_type IN ('payment_voucher', 'payment', 'salary_payment') THEN 'Payment'
+                WHEN v.voucher_type IN ('receipt', 'received') OR je.event_type IN ('received_voucher', 'receipt', 'customer_receipt') THEN 'Received'
+                WHEN je.event_type IN ('sale', 'credit_sale') THEN 'Sale'
+                WHEN je.event_type IN ('purchase', 'credit_purchase') THEN 'Purchase'
+                WHEN jl.debit_amount > 0 THEN 'Payment'
+                ELSE 'Received'
+            END AS voucher_payment_type
         ";
     }
 
