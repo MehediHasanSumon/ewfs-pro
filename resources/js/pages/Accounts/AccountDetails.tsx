@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination } from '@/components/ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePermission } from '@/hooks/usePermission';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
@@ -13,6 +14,12 @@ import { ArrowLeft, FileText, Filter, X } from 'lucide-react';
 import { useState } from 'react';
 
 interface Group {
+    id: number;
+    code: string;
+    name: string;
+}
+
+interface VoucherCategory {
     id: number;
     code: string;
     name: string;
@@ -46,6 +53,7 @@ interface Transaction {
 
 interface AccountDetailsProps {
     account: Account;
+    categories: VoucherCategory[];
     transactions: {
         data: Transaction[];
         current_page: number;
@@ -62,12 +70,15 @@ interface AccountDetailsProps {
     filters: {
         start_date?: string;
         end_date?: string;
+        category_id?: string;
+        transaction_type?: string;
         per_page?: number;
     };
 }
 
 export default function AccountDetails({
     account,
+    categories = [],
     transactions,
     openingBalance = 0,
     periodDebit = 0,
@@ -81,6 +92,8 @@ export default function AccountDetails({
 
     const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
+    const [categoryId, setCategoryId] = useState(filters.category_id || 'all');
+    const [transactionType, setTransactionType] = useState(filters.transaction_type || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || 15);
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -104,6 +117,8 @@ export default function AccountDetails({
             {
                 start_date: startDate,
                 end_date: endDate,
+                category_id: categoryId === 'all' ? undefined : categoryId,
+                transaction_type: transactionType === 'all' ? undefined : transactionType,
                 per_page: perPage,
             },
             { preserveState: true }
@@ -114,6 +129,8 @@ export default function AccountDetails({
         const today = new Date().toISOString().split('T')[0];
         setStartDate(today);
         setEndDate(today);
+        setCategoryId('all');
+        setTransactionType('all');
         router.get(`/accounts/${account.id}`, {
             start_date: today,
             end_date: today,
@@ -128,6 +145,8 @@ export default function AccountDetails({
                 page,
                 start_date: startDate,
                 end_date: endDate,
+                category_id: categoryId === 'all' ? undefined : categoryId,
+                transaction_type: transactionType === 'all' ? undefined : transactionType,
                 per_page: perPage,
             },
             { preserveState: true }
@@ -138,6 +157,8 @@ export default function AccountDetails({
         const params = new URLSearchParams();
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
+        if (categoryId && categoryId !== 'all') params.append('category_id', categoryId);
+        if (transactionType && transactionType !== 'all') params.append('transaction_type', transactionType);
         openPdfViewer(`/accounts/${account.id}/statement-pdf?${params.toString()}`);
     };
 
@@ -153,7 +174,7 @@ export default function AccountDetails({
                             {account.name}
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            A/C Number: {account.ac_number}
+                            A/C Number: {account.ac_number} • Group: {account.group?.name || 'N/A'} • Current Balance: <span className={`font-bold ${closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{Math.abs(closingBalance).toFixed(2)} {closingBalance >= 0 ? 'Cr' : 'Dr'}</span>
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -186,7 +207,7 @@ export default function AccountDetails({
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
                                 <div>
                                     <Label className="dark:text-gray-200">Start Date</Label>
                                     <Input
@@ -205,6 +226,40 @@ export default function AccountDetails({
                                         className="dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Transaction Category</Label>
+                                    <Select value={categoryId} onValueChange={setCategoryId}>
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All Categories" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Categories</SelectItem>
+                                            {categories.map((cat) => (
+                                                <SelectItem key={cat.id} value={cat.id.toString()}>
+                                                    {cat.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="dark:text-gray-200">Transaction Type</Label>
+                                    <Select value={transactionType} onValueChange={setTransactionType}>
+                                        <SelectTrigger className="dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                            <SelectValue placeholder="All Types" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Types</SelectItem>
+                                            <SelectItem value="payment">Payment</SelectItem>
+                                            <SelectItem value="receipt">Receipt</SelectItem>
+                                            <SelectItem value="sale">Sale</SelectItem>
+                                            <SelectItem value="purchase">Purchase</SelectItem>
+                                            <SelectItem value="journal">Journal</SelectItem>
+                                            <SelectItem value="dr">Debit (Dr)</SelectItem>
+                                            <SelectItem value="cr">Credit (Cr)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                 <div className="flex items-end gap-2 md:col-span-2">
                                     <Button onClick={applyFilters} className="px-4">
                                         Apply Filters
@@ -222,35 +277,6 @@ export default function AccountDetails({
                         </CardContent>
                     </Card>
                 )}
-
-                {/* Account Info Card */}
-                <Card className="dark:border-gray-700 dark:bg-gray-800">
-                    <CardHeader>
-                        <CardTitle className="text-[16px] font-bold dark:text-white mb-2">
-                            Account Information
-                        </CardTitle>
-                        <div className="space-y-1 text-[13px]">
-                            <div>
-                                <span className="font-semibold dark:text-gray-300">Account Name:</span>{' '}
-                                <span className="dark:text-white">{account.name}</span>
-                            </div>
-                            <div>
-                                <span className="font-semibold dark:text-gray-300">Account Number:</span>{' '}
-                                <span className="dark:text-white">{account.ac_number}</span>
-                            </div>
-                            <div>
-                                <span className="font-semibold dark:text-gray-300">Group:</span>{' '}
-                                <span className="dark:text-white">{account.group?.name || 'N/A'}</span>
-                            </div>
-                            <div>
-                                <span className="font-semibold dark:text-gray-300">Current Balance:</span>{' '}
-                                <span className={`font-bold ${closingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {Math.abs(closingBalance).toFixed(2)} {closingBalance >= 0 ? 'Cr' : 'Dr'}
-                                </span>
-                            </div>
-                        </div>
-                    </CardHeader>
-                </Card>
 
                 {/* Transactions Table */}
                 <Card className="dark:border-gray-700 dark:bg-gray-800">
@@ -353,6 +379,8 @@ export default function AccountDetails({
                                         {
                                             start_date: startDate,
                                             end_date: endDate,
+                                            category_id: categoryId === 'all' ? undefined : categoryId,
+                                            transaction_type: transactionType === 'all' ? undefined : transactionType,
                                             per_page: newPerPage,
                                         },
                                         { preserveState: true }

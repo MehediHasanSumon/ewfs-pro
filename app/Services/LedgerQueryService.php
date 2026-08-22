@@ -94,7 +94,7 @@ class LedgerQueryService
             ->get();
     }
 
-    public function accountLedger(Account $account, string $startDate, string $endDate): array
+    public function accountLedger(Account $account, string $startDate, string $endDate, array $filters = []): array
     {
         $account->loadMissing('group');
         $isCreditNormal = $account->group?->normal_balance === 'credit';
@@ -104,7 +104,7 @@ class LedgerQueryService
             ? '? + SUM(jl.credit_amount - jl.debit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance'
             : '? + SUM(jl.debit_amount - jl.credit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance';
 
-        $transactions = $this->accountLinesQuery($account->id, $startDate, $endDate)
+        $transactions = $this->accountLinesQuery($account->id, $startDate, $endDate, $filters)
             ->select($this->legacySelectColumns())
             ->selectRaw($this->legacySelectExpressions())
             ->selectRaw($runningBalanceSql, [$openingBalance])
@@ -114,7 +114,7 @@ class LedgerQueryService
             ->get()
             ->map(fn (object $row) => $this->normalizeLegacyRow($row));
 
-        $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate);
+        $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate, $filters);
 
         $closingBalance = $isCreditNormal
             ? $openingBalance + (float) $totals->total_credit - (float) $totals->total_debit
@@ -133,7 +133,8 @@ class LedgerQueryService
         Account $account,
         string $startDate,
         string $endDate,
-        int $perPage
+        int $perPage,
+        array $filters = []
     ): array {
         $account->loadMissing('group');
         $isCreditNormal = $account->group?->normal_balance === 'credit';
@@ -143,7 +144,7 @@ class LedgerQueryService
             ? '? + SUM(jl.credit_amount - jl.debit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance'
             : '? + SUM(jl.debit_amount - jl.credit_amount) OVER (ORDER BY je.business_date, je.occurred_at, jl.id) AS balance';
 
-        $query = $this->accountLinesQuery($account->id, $startDate, $endDate)
+        $query = $this->accountLinesQuery($account->id, $startDate, $endDate, $filters)
             ->select($this->legacySelectColumns())
             ->selectRaw($this->legacySelectExpressions())
             ->selectRaw($runningBalanceSql, [$openingBalance])
@@ -156,7 +157,7 @@ class LedgerQueryService
             $transactions->getCollection()
                 ->map(fn (object $row) => $this->normalizeLegacyRow($row))
         );
-        $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate);
+        $totals = $this->accountPeriodTotals($account->id, $startDate, $endDate, $filters);
 
         $closingBalance = $isCreditNormal
             ? $openingBalance + (float) $totals->total_credit - (float) $totals->total_debit
@@ -286,26 +287,74 @@ class LedgerQueryService
     private function accountLinesQuery(
         int $accountId,
         string $startDate,
-        string $endDate
+        string $endDate,
+        array $filters = []
     ): Builder {
-        return DB::table('journal_lines as jl')
+        $query = DB::table('journal_lines as jl')
             ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
             ->leftJoin('vouchers as v', function ($join) {
                 $join->on('v.id', '=', 'je.source_id')
                     ->where('je.source_type', Voucher::class);
             })
+            ->leftJoin('voucher_transaction_types as vtt', 'vtt.id', '=', 'v.voucher_transaction_type_id')
             ->leftJoin('shifts as s', 's.id', '=', 'je.shift_id')
             ->where('jl.account_id', $accountId)
             ->whereIn('je.status', ['posted', 'reversed'])
             ->whereBetween('je.business_date', [$startDate, $endDate]);
+
+        if (!empty($filters['category_id']) && $filters['category_id'] !== 'all') {
+            $categoryId = (int) $filters['category_id'];
+            $query->where(function ($q) use ($categoryId) {
+                $q->where('v.voucher_category_id', $categoryId)
+                  ->orWhere('vtt.voucher_category_id', $categoryId);
+            });
+        }
+
+        if (!empty($filters['transaction_type']) && $filters['transaction_type'] !== 'all') {
+            $type = strtolower($filters['transaction_type']);
+            if ($type === 'payment') {
+                $query->where(function ($q) {
+                    $q->where('v.voucher_type', 'payment')
+                      ->orWhereIn('je.event_type', ['payment_voucher', 'payment', 'salary_payment']);
+                });
+            } elseif ($type === 'receipt' || $type === 'received') {
+                $query->where(function ($q) {
+                    $q->where('v.voucher_type', 'receipt')
+                      ->orWhereIn('je.event_type', ['received_voucher', 'receipt', 'customer_receipt']);
+                });
+            } elseif ($type === 'sale') {
+                $query->whereIn('je.event_type', ['sale', 'credit_sale', 'sale_created']);
+            } elseif ($type === 'purchase') {
+                $query->whereIn('je.event_type', ['purchase', 'credit_purchase']);
+            } elseif ($type === 'journal') {
+                $query->where('je.event_type', 'journal');
+            } elseif ($type === 'dr') {
+                $query->where('jl.debit_amount', '>', 0);
+            } elseif ($type === 'cr') {
+                $query->where('jl.credit_amount', '>', 0);
+            }
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('je.entry_no', 'like', "%{$search}%")
+                  ->orWhere('v.voucher_no', 'like', "%{$search}%")
+                  ->orWhere('jl.description', 'like', "%{$search}%")
+                  ->orWhere('je.description', 'like', "%{$search}%");
+            });
+        }
+
+        return $query;
     }
 
     private function accountPeriodTotals(
         int $accountId,
         string $startDate,
-        string $endDate
+        string $endDate,
+        array $filters = []
     ): object {
-        return $this->accountLinesQuery($accountId, $startDate, $endDate)
+        return $this->accountLinesQuery($accountId, $startDate, $endDate, $filters)
             ->selectRaw(
                 'COALESCE(SUM(jl.debit_amount), 0) AS total_debit,
                  COALESCE(SUM(jl.credit_amount), 0) AS total_credit'

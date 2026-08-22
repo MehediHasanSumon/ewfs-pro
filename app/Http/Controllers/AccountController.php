@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\Group;
+use App\Models\VoucherCategory;
 use App\Models\CompanySetting;
 use App\Services\DocumentNumberService;
 use App\Services\LedgerQueryService;
@@ -205,55 +206,39 @@ class AccountController extends Controller implements HasMiddleware
 
     public function show(Request $request, Account $account, LedgerQueryService $ledger)
     {
-        $account->loadMissing([
-            'group',
-            'customer:id,account_id,name,code,mobile',
-            'supplier:id,account_id,name,mobile',
-            'employee:id,account_id,employee_name,employee_code,designation_id',
-            'employee.designation:id,name',
-        ]);
+        $account->loadMissing('group');
 
         $startDate = $request->get('start_date', date('Y-m-d'));
         $endDate = $request->get('end_date', date('Y-m-d'));
         $perPage = max(1, min((int) $request->get('per_page', 15), 100));
+        $categoryId = $request->get('category_id');
+        $transactionType = $request->get('transaction_type');
 
-        $result = $ledger->paginatedAccountLedger($account, $startDate, $endDate, $perPage);
+        $filters = [
+            'category_id' => $categoryId,
+            'transaction_type' => $transactionType,
+            'search' => $request->get('search'),
+        ];
 
-        // Overall stats (all-time)
-        $allTimeTotals = DB::table('journal_lines as jl')
-            ->join('journal_entries as je', 'je.id', '=', 'jl.journal_entry_id')
-            ->where('jl.account_id', $account->id)
-            ->whereIn('je.status', ['posted', 'reversed'])
-            ->selectRaw('
-                COUNT(jl.id) as total_count,
-                COALESCE(SUM(jl.debit_amount), 0) as total_debit,
-                COALESCE(SUM(jl.credit_amount), 0) as total_credit
-            ')
-            ->first();
+        $result = $ledger->paginatedAccountLedger($account, $startDate, $endDate, $perPage, $filters);
 
-        $isCreditNormal = $account->group?->normal_balance === 'credit';
-        $allTimeBalance = $isCreditNormal
-            ? (float) $allTimeTotals->total_credit - (float) $allTimeTotals->total_debit
-            : (float) $allTimeTotals->total_debit - (float) $allTimeTotals->total_credit;
-
-        $groups = Group::where('status', true)->get(['id', 'code', 'name']);
+        $categories = VoucherCategory::where('status', true)
+            ->orderBy('name')
+            ->get(['id', 'code', 'name']);
 
         return Inertia::render('Accounts/AccountDetails', [
             'account' => $account,
-            'groups' => $groups,
+            'categories' => $categories,
             'transactions' => $result['transactions'],
             'openingBalance' => (float) $result['opening_balance'],
             'periodDebit' => (float) $result['total_debit'],
             'periodCredit' => (float) $result['total_credit'],
             'closingBalance' => (float) $result['closing_balance'],
-            'allTimeBalance' => (float) $allTimeBalance,
-            'allTimeDebit' => (float) $allTimeTotals->total_debit,
-            'allTimeCredit' => (float) $allTimeTotals->total_credit,
-            'transactionCount' => (int) $allTimeTotals->total_count,
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
-                'search' => $request->get('search', ''),
+                'category_id' => $categoryId,
+                'transaction_type' => $transactionType,
                 'per_page' => $perPage,
             ],
         ]);
@@ -261,11 +246,19 @@ class AccountController extends Controller implements HasMiddleware
 
     public function downloadStatementPdf(Request $request, Account $account, LedgerQueryService $ledger)
     {
-        $startDate = $request->get('start_date', date('Y-01-01'));
+        $startDate = $request->get('start_date', date('Y-m-d'));
         $endDate = $request->get('end_date', date('Y-m-d'));
+        $categoryId = $request->get('category_id');
+        $transactionType = $request->get('transaction_type');
+
+        $filters = [
+            'category_id' => $categoryId,
+            'transaction_type' => $transactionType,
+            'search' => $request->get('search'),
+        ];
 
         $account->loadMissing('group');
-        $result = $ledger->accountLedger($account, $startDate, $endDate);
+        $result = $ledger->accountLedger($account, $startDate, $endDate, $filters);
         $transactions = $result['transactions'];
         $openingBalance = $result['opening_balance'];
         $closingBalance = $result['closing_balance'];
